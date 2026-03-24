@@ -5,7 +5,9 @@
       "Bash(python src/test_wallet_balances.py)",
       "WebFetch(domain:docs.etherscan.io)",
       "Bash(ls test_*_20*)",
-      "Bash(xargs rm:*)"
+      "Bash(xargs rm:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)"
     ]
   }
 }
