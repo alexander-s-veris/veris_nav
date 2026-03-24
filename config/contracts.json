@@ -1,7 +1,7 @@
 {
   "ethereum": {
     "midas_mfone_token": {
-      "address": "0x238a700eD6165261Cf8b2e544ba797BC11e466Ba",
+      "address": "C",
       "description": "mF-ONE Token"
     },
     "midas_mfone_oracle": {
