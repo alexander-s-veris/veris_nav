@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python src/test_mfone_oracle.py)",
+      "Bash(python src/test_wallet_balances.py)",
+      "WebFetch(domain:docs.etherscan.io)",
+      "Bash(ls test_*_20*)",
+      "Bash(xargs rm:*)"
+    ]
+  }
+}

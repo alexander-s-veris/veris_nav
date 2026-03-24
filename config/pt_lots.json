@@ -1,0 +1,26 @@
+{
+  "PT-USX-01JUN26": {
+    "underlying": "USX",
+    "maturity": "2026-06-01",
+    "lots": [],
+    "total_tokens": 1802168,
+    "chain": "solana",
+    "protocol": "exponent",
+    "notes": "7 tranches — individual lot details to be added"
+  },
+  "PT-eUSX-01JUN26": {
+    "underlying": "eUSX",
+    "maturity": "2026-06-01",
+    "tokens": 77840,
+    "chain": "solana",
+    "protocol": "exponent",
+    "notes": "In Kamino Solstice"
+  },
+  "PT-ONyc-13MAY26": {
+    "underlying": "ONyc",
+    "maturity": "2026-05-13",
+    "chain": "solana",
+    "protocol": "exponent",
+    "notes": "In LP position"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "ethereum": {
+    "midas_mfone_token": {
+      "address": "0x238a700eD6165261Cf8b2e544ba797BC11e466Ba",
+      "description": "mF-ONE Token"
+    },
+    "midas_mfone_oracle": {
+      "address": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
+      "description": "mF-ONE/USD Chainlink-style Oracle"
+    },
+    "morpho_core": {
+      "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+      "description": "Morpho Core"
+    },
+    "credit_coop_vault": {
+      "address": "0xb21eAFB126cEf15CB99fe2D23989b58e40097919",
+      "description": "Veris Credit Vault"
+    },
+    "gauntlet_vault": {
+      "address": "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44",
+      "description": "Levered FalconX Vault"
+    },
+    "pareto_tranche_price": {
+      "address": "0x433d5b175148da32ffe1e1a37a939e1b7e79be4d",
+      "description": "Pareto Tranche Price Contract"
+    },
+    "fluid_vault": {
+      "address": "0xbc345229c1b52e4c30530c614bb487323ba38da5",
+      "description": "Fluid Vault (syrupUSDC/USDC)"
+    }
+  },
+  "chainlink_feeds": {
+    "usdt_usd": {
+      "address": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
+      "chain": "ethereum",
+      "description": "USDT/USD Price Feed"
+    },
+    "usdc_usd": {
+      "address": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+      "chain": "ethereum",
+      "description": "USDC/USD Price Feed"
+    },
+    "dai_usd": {
+      "address": "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
+      "chain": "ethereum",
+      "description": "DAI/USD Price Feed"
+    },
+    "uscc_nav": {
+      "address": "0xAfFd00d9",
+      "chain": "ethereum",
+      "description": "USCC NAV per share (NAVLink)",
+      "notes": "uscc-nav.data.eth"
+    },
+    "mfone_usd": {
+      "address": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
+      "chain": "ethereum",
+      "description": "mF-ONE/USD Oracle (Midas Chainlink-style)"
+    }
+  }
+}
