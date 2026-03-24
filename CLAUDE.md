@@ -135,7 +135,7 @@ Every position falls into one of these categories. The category determines the v
 | **C** | LP positions (AMM pool decomposition) | Decompose into constituent tokens, price each per its category |
 | **D** | Leveraged positions (looping) | Net = Collateral value − Debt value |
 | **E** | Stablecoins & cash | Par value (USDC-pegged) or oracle price (non-USDC-pegged) |
-| **F** | Other / bespoke (governance tokens, dust, YT, rewards) | Kraken price → CoinGecko → DEX TWAP; de minimis (<$100) valued at zero |
+| **F** | Other / bespoke (governance tokens, YT, rewards) | Kraken price → CoinGecko → DEX TWAP |
 
 ---
 
@@ -206,7 +206,7 @@ Pricing is **category-driven, not a single waterfall**. The category determines 
   2. **CoinGecko** (volume-weighted aggregated price)
   3. **DEX TWAP** (last resort)
 - **Airdrop claims / protocol points**: Valued at zero until token is confirmed, claimable, and has liquid markets
-- **Dust threshold**: Positions under $100 valued at zero
+- **Unregistered tokens**: Tokens not in the token registry (spam, airdrops, unsolicited deposits) are excluded from the snapshot. All whitelisted tokens with balance >$0 are included regardless of value.
 
 ### Kraken-Held Assets (special rule)
 Assets held at Kraken are priced using **Kraken's reported market price** regardless of their category classification. The category-specific methodology does NOT apply to Kraken-held assets. When assets transfer between Kraken and other custodians, the applicable methodology changes upon settlement.
@@ -283,12 +283,13 @@ GET https://hermes.pyth.network/v2/updates/price/latest?ids[]=<price_feed_id>
 ```
 Check https://docs.pyth.network/price-feeds/price-feeds for available feed IDs.
 
-### CoinGecko API
+### CoinGecko API (Pro plan)
 
-Free tier, no API key needed for basic queries:
+Using Pro API key with `x-cg-pro-api-key` header:
 ```
-GET https://api.coingecko.com/api/v3/simple/price?ids=<coin_id>&vs_currencies=usd
+GET https://pro-api.coingecko.com/api/v3/simple/price?ids=<coin_id>&vs_currencies=usd
 ```
+Note: Pro plan uses `pro-api.coingecko.com` base URL (not `api.coingecko.com`). Multiple IDs can be batched in one call (comma-separated).
 The NAV spreadsheet already uses CoinGecko via a helper table `tbl_Helper_CoinIds` with these mappings:
 - usd-coin → USDC
 - usdt0 → USDT0
@@ -363,7 +364,7 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 
 ### E Positions (Stablecoins & Cash)
 - **Hyperliquid**: ~$1M USDC
-- **Various wallet dust**: USDC, USDT, USDG across wallets
+- **Various small balances**: USDC, USDT, USDG across wallets
 - USDC-pegged stablecoins (USDC, USDS, DAI, PYUSD, USX) valued at par within ±0.5%
 - Non-USDC-pegged (USDT, USDG) valued at oracle price
 
@@ -372,7 +373,7 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **GIZA**: 223,251 tokens on Base
 - **RLP (Resolv)**: 204,746 tokens
 - **YT-ONyc-13MAY26**: ~725,568 tokens
-- Dust threshold: <$100 valued at zero
+- All whitelisted tokens with balance >$0 included in valuation
 
 ---
 
@@ -394,6 +395,13 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **Chainlink oracle**: `latestRoundData()` on aggregator contract → returns `(roundId, answer, startedAt, updatedAt, answeredInRound)` + `decimals()` for scaling
 - **Fluid**: Uses NFT positions (not fungible shares). Query by NFT ID.
 - **Aave**: `getUserAccountData(wallet)` for aggregate, or per-reserve queries.
+
+### Balance Query Methods
+- **Primary (EVM)**: Alchemy `alchemy_getTokenBalances` — returns all ERC-20 balances for a wallet in one RPC call
+- **Fallback (EVM)**: Direct `balanceOf` contract call for each registered token. Used when Alchemy hasn't indexed a token (e.g. GIZA on Base)
+- **Plasma**: Etherscan V2 API `addresstokenbalance` endpoint (Alchemy not available)
+- **Solana**: Alchemy `getTokenAccountsByOwner` — returns all SPL token accounts
+- **Solana A1 (eUSX)**: Exchange rate derived from vault state: `total USX in vault / total eUSX supply`. Vault = USX token account owned by eUSX mint authority (`2aHdm37djj4c21ztMRBmmo4my6RtzN5Nn58Y39rpWbRM`)
 
 ### ABI for Chainlink AggregatorV3Interface
 ```json
@@ -419,6 +427,7 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **Base**: Alchemy
 - **Avalanche**: Public RPC or Alchemy
 - **Plasma**: Etherscan V2 API (chain ID 9745, native token: XPL, explorer: plasmascan.to). Alchemy not available for Plasma.
+- **HyperEVM**: Alchemy (chain ID 999, native token: HYPE)
 - **Solana**: Alchemy (`solana-mainnet.g.alchemy.com/v2/API_KEY`)
 
 Store API keys in a `.env` file (never commit to GitHub).
@@ -430,24 +439,30 @@ Store API keys in a `.env` file (never commit to GitHub).
 ```
 veris-nav/
 ├── CLAUDE.md                  # This file — project context
-├── .env                       # API keys (gitignored)
-├── .gitignore                 # Ignore .env, __pycache__, outputs
+├── .env                       # API keys: Alchemy, Etherscan, CoinGecko Pro (gitignored)
+├── .gitignore
 ├── requirements.txt           # Python dependencies
 ├── src/
-│   ├── collect.py             # Main entry point — orchestrates collection
-│   ├── evm.py                 # EVM chain queries (web3.py)
-│   ├── solana_client.py       # Solana queries (Kamino API + anchorpy)
-│   ├── pricing.py             # Price feed hierarchy (Chainlink → Pyth → CG)
-│   ├── valuation.py           # Category-specific valuation logic
-│   └── output.py              # Writes snapshot CSV/JSON
+│   ├── evm.py                 # Shared EVM utilities (cached Web3, block queries, constants)
+│   ├── solana_client.py       # Solana RPC helpers (balances, eUSX exchange rate)
+│   ├── pricing.py             # Price adapters (Chainlink, Pyth, Kraken, CoinGecko Pro, par+depeg)
+│   ├── collect_balances.py    # Production wallet balance scanner (Cat E + F + A1/A2 tokens)
+│   ├── test_mfone_oracle.py   # Test script — mF-ONE Chainlink oracle query
+│   ├── collect.py             # [Planned] Main orchestrator for full NAV collection
+│   ├── valuation.py           # [Planned] Category-specific valuation logic (A1/A3/B/C/D)
+│   └── output.py              # [Planned] Final NAV snapshot writer
 ├── config/
+│   ├── chains.json            # Chain configs — RPC URLs, chain IDs, explorers
 │   ├── wallets.json           # Wallet addresses per chain
+│   ├── tokens.json            # Token registry — whitelist per chain with pricing config
 │   ├── contracts.json         # Contract addresses and ABIs
-│   ├── price_feeds.json       # Token → price source mapping
 │   └── pt_lots.json           # PT token individual lot details
-├── outputs/
-│   └── snapshot_YYYYMMDD_HHMM.csv
-└── README.md                  # Setup and usage instructions
+├── plans/                     # Implementation plans
+├── outputs/                   # Generated snapshots (JSON + CSV, gitignored)
+│   ├── wallet_balances.json   # Latest wallet balance snapshot with methodology header
+│   └── wallet_balances.csv    # Same data in CSV format
+├── docs/                      # Valuation Policy and reference documents
+└── README.md
 ```
 
 ---

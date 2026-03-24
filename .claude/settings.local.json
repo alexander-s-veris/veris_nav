@@ -7,7 +7,15 @@
       "Bash(ls test_*_20*)",
       "Bash(xargs rm:*)",
       "Bash(pip install:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(curl -s \"https://api.coingecko.com/api/v3/search?query=plasma+xpl\")",
+      "Bash(curl -s https://api.coingecko.com/api/v3/search?query=xpl)",
+      "Bash(curl -s \"https://hermes.pyth.network/v2/updates/price/latest?ids[]=0xe6d3a7139b1e0b0072005aee6d4cdaab20f06bfb874b2fcc875af4b17ccc052a\")",
+      "Bash(curl -s \"https://api.coingecko.com/api/v3/search?query=datamine+dam\")",
+      "Bash(curl -s \"https://api.coingecko.com/api/v3/search?query=reservoir+dam\")",
+      "Bash(ls:*)",
+      "Bash(python -c \":*)",
+      "Bash(playwright install:*)"
     ]
   }
 }
