@@ -1,0 +1,161 @@
+# Output Schema Plan for Veris NAV Data Collection
+
+## Context
+
+The system currently has `collect_balances.py` covering wallet-level token balances (Categories E and F, plus some A1/A2 tokens held in wallets). The next step is collecting protocol-level positions (A1 vaults, A2 oracle-priced tokens, A3 private credit accruals, B PT lot amortisation, C LP decomposition, D leveraged positions). After analysing the existing Excel workbook, we need an output schema that:
+- Replaces the spreadsheet's Power Queries and manual calc sheets with a single automated pipeline
+- Produces audit-ready output for Bank Frick (Calculation Agent) and Grant Thornton (Auditor)
+- Supports historical snapshots (one folder per Valuation Date)
+- Handles the structural differences between categories (leveraged positions need collateral+debt rows, LPs need constituent rows, PTs need per-lot rows, A3 needs accrual+cross-reference)
+
+## File Structure
+
+Each run creates a date-stamped folder. Existing `wallet_balances.*` files remain for standalone balance checks.
+
+```
+outputs/
+  nav_20260430/
+    positions.json          # Master snapshot with _methodology header
+    positions.csv           # Flat CSV of all positions
+    query_log.json          # Every on-chain/API call with raw results
+    query_log.csv           # Same, flat
+    nav_summary.json        # Aggregation, fees, verification, flags
+    pt_lots.csv             # Category B individual lot amortisation detail
+    a3_accruals.csv         # Category A3 private credit accrual detail
+    lp_decomposition.csv    # Category C LP constituent breakdown
+    leverage_detail.csv     # Category D collateral/debt pairs
+  wallet_balances.json      # Existing (standalone balance scanner)
+  wallet_balances.csv       # Existing
+```
+
+## Master Position Schema (positions.csv / positions.json)
+
+One row per valued position. All categories share common columns. Category-specific columns are empty/null when not applicable.
+
+### Common Columns (all rows)
+
+- `position_id` — unique key, format: `{chain}_{protocol}_{wallet_short}_{token}_{category}_{qualifier}`
+- `valuation_date` — dd/mm/yyyy
+- `timestamp_utc` — block timestamp, dd/mm/yyyy hh:mm:ss
+- `chain` — ethereum, arbitrum, base, avalanche, plasma, hyperevm, solana
+- `protocol` — morpho, kamino, exponent, aave, fluid, credit_coop, pareto, wallet, etc.
+- `wallet` — full address
+- `position_label` — human-readable name (e.g. "Morpho syrupUSDC/USDT")
+- `category` — A1, A2, A3, B, C, D, E, F
+- `position_type` — token_balance, vault_share, oracle_priced, manual_accrual, pt_lot, lp_position, lp_constituent, collateral, debt, reward
+- `token_symbol` — token ticker
+- `token_name` — full name
+- `token_contract` — contract address or mint
+- `balance_raw` — raw on-chain value (uint256 string)
+- `balance_human` — scaled balance (Decimal string)
+- `price_usd` — Decimal string
+- `price_source` — par, chainlink, pyth, kraken, coingecko, a1_exchange_rate, manual_accrual, linear_amortisation
+- `price_source_detail` — specific feed/contract/endpoint
+- `oracle_updated_at` — timestamp of oracle data point (or null)
+- `value_usd` — balance_human x price_usd (Decimal string)
+- `block_number` — block/slot used
+- `block_timestamp_utc` — dd/mm/yyyy hh:mm:ss
+- `depeg_flag` — none, minor_X.XX%, material_X.XX%
+- `staleness_flag` — ok, stale_Xh
+- `methodology_ref` — Valuation Policy section reference
+- `notes` — free text
+- `run_timestamp_cet` — script execution time
+
+### Category-Specific Columns
+
+**A1 (vault shares)**: `exchange_rate`, `exchange_rate_contract`, `exchange_rate_function`, `underlying_token`, `underlying_price_usd`
+
+**A2 (oracle-priced)**: `cross_ref_price_usd`, `cross_ref_source`, `cross_ref_divergence_pct`, `expected_update_freq_hours`
+
+**A3 (private credit)**: `accrual_principal`, `accrual_rate_pct`, `accrual_start_date`, `accrual_end_date`, `accrued_interest_usd`, `cross_ref_price_usd`, `cross_ref_source`, `cross_ref_divergence_pct`
+
+**B (PT lots)**: `pt_lot_id`, `pt_purchase_date`, `pt_implied_rate`, `pt_maturity_date`, `pt_days_to_maturity`, `pt_amortised_value`, `underlying_token`, `underlying_price_usd`, `cross_ref_price_usd`, `cross_ref_source`, `cross_ref_divergence_pct`
+
+**C (LP)**: `lp_pool_address`, `lp_total_shares`, `lp_constituent_index`, `lp_constituent_token`, `lp_constituent_amount`, `lp_implied_rate`, `underlying_token`, `underlying_price_usd`
+
+**D (leverage)**: `leverage_market_id`, `leverage_side` (collateral/debt), `leverage_counterpart_token`, `leverage_net_value_usd`
+
+**Linking**: `parent_position_id` — links debt to collateral, LP constituent to LP parent, PT lot to PT aggregate
+
+### How Each Category Appears
+
+- **A1**: One row per vault position. `position_type = vault_share`. Exchange rate from `convertToAssets` or protocol-specific function.
+- **A2**: One row per token. `position_type = oracle_priced`. Primary price from oracle hierarchy, cross-reference against issuer NAV where available.
+- **A3**: One row per vault. `position_type = manual_accrual`. Primary value = principal + accrued interest from config. On-chain convertToAssets or tranche price as cross-reference only.
+- **B**: One row per lot. `position_type = pt_lot`. Formula: `underlying_price / (1 + implied_rate * days_to_maturity / 365)`. AMM price as cross-reference only. Lots linked via `parent_position_id` to an aggregate row.
+- **C**: One parent row (`position_type = lp_position`) with total value, plus one row per constituent (`position_type = lp_constituent`). PT constituents in yield-splitting LPs use Exponent formula with `last_ln_implied_rate`, not linear amortisation.
+- **D**: Two rows per position: `position_type = collateral` (positive value) and `position_type = debt` (negative value). Collateral row carries `leverage_net_value_usd`. Both linked via `parent_position_id`.
+- **E/F**: One row per holding. `position_type = token_balance` or `reward`. Same as current `collect_balances.py` output, extended with the new common columns.
+
+## Query Audit Log (query_log.csv / query_log.json)
+
+Every on-chain call and API request, in execution order.
+
+Columns: `query_id`, `timestamp_utc`, `chain`, `query_type` (rpc_call/rest_api/contract_call/computation), `target` (contract address or URL), `method` (function name), `params` (JSON string), `block_number`, `raw_result` (truncated to 500 chars), `decoded_result`, `used_for` (position_id), `notes`
+
+## NAV Summary (nav_summary.json)
+
+Single JSON with:
+- `valuation_blocks` — block number and timestamp per chain
+- `by_category` — count and value per category (with collateral/debt/net breakdown for D)
+- `by_wallet` — count and value per wallet
+- `by_custodian` — ForDefi, Kraken, Bank Frick
+- `total_assets_usd` — aggregate pre-fee value
+- `fees` — management, administration, service, performance, extra NAV (pro-rated)
+- `nav_calculation` — total assets, total fees, net assets, outstanding products, NAV per product
+- `flags` — stale prices, depeg events, special valuation triggers, judgement exercised
+- `verification` — DeBank/Octav totals, divergence %, missing positions
+
+## Supplementary Detail CSVs
+
+These provide deeper breakdowns consumed by the corresponding Excel calc sheets:
+
+- **pt_lots.csv**: lot_id, token_symbol, chain, protocol, purchase_date, purchase_price, implied_rate, maturity_date, underlying_token, underlying_price_usd, quantity, days_total, days_elapsed, days_to_maturity, amortised_price_per_unit, value_usd, amm_cross_ref_price, amm_divergence_pct
+- **a3_accruals.csv**: position_id, vault_name, protocol, wallet, principal_usd, rate_pct, rate_period_start, rate_period_end, days_in_period, accrued_interest_usd, total_value_usd, on_chain_cross_ref_value, cross_ref_divergence_pct, incentive_rate_pct, incentive_accrued_usd, impairment_flag, notes
+- **lp_decomposition.csv**: parent_position_id, lp_name, pool_address, total_lp_shares, constituent_index, constituent_token, constituent_category, constituent_amount, constituent_price_usd, constituent_value_usd, constituent_price_source, lp_implied_rate, accrued_fees_usd
+- **leverage_detail.csv**: parent_position_id, protocol, market_id, wallet, chain, side, token_symbol, token_category, balance_human, price_usd, price_source, value_usd, accrued_interest_usd, net_value_usd
+
+## Config Extensions Needed
+
+### config/a3_accruals.json (new)
+Stores contractual parameters for each private credit position: principal, rate periods (with dates for rate resets), incentive rates, performance fees, deposit/withdrawal history, cross-reference contract details.
+
+### config/protocol_positions.json (new)
+Maps wallets to protocol positions for D and C categories: protocol name, chain, wallet, market/pool ID, collateral/debt tokens, query method. Also covers Gauntlet indirect exposure (vault share calculation).
+
+### config/pt_lots.json (extend existing)
+Populate the empty `lots` arrays with per-lot data: purchase_date, quantity, implied_rate, tx_ref.
+
+### config/contracts.json (fix and extend)
+- Fix `midas_mfone_token` address (currently "C")
+- Add Plasma-specific contracts (Fluid vault resolver at `0x5471...`)
+- Add Morpho market IDs (mF-ONE/USDC: `0xef2c...`, AA_FalconXUSDC/USDC: `0xe83d...`)
+- Add Kamino addresses (obligation: `HMMc5d...`, market: `9Y7uwX...`)
+- Add ABIs needed for protocol queries
+
+## Integration with Existing Code
+
+1. **collect_balances.py** — refactor `main()` to expose `scan_wallet_balances()` as a callable function. Add the new common columns (`position_id`, `position_type`, `methodology_ref`, `staleness_flag`). Keep `main()` working for standalone use.
+
+2. **pricing.py** — extend with staleness checking for A2 tokens (compare `oracle_updated_at` against `expected_update_freq_hours`), cross-reference comparison logic, and Exponent PT pricing formula.
+
+3. **evm.py** — add Valuation Block finder (binary search for block closest to but not exceeding 15:00 UTC) and contract call helpers (generic `call_contract`, Morpho `position()`, ERC-4626 `convertToAssets`).
+
+4. **New files**:
+   - `src/valuation.py` — category-specific valuation functions (value_a1, value_a2, value_a3, value_b, value_c, value_d)
+   - `src/collect.py` — orchestrator that calls balance scanner + valuation modules, deduplicates, writes all outputs
+   - `src/output.py` — output writers (JSON, CSV, optional XLSX with per-category sheets)
+
+5. **Deduplication rule**: tokens appearing in both wallet balances AND protocol positions get the protocol-level row (richer metadata). E.g., USCC held as Kamino collateral appears as a D-collateral row, not an E token_balance row.
+
+## Verification
+
+After implementation, test by:
+1. Run `collect.py` with a specific valuation date (use a recent past date)
+2. Verify all output files are created in `outputs/nav_YYYYMMDD/`
+3. Check `positions.csv` imports cleanly into Excel
+4. Cross-reference D positions: collateral value - debt value = leverage_net_value_usd
+5. Cross-reference B positions: manual amortisation calculation matches formula
+6. Cross-reference A3 positions: accrual matches contractual terms
+7. Verify `nav_summary.json` totals match sum of `positions.csv` values
+8. Compare output against last known NAV from spreadsheet (14 March 2026) for sanity check

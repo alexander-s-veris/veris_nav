@@ -21,6 +21,7 @@
   },
   "plasma": {
     "chain_id": 9745,
+    "rpc_url_template": "https://plasma-mainnet.g.alchemy.com/v2/{api_key}",
     "token_balance_method": "etherscan_v2",
     "explorer": "https://plasmascan.to"
   },
@@ -28,6 +29,11 @@
     "chain_id": 999,
     "rpc_url_template": "https://hyperliquid-mainnet.g.alchemy.com/v2/{api_key}",
     "explorer": null
+  },
+  "katana": {
+    "chain_id": 747474,
+    "rpc_env_var": "KATANA_RPC_URL",
+    "explorer": "https://katanascan.com"
   },
   "solana": {
     "rpc_url_template": "https://solana-mainnet.g.alchemy.com/v2/{api_key}",

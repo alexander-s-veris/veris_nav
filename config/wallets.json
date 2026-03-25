@@ -2,7 +2,7 @@
   "solana": [
     {
       "address": "ASQ4kYjSYGUYbbYtsaLhUeJS6RtrN4Uwp4XbF4gDifvr",
-      "description": "Main Solana wallet"
+      "description": "Solana Vault 1"
     }
   ],
   "ethereum": [
@@ -12,7 +12,7 @@
     },
     {
       "address": "0x6691005cd97656d488b72594c42cae987264e0e7",
-      "description": "Open Market Positions 2"
+      "description": "Private Deal Positions"
     },
     {
       "address": "0x0c1644d7af63df4a3b15423dbe04a1927c00a4f4",
@@ -24,11 +24,35 @@
     },
     {
       "address": "0xaca2ef22f720ae3f622b9ce3065848c4333687ae",
-      "description": "Multi-chain wallet"
+      "description": "Open Market Positions 3"
     },
     {
       "address": "0x80559941c1a741bc435cb6782b6f161d5772ac4b",
-      "description": "Multi-chain wallet"
+      "description": "Open Market Positions 2"
+    }
+  ],
+  "katana": [
+    {
+      "address": "0x6691005cd97656d488b72594c42cae987264e0e7",
+      "description": "Private Deal Positions"
+    }
+  ],
+  "arma_proxies": [
+    {
+      "address": "0xa8d4e894f268438d3438d0030f2e36852aeba97d",
+      "chain": "base",
+      "description": "ARMA (Giza) smart account proxy — autonomous yield agent, scan as wallet",
+      "parent_wallet": "0x6691005cd97656d488b72594c42cae987264e0e7",
+      "proxy_type": "erc4337_smart_account",
+      "implementation": "0x17bac39f916c21ac825aed89607fdba251dce97d"
+    },
+    {
+      "address": "0xd5086229c2fdea72f8c3292cfafbae7337126c9b",
+      "chain": "arbitrum",
+      "description": "ARMA (Giza) smart account proxy — autonomous yield agent, scan as wallet",
+      "parent_wallet": "0xaca2ef22f720ae3f622b9ce3065848c4333687ae",
+      "proxy_type": "erc4337_smart_account",
+      "implementation": "0x17bac39f916c21ac825aed89607fdba251dce97d"
     }
   ]
 }
