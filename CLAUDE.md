@@ -1,5 +1,20 @@
 # Veris Capital AMC — NAV Data Collection System
 
+## Session Start Checklist
+
+At the start of each new conversation, before working on any tasks, read through all project `.md` files to refresh context:
+- `CLAUDE.md` (this file)
+- `protocol_sourcing.md` — how to read positions from each protocol
+- `README.md`
+- `plans/*.md` — current and future plans
+- `docs/methodology/*.md` — NAV methodology
+- `docs/analysis/*.md` — spreadsheet analysis, token registry
+- `.claude/skills/*/SKILL.md` — operational skills (e.g. safe file organization)
+
+Do NOT rely on memory alone — always re-read the docs.
+
+---
+
 ## Project Overview
 
 This project builds a Python-based data collection system for the Veris Capital AMC (ISIN: LI1536896288), an open-ended Actively Managed Certificate issued by 10C PCC / 10C Cell 11 PC. The system collects on-chain positions, oracle prices, and market data to produce a canonical NAV snapshot file that feeds into the NAV workbook (Excel).
@@ -455,9 +470,13 @@ veris-nav/
 │   ├── chains.json            # Chain configs — RPC URLs, chain IDs, explorers
 │   ├── wallets.json           # Wallet addresses per chain
 │   ├── tokens.json            # Token registry — whitelist per chain with pricing config
-│   ├── contracts.json         # Contract addresses and ABIs
+│   ├── contracts.json         # Protocol contracts grouped by chain and protocol
+│   ├── abis.json              # Minimal ABIs for all contract interactions
+│   ├── morpho_markets.json    # Morpho market IDs and position configs
 │   └── pt_lots.json           # PT token individual lot details
+├── protocol_sourcing.md       # How to read positions from each protocol
 ├── plans/                     # Implementation plans
+├── cache/                     # Cached xlsx sheets as CSVs (gitignored)
 ├── outputs/                   # Generated snapshots (JSON + CSV, gitignored)
 │   ├── wallet_balances.json   # Latest wallet balance snapshot with methodology header
 │   └── wallet_balances.csv    # Same data in CSV format

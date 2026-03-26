@@ -26,9 +26,9 @@ KATANA_RPC_URL=https://rpc.katana.network
 
 | Wallet | Description | Positions Registered |
 |--------|-------------|---------------------|
-| 0xa33e | Open Market Positions | Morpho D (4 markets), Steakhouse A1, Euler A1, Aave Base A1, mHYPER A2, Ethena cooldown, Uniswap V4 LP |
+| 0xa33e | Open Market Positions | Morpho D (3 active, 1 closed), Steakhouse USDC A1, Steakhouse USDT A1, Euler A1, Aave Base A1, mF-ONE A2, mHYPER A2, Ethena cooldown, Uniswap V4 LP |
 | 0x6691 | Private Deal Positions | msyrupUSDp A2, Aave Plasma A1, Avantis A1, Yearn Katana A1, ARMA proxy, Curve LP |
-| 0x0c16 | Credit Positions | Pending |
+| 0x0c16 | Credit Positions | Gauntlet/FalconX A3 (indirect via vault + direct AA_FalconXUSDC), Morpho AA_FalconXUSDC closed |
 | 0xeC0B | Credit Positions 2 | Pending |
 | 0xaca2 | Open Market Positions 3 | ARMA proxy (Arbitrum) |
 | 0x8055 | Open Market Positions 2 | Aave Horizon D, Clearstar A1, mHYPER A2 |
@@ -38,10 +38,13 @@ KATANA_RPC_URL=https://rpc.katana.network
 
 ```
 src/
-  evm.py                  # Shared EVM utilities (cached Web3, block queries)
+  evm.py                   # Shared EVM utilities (cached Web3, block queries)
   solana_client.py         # Solana RPC helpers (balances, eUSX exchange rate)
   pricing.py               # Price adapters (Chainlink, Pyth, Kraken, CoinGecko, par+depeg)
   collect_balances.py      # Production wallet balance scanner (Cat E + F + A1/A2)
+  cache_xlsx.py            # Cache xlsx sheets as CSVs for fast access
+  temp/                    # Temporary query scripts (deleted after final build)
+    query_positions.py     # Reusable position query script for wallet walkthrough
   collect.py               # [Planned] Main orchestrator for full NAV collection
   valuation.py             # [Planned] Category-specific valuation logic (A1-D)
   output.py                # [Planned] NAV snapshot and methodology log writer
@@ -49,17 +52,21 @@ config/
   chains.json              # Chain configs (RPC URLs, chain IDs, explorers)
   wallets.json             # Wallet addresses per chain + ARMA proxy wallets
   tokens.json              # Token registry (whitelist per chain with pricing config)
-  contracts.json           # Protocol contract addresses (Aave, Morpho, Midas, etc.)
-  morpho_markets.json      # Morpho market configs (market IDs, collateral/loan tokens)
+  contracts.json           # Protocol contracts grouped by chain and protocol
+  abis.json                # Minimal ABIs for all contract interactions
+  morpho_markets.json      # Morpho market IDs and position configs
   pt_lots.json             # PT token individual lot details for linear amortisation
+protocol_sourcing.md       # How to read positions from each protocol
+cache/                     # Cached xlsx sheets as CSVs (gitignored)
 outputs/
   wallet_balances.json     # Latest wallet balance snapshot
   wallet_balances.csv      # Same data in CSV
   nav_YYYYMMDD/            # [Planned] Date-stamped NAV snapshots
-plans/
-  output_schema_plan.md    # Approved output schema design
+plans/                     # Implementation plans
 docs/
-  spreadsheet_analysis.md  # Analysis of existing NAV Excel workbook
+  reference/               # Source documents (policy, spreadsheet, loan docs)
+  analysis/                # Working notes and analysis
+  methodology/             # NAV methodology documents
 ```
 
 ## Configuration Files
@@ -67,7 +74,8 @@ docs/
 - `config/chains.json` — RPC endpoints per chain (Ethereum, Arbitrum, Base, Avalanche, Plasma, HyperEVM, Katana, Solana)
 - `config/wallets.json` — Wallet addresses per chain, plus ARMA smart account proxy addresses
 - `config/tokens.json` — Token registry per chain with category (A1-F) and pricing config
-- `config/contracts.json` — Protocol contract addresses (Aave pools, Morpho core, Midas oracles, Ethena, Uniswap, etc.)
+- `config/contracts.json` — Protocol contracts grouped by chain and protocol, with ABI references
+- `config/abis.json` — Minimal ABIs for all contract interactions (ERC-20, ERC-4626, Morpho, Chainlink, Aave, Pareto, Ethena)
 - `config/morpho_markets.json` — Morpho leveraged position market IDs with collateral/loan token details
 - `config/pt_lots.json` — PT token individual lot details for linear amortisation
 
@@ -98,4 +106,6 @@ See `plans/output_schema_plan.md` for the complete schema specification.
 
 See `CLAUDE.md` for full project context, valuation methodology, and asset classification framework.
 
-See `docs/` for the Valuation Policy governing how all positions are priced.
+See `docs/reference/` for the Valuation Policy and NAV workbook.
+
+See `protocol_sourcing.md` for detailed protocol-by-protocol position reading guide.

@@ -4,6 +4,24 @@ How to read balances and positions from each protocol encountered in the portfol
 
 ---
 
+## Data Sourcing Method
+
+**All position data is sourced via RPC endpoints** (Alchemy) as configured in `config/chains.json`. This is the primary and only method for reading on-chain balances and positions.
+
+- **EVM chains**: Alchemy RPC (Ethereum, Arbitrum, Base, Avalanche, Plasma, HyperEVM)
+- **Katana**: Public RPC endpoint (env var)
+- **Solana**: Alchemy Solana RPC
+
+**DeBank is NOT used for data sourcing.** DeBank is a verification source only (per Valuation Policy Section 7) — used to cross-check aggregate portfolio value against our independently sourced data.
+
+**Workflow for walking through wallet positions:**
+1. Query token balances via RPC (Alchemy `alchemy_getTokenBalances` or direct `balanceOf`)
+2. For protocol positions (Morpho markets, Aave lending, etc.): query the protocol's smart contracts directly at the relevant block
+3. Price each position per its category methodology
+4. Record all query details (contract, function, block number, result) for the methodology log
+
+---
+
 ## Morpho (Ethereum, Arbitrum, Base)
 
 Morpho has two product types. Both use the same core contract per chain.
@@ -30,34 +48,7 @@ Isolated lending markets. Each market has a unique `market_id` (bytes32). A posi
    - Convert: `supplyAssets = supplyShares × totalSupplyAssets / totalSupplyShares`
    - Convert: `borrowAssets = borrowShares × totalBorrowAssets / totalBorrowShares`
 
-**ABI (minimal)**:
-```json
-[
-  {
-    "inputs": [{"name": "id", "type": "bytes32"}, {"name": "user", "type": "address"}],
-    "name": "position",
-    "outputs": [
-      {"name": "supplyShares", "type": "uint256"},
-      {"name": "borrowShares", "type": "uint128"},
-      {"name": "collateral", "type": "uint128"}
-    ],
-    "stateMutability": "view", "type": "function"
-  },
-  {
-    "inputs": [{"name": "id", "type": "bytes32"}],
-    "name": "market",
-    "outputs": [
-      {"name": "totalSupplyAssets", "type": "uint128"},
-      {"name": "totalSupplyShares", "type": "uint128"},
-      {"name": "totalBorrowAssets", "type": "uint128"},
-      {"name": "totalBorrowShares", "type": "uint128"},
-      {"name": "lastUpdate", "type": "uint128"},
-      {"name": "fee", "type": "uint128"}
-    ],
-    "stateMutability": "view", "type": "function"
-  }
-]
-```
+**ABI**: `config/abis.json` → `morpho_core` (functions: `position`, `market`)
 
 **Config**: `config/morpho_markets.json` — one entry per market with market_id, loan token, collateral token, wallets.
 
@@ -147,30 +138,7 @@ When you borrow, a variable debt token is minted. Its `balanceOf` also increases
 - Returns: `(totalCollateralBase, totalDebtBase, availableBorrowsBase, currentLiquidationThreshold, ltv, healthFactor)`
 - Values in base currency (USD, 8 decimals)
 
-**ABI (minimal)**:
-```json
-[
-  {
-    "inputs": [{"name": "account", "type": "address"}],
-    "name": "balanceOf",
-    "outputs": [{"name": "", "type": "uint256"}],
-    "stateMutability": "view", "type": "function"
-  },
-  {
-    "inputs": [{"name": "user", "type": "address"}],
-    "name": "getUserAccountData",
-    "outputs": [
-      {"name": "totalCollateralBase", "type": "uint256"},
-      {"name": "totalDebtBase", "type": "uint256"},
-      {"name": "availableBorrowsBase", "type": "uint256"},
-      {"name": "currentLiquidationThreshold", "type": "uint256"},
-      {"name": "ltv", "type": "uint256"},
-      {"name": "healthFactor", "type": "uint256"}
-    ],
-    "stateMutability": "view", "type": "function"
-  }
-]
-```
+**ABI**: `config/abis.json` → `erc20` (for aToken/debt token `balanceOf`) and `aave_pool` (for `getUserAccountData`)
 
 ### Classification
 
@@ -219,19 +187,48 @@ Aave Horizon is a **separate RWA-only pool** with its own Pool contract and its 
 
 ## Euler V2 (Arbitrum)
 
-ERC-4626 vaults with sub-account system.
+ERC-4626 vaults with a sub-account system. Each wallet can have up to 256 sub-accounts within a vault.
 
-**How to read**:
-- Sub-accounts: `address XOR i` for i = 0..255. Must scan all 256 to find active ones.
-- Once sub-account found: `balanceOf(sub_account_address)` on vault contract → shares
-- `convertToAssets(shares)` → underlying amount
+### Sub-account system
 
-**Classification**: Category A1.
+Euler V2 uses a XOR-based addressing scheme for sub-accounts:
+- Sub-account address = `wallet_address XOR sub_account_id` (where id = 0..255)
+- This only affects the **last byte** of the address
+- Sub-account 0 = the wallet itself (XOR 0 = no change)
+- You must **scan all 256 sub-accounts** to discover which ones have balances — there's no registry or event to query
 
-**Known vaults**:
-| Vault | Address | Chain | Active sub-account |
-|-------|---------|-------|--------------------|
-| esyrupUSDC-1 | 0xA999f8a38A902f27F278358c4bD20fe1459Ae47C | Arbitrum | 163 (for 0xa33e) |
+**Discovery script pattern**:
+```python
+wallet_int = int(wallet_address, 16)
+for i in range(256):
+    sub_addr = hex(wallet_int ^ i)
+    shares = vault.balanceOf(sub_addr)
+    if shares > 0:
+        print(f"Sub-account {i}: {shares}")
+```
+
+**Important**: Sub-account IDs are NOT stable across wallets. Wallet A might use sub-account 1, wallet B might use sub-account 42. Always scan when encountering a new wallet on Euler.
+
+### How to read (once sub-account is found)
+
+Standard ERC-4626:
+1. `balanceOf(sub_account_address)` on vault contract → shares
+2. `convertToAssets(shares)` → underlying token amount
+
+**Classification**: Category A1. Value = convertToAssets(shares) × underlying token price.
+
+### Known vaults
+
+| Vault | Address | Chain | Wallet | Active sub-account | Sub-account address |
+|-------|---------|-------|--------|--------------------|---------------------|
+| esyrupUSDC-1 | `0xA999f8a38A902f27F278358c4bD20fe1459Ae47C` | Arbitrum | 0xa33e | 1 | `0xa33e...62a3` |
+
+### Adding a new Euler position
+
+1. Get the vault contract address
+2. Scan all 256 sub-accounts for the wallet to find which ones have balances
+3. Record the active sub-account ID in contracts.json
+4. Read via standard ERC-4626 `balanceOf(sub_addr)` + `convertToAssets`
 
 ---
 
@@ -259,6 +256,109 @@ sUSDe is an ERC-4626 vault (staked USDe).
 - **Pending unstakes**: `cooldowns(wallet)` returns `(cooldownEnd, underlyingAmount)` — these are NOT visible via balanceOf
 
 **Classification**: A1 (sUSDe has deterministic on-chain exchange rate). Underlying USDe is Category E.
+
+---
+
+## Gauntlet / Pareto / FalconX (Ethereum)
+
+Multi-layered private credit position. Veris has exposure through two paths, both using Pareto's AA_FalconXUSDC tranche token as the underlying credit instrument.
+
+### Architecture
+
+```
+Pareto issues AA_FalconXUSDC tranche tokens (credit to FalconX)
+  ↓
+Two paths of exposure for Veris:
+
+Path 1 (indirect): Gauntlet vault holds AA_FalconXUSDC as Morpho collateral
+  → borrows USDC against it (leveraged)
+  → Veris holds gpAAFalconX shares = pro-rata claim on vault's net exposure
+
+Path 2 (direct): Veris wallet 0x0c16 holds AA_FalconXUSDC directly
+  → Previously deployed as Morpho collateral (closed 16 Mar 2026)
+  → Tokens withdrawn to wallet, still held
+```
+
+### Classification
+
+**Category A3** (private credit). Primary valuation is **manual accrual** at contractual interest rate, NOT on-chain value. The on-chain queries below serve as **cross-reference only**.
+
+### Contracts
+
+| Contract | Address | Purpose |
+|----------|---------|---------|
+| Gauntlet Levered FalconX Vault | `0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44` | Custom vault (NOT ERC-4626). gpAAFalconX token, 18 decimals. No convertToAssets/totalAssets. |
+| Gauntlet Provisioner | `0x21994912f1D286995c4d4961303cBB8E44939944` | Vault management |
+| Gauntlet Price Fee Calculator | `0x8F3FfA11CD5915f0E869192663b905504A2Ef4a5` | Fee calculations |
+| Pareto Credit Vault FalconX | `0x433d5b175148da32ffe1e1a37a939e1b7e79be4d` | Price oracle only (NOT ERC-20). `tranchePrice(address)` → uint256 (6 dec) |
+| AA_FalconXUSDC Tranche | `0xC26A6Fa2C37b38E549a4a1807543801Db684f99C` | ERC-20 tranche token, 18 decimals. Total supply 120.4M. NOT ERC-4626. |
+| Morpho Market (AA_FalconXUSDC/USDC) | ID: `0xe83d72fa...f36f52` | The leveraged market |
+
+### How to read (on-chain cross-reference)
+
+**Step 1 — Tranche price:**
+- Call `tranchePrice(tranche_address)` on Pareto contract `0x433d...`
+- Input: `0xC26A6Fa2C37b38E549a4a1807543801Db684f99C`
+- Returns: price scaled by 6 decimals (e.g. 1067961 = $1.067961 per tranche token)
+- Note: `getTranchePrice()` reverts — use `tranchePrice()` instead
+
+**Step 2 — Vault's Morpho position:**
+- Call `position(market_id, vault_address)` on Morpho Core
+- Returns collateral (AA_FalconXUSDC, 18 decimals) and borrow shares
+- Convert borrow shares to USDC using `market(market_id)`
+- Collateral value = collateral tokens × tranche price
+
+**Step 3 — Veris's share:**
+- `balanceOf(0x0c16)` on Gauntlet vault → Veris's gpAAFalconX shares
+- `totalSupply()` on Gauntlet vault → total shares
+- Veris % = veris_shares / total_supply
+
+**Step 4 — Veris's indirect (Gauntlet) on-chain cross-reference:**
+- Vault net = (Morpho collateral × tranche price) − borrow USDC
+- Veris portion = vault net × Veris %
+- Note: Gauntlet vault holds 0 AA_FalconXUSDC in wallet — all deployed as Morpho collateral
+
+**Step 5 — Veris's direct AA_FalconXUSDC holding:**
+- `balanceOf(0x0c16)` on AA_FalconXUSDC token `0xC26A...`
+- Direct value = balance × tranche price
+
+### Current values (26 Mar 2026)
+
+**Indirect (via Gauntlet vault):**
+
+| Metric | Value |
+|--------|-------|
+| Veris gpAAFalconX shares | 2,507,115 |
+| Total supply | 26,740,263 |
+| Veris ownership | 9.3758% |
+| Vault Morpho collateral | 55,561,262 AA_FalconXUSDC |
+| Tranche price | $1.067961 |
+| Vault collateral value | $59,337,261 |
+| Vault borrow | $30,924,012 USDC |
+| Vault net | $28,413,248 |
+| Veris on-chain cross-ref | $2,663,971 |
+
+**Direct (AA_FalconXUSDC in wallet 0x0c16):**
+
+| Metric | Value |
+|--------|-------|
+| 0x0c16 AA_FalconXUSDC balance | 1,894,970 |
+| Tranche price | $1.067961 |
+| Direct on-chain cross-ref | $2,023,746 |
+
+**Combined FalconX cross-ref: ~$4,687,717**
+
+### Accrual (primary valuation)
+
+Contractual rate history:
+- Jul 2025: initial $2M investment
+- Aug 2025: 11.25%
+- Sep 2025: 12%
+- Oct 2025: 12% (additional investment, total ~$4.36M Gauntlet value)
+- Jan 2026: 10.5%
+- Feb 2026: 10%
+
+Accrual details to be provided separately in loan documentation.
 
 ---
 
