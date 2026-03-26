@@ -38,7 +38,8 @@
           "decimals": 18,
           "category": "A2"
         },
-        "wallets": ["0xa33e1f748754d2d624638ab335100d92fcbe62a2"]
+        "wallets": ["0xa33e1f748754d2d624638ab335100d92fcbe62a2"],
+        "_note": "Closed as of 26 Mar 2026. mF-ONE collateral moved to wallet, USDT deposited to Steakhouse USDT vault."
       },
       {
         "market_id": "0xab3196447663a41382ba4b4d55eab3fa702ee2cf071db224fd72492953040056",
