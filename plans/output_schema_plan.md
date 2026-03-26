@@ -81,7 +81,7 @@ One row per valued position. All categories share common columns. Category-speci
 
 - **A1**: One row per vault position. `position_type = vault_share`. Exchange rate from `convertToAssets` or protocol-specific function.
 - **A2**: One row per token. `position_type = oracle_priced`. Primary price from oracle hierarchy, cross-reference against issuer NAV where available.
-- **A3**: One row per vault. `position_type = manual_accrual`. Primary value = principal + accrued interest from config. On-chain convertToAssets or tranche price as cross-reference only.
+- **A3**: One row per position. `position_type = manual_accrual`. Value is read from the position's supporting workbook at the valuation timestamp (see A3 flow below). Cross-reference is post-facto only (verified at next on-chain price update, not at NAV date).
 - **B**: One row per lot. `position_type = pt_lot`. Formula: `underlying_price / (1 + implied_rate * days_to_maturity / 365)`. AMM price as cross-reference only. Lots linked via `parent_position_id` to an aggregate row.
 - **C**: One parent row (`position_type = lp_position`) with total value, plus one row per constituent (`position_type = lp_constituent`). PT constituents in yield-splitting LPs use Exponent formula with `last_ln_implied_rate`, not linear amortisation.
 - **D**: Two rows per position: `position_type = collateral` (positive value) and `position_type = debt` (negative value). Collateral row carries `leverage_net_value_usd`. Both linked via `parent_position_id`.
@@ -111,27 +111,57 @@ Single JSON with:
 These provide deeper breakdowns consumed by the corresponding Excel calc sheets:
 
 - **pt_lots.csv**: lot_id, token_symbol, chain, protocol, purchase_date, purchase_price, implied_rate, maturity_date, underlying_token, underlying_price_usd, quantity, days_total, days_elapsed, days_to_maturity, amortised_price_per_unit, value_usd, amm_cross_ref_price, amm_divergence_pct
-- **a3_accruals.csv**: position_id, vault_name, protocol, wallet, principal_usd, rate_pct, rate_period_start, rate_period_end, days_in_period, accrued_interest_usd, total_value_usd, on_chain_cross_ref_value, cross_ref_divergence_pct, incentive_rate_pct, incentive_accrued_usd, impairment_flag, notes
+- **a3_accruals.csv**: position_id, vault_name, protocol, wallet, rate_pct, rate_period_start, rate_period_end, days_in_period, accrued_interest_usd, total_value_usd, supporting_workbook, supporting_sheet, supporting_column, impairment_flag, notes
 - **lp_decomposition.csv**: parent_position_id, lp_name, pool_address, total_lp_shares, constituent_index, constituent_token, constituent_category, constituent_amount, constituent_price_usd, constituent_value_usd, constituent_price_source, lp_implied_rate, accrued_fees_usd
 - **leverage_detail.csv**: parent_position_id, protocol, market_id, wallet, chain, side, token_symbol, token_category, balance_human, price_usd, price_source, value_usd, accrued_interest_usd, net_value_usd
 
 ## Config Extensions Needed
 
-### config/a3_accruals.json (new)
-Stores contractual parameters for each private credit position: principal, rate periods (with dates for rate resets), incentive rates, performance fees, deposit/withdrawal history, cross-reference contract details.
+### config/a3_positions.json (new)
+Maps each A3 position to its supporting workbook, accrual methodology, and on-chain query details:
+```json
+{
+  "falconx_gauntlet": {
+    "workbook": "outputs/falconx_position.xlsx",
+    "sheet": "Gauntlet_LeveredX",
+    "nav_column": "Veris share",
+    "methodology": "plans/falconx_position_flow.md",
+    "rate_source": "docs/reference/loans/",
+    "rate_net_factor": 0.90,
+    "on_chain_queries": {
+      "morpho_position": {"contract": "morpho_core", "market_id": "0xe83d..."},
+      "vault_share": {"contract": "erc20", "address": "0x0000...aF44"},
+      "tranche_price": {"contract": "pareto_credit_vault", "address": "0x433d..."}
+    },
+    "verification": {
+      "method": "convertUnitsToToken on PriceFeeCalculator (0x8F3F...)",
+      "timing": "post-facto at next epoch end, NOT at NAV date"
+    }
+  },
+  "falconx_direct": {
+    "workbook": "outputs/falconx_position.xlsx",
+    "sheet": "Direct Accrual",
+    "nav_column": "Running Balance (USD)",
+    "methodology": "plans/falconx_position_flow.md",
+    "on_chain_queries": {
+      "balance": "balanceOf(veris) on AA_FalconXUSDC + position(market, veris).collateral on Morpho"
+    }
+  }
+}
+```
+Other A3 positions (CreditCoop, Giza, Resolv) will follow a similar pattern — each with its own supporting workbook, rate source, and on-chain queries.
 
 ### config/protocol_positions.json (new)
-Maps wallets to protocol positions for D and C categories: protocol name, chain, wallet, market/pool ID, collateral/debt tokens, query method. Also covers Gauntlet indirect exposure (vault share calculation).
+Maps wallets to protocol positions for D and C categories: protocol name, chain, wallet, market/pool ID, collateral/debt tokens, query method.
 
 ### config/pt_lots.json (extend existing)
 Populate the empty `lots` arrays with per-lot data: purchase_date, quantity, implied_rate, tx_ref.
 
-### config/contracts.json (fix and extend)
-- Fix `midas_mfone_token` address (currently "C")
-- Add Plasma-specific contracts (Fluid vault resolver at `0x5471...`)
-- Add Morpho market IDs (mF-ONE/USDC: `0xef2c...`, AA_FalconXUSDC/USDC: `0xe83d...`)
-- Add Kamino addresses (obligation: `HMMc5d...`, market: `9Y7uwX...`)
-- Add ABIs needed for protocol queries
+### config/contracts.json — DONE
+Already restructured by chain and protocol, with ABI references. Includes Morpho markets in `config/morpho_markets.json`.
+
+### config/abis.json — DONE
+All ABIs centralised: erc20, erc4626, morpho_core, chainlink, aave_pool, pareto_credit_vault, ethena_cooldown, credit_coop_vault.
 
 ## Integration with Existing Code
 
@@ -139,7 +169,7 @@ Populate the empty `lots` arrays with per-lot data: purchase_date, quantity, imp
 
 2. **pricing.py** — extend with staleness checking for A2 tokens (compare `oracle_updated_at` against `expected_update_freq_hours`), cross-reference comparison logic, and Exponent PT pricing formula.
 
-3. **evm.py** — add Valuation Block finder (binary search for block closest to but not exceeding 15:00 UTC) and contract call helpers (generic `call_contract`, Morpho `position()`, ERC-4626 `convertToAssets`).
+3. **evm.py** — add Valuation Block finder (binary search for block closest to but not exceeding 15:00 UTC) and contract call helpers. ABIs loaded from `config/abis.json` (see `plans/abi_migration.md`).
 
 4. **New files**:
    - `src/valuation.py` — category-specific valuation functions (value_a1, value_a2, value_a3, value_b, value_c, value_d)
@@ -147,6 +177,50 @@ Populate the empty `lots` arrays with per-lot data: purchase_date, quantity, imp
    - `src/output.py` — output writers (JSON, CSV, optional XLSX with per-category sheets)
 
 5. **Deduplication rule**: tokens appearing in both wallet balances AND protocol positions get the protocol-level row (richer metadata). E.g., USCC held as Kamino collateral appears as a D-collateral row, not an E token_balance row.
+
+## A3 Position Flow (Category-Specific)
+
+A3 positions differ from all others: they require a **supporting workbook** with continuous accrual calculations, not just a point-in-time query.
+
+### collect.py flow for A3:
+
+```
+1. Read config/a3_positions.json → get workbook path, sheet, NAV column
+2. Open the supporting workbook (e.g. outputs/falconx_position.xlsx)
+3. Check if data covers the valuation date:
+   a. If yes → read the NAV value at the valuation timestamp
+   b. If no → append hourly rows from last timestamp to valuation date:
+      - Query on-chain data (Multicall3) per protocol_sourcing.md
+      - Apply loan notice net rate for interest calculation
+      - Detect deposits/withdrawals via Etherscan
+      - Write formula-based rows
+4. Read the NAV column value at the valuation row
+5. Write ONE row to positions.csv with:
+   - value_usd = NAV column value
+   - price_source = manual_accrual
+   - accrual_rate_pct = current net rate
+   - No cross_ref at NAV date (stale mid-epoch)
+6. Write detail to a3_accruals.csv with supporting workbook reference
+```
+
+### Cross-reference (post-facto, NOT at NAV date):
+
+A3 cross-reference is verified AFTER the NAV date, when the next on-chain price update occurs:
+- For FalconX: `convertUnitsToToken()` on PriceFeeCalculator at the next epoch end
+- For CreditCoop: `convertToAssets()` on the vault at any time (real-time)
+- Divergence threshold: 5% (Appendix B)
+
+This verification is logged in the NAV Methodology Report but does NOT change the NAV value.
+
+### Supporting workbooks by position:
+
+| Position             | Workbook                        | Sheet              | NAV Column          | Methodology                        |
+|----------------------|---------------------------------|--------------------|---------------------|------------------------------------|
+| FalconX (Gauntlet)   | `outputs/falconx_position.xlsx` | Gauntlet_LeveredX  | Veris share         | `plans/falconx_position_flow.md`   |
+| FalconX (Direct)     | `outputs/falconx_position.xlsx` | Direct Accrual     | Running Balance     | `plans/falconx_position_flow.md`   |
+| CreditCoop           | TBD                             | TBD                | TBD                 | TBD                                |
+| Giza                 | TBD                             | TBD                | TBD                 | TBD                                |
+| Resolv               | TBD                             | TBD                | TBD                 | TBD                                |
 
 ## Verification
 
@@ -156,6 +230,7 @@ After implementation, test by:
 3. Check `positions.csv` imports cleanly into Excel
 4. Cross-reference D positions: collateral value - debt value = leverage_net_value_usd
 5. Cross-reference B positions: manual amortisation calculation matches formula
-6. Cross-reference A3 positions: accrual matches contractual terms
+6. Cross-reference A3 positions: accrual value matches supporting workbook at valuation timestamp
 7. Verify `nav_summary.json` totals match sum of `positions.csv` values
 8. Compare output against last known NAV from spreadsheet (14 March 2026) for sanity check
+9. For A3: after next epoch/price update, verify cross-reference divergence < 5%

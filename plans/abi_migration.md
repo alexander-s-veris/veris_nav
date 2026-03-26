@@ -32,6 +32,6 @@ When building the final `src/collect.py` orchestrator:
 - `morpho_core` — position, market
 - `chainlink_aggregator_v3` — latestRoundData, decimals, description
 - `aave_pool` — getUserAccountData
-- `pareto_tranche_price` — tranchePrice(address)
+- `pareto_credit_vault` — tranchePrice, getApr, getContractValue, epoch info, defaulted
 - `ethena_cooldown` — cooldowns(address)
 - `credit_coop_vault` — balanceOf, convertToAssets

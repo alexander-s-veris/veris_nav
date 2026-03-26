@@ -61,6 +61,8 @@ cache/                     # Cached xlsx sheets as CSVs (gitignored)
 outputs/
   wallet_balances.json     # Latest wallet balance snapshot
   wallet_balances.csv      # Same data in CSV
+  falconx_position.xlsx    # FalconX/Pareto A3 accrual workbook (Gauntlet + Direct Accrual)
+  pareto_tranche_price_history.json  # Tranche price update history with epoch metadata
   nav_YYYYMMDD/            # [Planned] Date-stamped NAV snapshots
 plans/                     # Implementation plans
 docs/

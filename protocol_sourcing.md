@@ -275,90 +275,74 @@ Path 1 (indirect): Gauntlet vault holds AA_FalconXUSDC as Morpho collateral
   → Veris holds gpAAFalconX shares = pro-rata claim on vault's net exposure
 
 Path 2 (direct): Veris wallet 0x0c16 holds AA_FalconXUSDC directly
-  → Previously deployed as Morpho collateral (closed 16 Mar 2026)
-  → Tokens withdrawn to wallet, still held
+  → Jul-Sep 2025: held in wallet, then moved to Gauntlet
+  → Mar 2026: revived — supplied as Morpho collateral, then withdrawn to wallet
 ```
 
 ### Classification
 
-**Category A3** (private credit). Primary valuation is **manual accrual** at contractual interest rate, NOT on-chain value. The on-chain queries below serve as **cross-reference only**.
+**Category A3** (private credit). Primary valuation is **manual accrual** from supporting workbook (`outputs/falconx_position.xlsx`). On-chain tranche price is cross-reference only (and only valid at epoch end, not at NAV date).
+
+Full methodology: `docs/methodology/falconx_accrual_analysis.md`
+Position collection flow: `plans/falconx_position_flow.md`
 
 ### Contracts
 
-| Contract | Address | Purpose |
-|----------|---------|---------|
-| Gauntlet Levered FalconX Vault | `0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44` | Custom vault (NOT ERC-4626). gpAAFalconX token, 18 decimals. No convertToAssets/totalAssets. |
-| Gauntlet Provisioner | `0x21994912f1D286995c4d4961303cBB8E44939944` | Vault management |
-| Gauntlet Price Fee Calculator | `0x8F3FfA11CD5915f0E869192663b905504A2Ef4a5` | Fee calculations |
-| Pareto Credit Vault FalconX | `0x433d5b175148da32ffe1e1a37a939e1b7e79be4d` | Price oracle only (NOT ERC-20). `tranchePrice(address)` → uint256 (6 dec) |
-| AA_FalconXUSDC Tranche | `0xC26A6Fa2C37b38E549a4a1807543801Db684f99C` | ERC-20 tranche token, 18 decimals. Total supply 120.4M. NOT ERC-4626. |
-| Morpho Market (AA_FalconXUSDC/USDC) | ID: `0xe83d72fa...f36f52` | The leveraged market |
+| Contract                         | Address                                       | Purpose                                                    |
+|----------------------------------|-----------------------------------------------|------------------------------------------------------------|
+| Gauntlet Levered FalconX Vault   | `0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44`  | Custom vault (NOT ERC-4626). gpAAFalconX, 18 dec.          |
+| Gauntlet Price Fee Calculator    | `0x8F3FfA11CD5915f0E869192663b905504A2Ef4a5`  | `convertUnitsToToken()` for post-facto verification        |
+| Pareto Credit Vault              | `0x433d5b175148da32ffe1e1a37a939e1b7e79be4d`  | Proxy (impl: `0x8016...Ccaf`). TP, epoch, pool data.       |
+| AA_FalconXUSDC Tranche           | `0xC26A6Fa2C37b38E549a4a1807543801Db684f99C`  | ERC-20 tranche token, 18 dec. NOT ERC-4626.                |
+| Morpho Market                    | ID: `0xe83d72fa...f36f52`                      | AA_FalconXUSDC/USDC leveraged market                       |
 
-### How to read (on-chain cross-reference)
+### Pareto Credit Vault — on-chain functions
 
-**Step 1 — Tranche price:**
-- Call `tranchePrice(tranche_address)` on Pareto contract `0x433d...`
-- Input: `0xC26A6Fa2C37b38E549a4a1807543801Db684f99C`
-- Returns: price scaled by 6 decimals (e.g. 1067961 = $1.067961 per tranche token)
-- Note: `getTranchePrice()` reverts — use `tranchePrice()` instead
+ABI: `config/abis.json` → `pareto_credit_vault`
 
-**Step 2 — Vault's Morpho position:**
-- Call `position(market_id, vault_address)` on Morpho Core
-- Returns collateral (AA_FalconXUSDC, 18 decimals) and borrow shares
-- Convert borrow shares to USDC using `market(market_id)`
-- Collateral value = collateral tokens × tranche price
+| Function                    | Returns              | Description                                                      |
+|-----------------------------|----------------------|------------------------------------------------------------------|
+| `tranchePrice(tranche)`     | uint256 (6 dec)      | Current price per AA_FalconXUSDC token. Updates ~monthly at epoch end. |
+| `lastEpochApr()`            | uint256 (18 dec)     | Gross rate of last completed epoch (matches loan notice)         |
+| `lastEpochInterest()`       | uint256 (6 dec)      | Interest distributed at last epoch end                           |
+| `getContractValue()`        | uint256 (6 dec)      | Total pool value in USDC (matches loan notice principal)         |
+| `epochEndDate()`            | uint256 (unix ts)    | Scheduled end of current epoch                                   |
+| `epochDuration()`           | uint256 (seconds)    | Epoch length (~2,468,880 sec = ~28.6 days)                       |
+| `isEpochRunning()`          | bool                 | Whether an epoch is currently active                             |
+| `defaulted()`               | bool                 | Whether a default has occurred                                   |
+| `getApr(tranche)`           | uint256 (18 dec)     | Current net investor APR                                         |
 
-**Step 3 — Veris's share:**
-- `balanceOf(0x0c16)` on Gauntlet vault → Veris's gpAAFalconX shares
-- `totalSupply()` on Gauntlet vault → total shares
-- Veris % = veris_shares / total_supply
+**Epoch cycle**: ~31 days. At epoch end, `stopEpoch()` updates the tranche price. Between epochs, TP is stale. TP update method signature: `0xb4ecd47f`.
 
-**Step 4 — Veris's indirect (Gauntlet) on-chain cross-reference:**
-- Vault net = (Morpho collateral × tranche price) − borrow USDC
-- Veris portion = vault net × Veris %
-- Note: Gauntlet vault holds 0 AA_FalconXUSDC in wallet — all deployed as Morpho collateral
+### How to read — on-chain queries
 
-**Step 5 — Veris's direct AA_FalconXUSDC holding:**
-- `balanceOf(0x0c16)` on AA_FalconXUSDC token `0xC26A...`
-- Direct value = balance × tranche price
+**Hourly data collection** (via Multicall3, for supporting workbook):
 
-### Current values (26 Mar 2026)
+1. `position(market_id, gauntlet_vault)` on Morpho Core → collateral tokens + borrow shares
+2. `market(market_id)` on Morpho Core → convert borrow shares to USDC
+3. `totalSupply()` on Gauntlet vault → for Veris % calculation
+4. `tranchePrice(AA_tranche)` on Pareto vault → current TP
 
-**Indirect (via Gauntlet vault):**
+**Veris balances** (queried on change only via Etherscan transfers):
+- `balanceOf(0x0c16)` on Gauntlet vault → gpAAFalconX shares
+- `balanceOf(0x0c16)` on AA_FalconXUSDC → direct holding
+- `position(AA_USDC_market, 0x0c16)` on Morpho → direct Morpho collateral
 
-| Metric | Value |
-|--------|-------|
-| Veris gpAAFalconX shares | 2,507,115 |
-| Total supply | 26,740,263 |
-| Veris ownership | 9.3758% |
-| Vault Morpho collateral | 55,561,262 AA_FalconXUSDC |
-| Tranche price | $1.067961 |
-| Vault collateral value | $59,337,261 |
-| Vault borrow | $30,924,012 USDC |
-| Vault net | $28,413,248 |
-| Veris on-chain cross-ref | $2,663,971 |
+**Post-facto verification** (at epoch end only):
+- `convertUnitsToToken(vault, USDC, veris_balance)` on PriceFeeCalculator (`0x8F3F...`)
 
-**Direct (AA_FalconXUSDC in wallet 0x0c16):**
+### Primary valuation — accrual
 
-| Metric | Value |
-|--------|-------|
-| 0x0c16 AA_FalconXUSDC balance | 1,894,970 |
-| Tranche price | $1.067961 |
-| Direct on-chain cross-ref | $2,023,746 |
+```
+Interest = Opening_Value × Net_Rate × Days / 365
+Net_Rate = Gross_Rate × 0.90 (10% pool fee)
+```
 
-**Combined FalconX cross-ref: ~$4,687,717**
-
-### Accrual (primary valuation)
-
-Contractual rate history:
-- Jul 2025: initial $2M investment
-- Aug 2025: 11.25%
-- Sep 2025: 12%
-- Oct 2025: 12% (additional investment, total ~$4.36M Gauntlet value)
-- Jan 2026: 10.5%
-- Feb 2026: 10%
-
-Accrual details to be provided separately in loan documentation.
+- Gross rate from monthly loan notices at `docs/reference/loans/`
+- Also verifiable on-chain via `lastEpochApr()` at each TP update block
+- Supporting workbook: `outputs/falconx_position.xlsx` (two sheets: Gauntlet_LeveredX, Direct Accrual)
+- NAV figure: column R ("Veris share") for Gauntlet, column H ("Running Balance") for Direct Accrual
+- Collateral value in Gauntlet uses **re-engineered TP** from accrual, not stale on-chain TP
 
 ---
 

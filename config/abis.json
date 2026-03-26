@@ -142,11 +142,89 @@
     }
   ],
 
-  "pareto_tranche_price": [
+  "pareto_credit_vault": [
     {
       "inputs": [{"name": "tranche", "type": "address"}],
       "name": "tranchePrice",
       "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [{"name": "tranche", "type": "address"}],
+      "name": "virtualPrice",
+      "outputs": [{"name": "_virtualPrice", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [{"name": "tranche", "type": "address"}],
+      "name": "getApr",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getContractValue",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "lastNAVAA",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "epochDuration",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "epochEndDate",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "expectedEpochInterest",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "lastEpochApr",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "lastEpochInterest",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "isEpochRunning",
+      "outputs": [{"name": "", "type": "bool"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "defaulted",
+      "outputs": [{"name": "", "type": "bool"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "token",
+      "outputs": [{"name": "", "type": "address"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "AATranche",
+      "outputs": [{"name": "", "type": "address"}],
       "stateMutability": "view", "type": "function"
     }
   ],

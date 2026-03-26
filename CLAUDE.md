@@ -462,7 +462,8 @@ veris-nav/
 │   ├── solana_client.py       # Solana RPC helpers (balances, eUSX exchange rate)
 │   ├── pricing.py             # Price adapters (Chainlink, Pyth, Kraken, CoinGecko Pro, par+depeg)
 │   ├── collect_balances.py    # Production wallet balance scanner (Cat E + F + A1/A2 tokens)
-│   ├── test_mfone_oracle.py   # Test script — mF-ONE Chainlink oracle query
+│   ├── cache_xlsx.py          # Cache xlsx sheets as CSVs for fast access
+│   ├── temp/                  # Temporary query scripts (deleted after final build)
 │   ├── collect.py             # [Planned] Main orchestrator for full NAV collection
 │   ├── valuation.py           # [Planned] Category-specific valuation logic (A1/A3/B/C/D)
 │   └── output.py              # [Planned] Final NAV snapshot writer
@@ -477,9 +478,11 @@ veris-nav/
 ├── protocol_sourcing.md       # How to read positions from each protocol
 ├── plans/                     # Implementation plans
 ├── cache/                     # Cached xlsx sheets as CSVs (gitignored)
-├── outputs/                   # Generated snapshots (JSON + CSV, gitignored)
+├── outputs/                   # Generated snapshots (gitignored)
 │   ├── wallet_balances.json   # Latest wallet balance snapshot with methodology header
-│   └── wallet_balances.csv    # Same data in CSV format
+│   ├── wallet_balances.csv    # Same data in CSV format
+│   ├── falconx_position.xlsx  # FalconX/Pareto A3 accrual workbook
+│   └── pareto_tranche_price_history.json  # TP update history
 ├── docs/                      # Valuation Policy and reference documents
 └── README.md
 ```

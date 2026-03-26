@@ -40,10 +40,11 @@
         "address": "0x8F3FfA11CD5915f0E869192663b905504A2Ef4a5",
         "description": "Fee calculations"
       },
-      "pareto_tranche_price": {
+      "pareto_credit_vault": {
         "address": "0x433d5b175148da32ffe1e1a37a939e1b7e79be4d",
-        "abi": "pareto_tranche_price",
-        "description": "Price oracle only (not ERC-20). tranchePrice(address) → uint256 (6 dec). getTranchePrice() reverts."
+        "abi": "pareto_credit_vault",
+        "implementation": "0x8016E6f35a4B32a5Ea4c3919418039C7DaffCcaf",
+        "description": "Pareto Credit Vault (proxy). tranchePrice, getApr, getContractValue, epoch info. Underlying: USDC."
       },
       "aa_falconxusdc_tranche": {
         "address": "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C",
