@@ -50,7 +50,10 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         return _price_cache[key]
 
     symbol = token_entry.get("symbol", "UNKNOWN")
-    method = token_entry.get("pricing", {}).get("method", "")
+    pricing = token_entry.get("pricing", {})
+    if not isinstance(pricing, dict):
+        pricing = {}
+    method = pricing.get("method", "")
 
     if method == "par":
         result = par_price(token_entry, w3_eth)
@@ -59,7 +62,7 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     elif method == "kraken":
         result = _price_kraken_with_fallback(token_entry)
     elif method == "pyth":
-        feed_id = token_entry["pricing"].get("pyth_feed_id")
+        feed_id = pricing.get("pyth_feed_id")
         if feed_id:
             try:
                 result = pyth_price(feed_id)
@@ -68,7 +71,7 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         else:
             result = _unavailable(symbol)
     elif method == "coingecko":
-        cg_id = token_entry["pricing"].get("coingecko_id")
+        cg_id = pricing.get("coingecko_id")
         if cg_id:
             try:
                 result = coingecko_price(cg_id)

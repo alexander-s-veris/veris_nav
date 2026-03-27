@@ -19,6 +19,12 @@ class PricingDefensiveTests(unittest.TestCase):
         self.assertEqual(str(result["price_usd"]), "0")
         self.assertIn("UNKNOWN", result["notes"])
 
+    def test_get_price_handles_non_dict_pricing_field(self):
+        result = pricing.get_price({"symbol": "BAD", "pricing": "not-a-dict"})
+        self.assertEqual(result["price_source"], "unavailable")
+        self.assertEqual(str(result["price_usd"]), "0")
+        self.assertIn("BAD", result["notes"])
+
 
 class StrictConfigValidationTests(unittest.TestCase):
     def _bad_contracts(self):
