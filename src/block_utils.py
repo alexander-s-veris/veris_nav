@@ -25,14 +25,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- Block estimation (Option 1) ---
 
-AVG_BLOCK_TIME = {
-    "ethereum": 12.0,
-    "arbitrum": 0.25,
-    "base": 2.0,
-    "avalanche": 2.0,
-    "plasma": 2.0,
-    "hyperevm": 2.0,
-}
+def _get_avg_block_time(chain: str) -> float:
+    """Get average block time for a chain from chains.json config.
+
+    Falls back to 12.0s (Ethereum default) if not configured.
+    """
+    from evm import load_chains
+    chains = load_chains()
+    chain_cfg = chains.get(chain, {})
+    return chain_cfg.get("avg_block_time", 12.0)
 
 
 def estimate_blocks(
@@ -50,12 +51,12 @@ def estimate_blocks(
         ref_block: Known block number.
         ref_ts: Unix timestamp of ref_block.
         target_timestamps: List of target unix timestamps.
-        chain: Chain name (determines average block time).
+        chain: Chain name (determines average block time from chains.json).
 
     Returns:
         List of estimated block numbers (same length as target_timestamps).
     """
-    block_time = AVG_BLOCK_TIME.get(chain, 12.0)
+    block_time = _get_avg_block_time(chain)
     return [
         max(1, ref_block + round((ts - ref_ts) / block_time))
         for ts in target_timestamps
@@ -79,7 +80,7 @@ def refine_block(w3, estimated_block: int, target_ts: int, tolerance: int = 15,
     Returns:
         Refined block number.
     """
-    block_time = AVG_BLOCK_TIME.get(chain, 12.0)
+    block_time = _get_avg_block_time(chain)
     latest = w3.eth.block_number
     est = max(1, min(estimated_block, latest))
 
