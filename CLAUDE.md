@@ -13,6 +13,8 @@ At the start of each new conversation, before working on any tasks, read through
 
 Do NOT rely on memory alone — always re-read the docs.
 
+**Memory maintenance**: Update your memory files (`.claude/projects/.../memory/`) every hour during long sessions and after every significant milestone (feature completed, architecture change, new position onboarded, bug fixed). Memory should reflect the current project state so the next session starts with accurate context.
+
 ---
 
 ## Project Overview
@@ -545,6 +547,16 @@ No hardcoded Pyth feed IDs or fallback prices — all pricing is config-driven v
 - New/disappeared positions, zero-value positions, value changes >10%, price source changes, balance changes >50%
 - Usage: `python src/diff_snapshots.py --latest`
 
+### Robustness Features
+
+- **Config validation**: `_validate_config()` checks required fields in contracts.json, morpho_markets.json, and solana_protocols.json before making RPC calls. Called lazily on first query.
+- **Price cache**: Keyed by `(symbol, method, feed)` not just symbol — prevents cross-chain cache collisions for same-named tokens with different pricing configs.
+- **Handler retry**: All protocol handlers (EVM and Solana) retry once with 2s backoff on failure, preventing transient RPC timeouts from causing material position gaps.
+- **ERC-4626 filtering**: Handler scans only sections with `_query_type: "erc4626"` instead of all sections.
+- **Balance method registry**: `collect.py` dispatches balance queries via a `balance_scanners` dict (alchemy/etherscan_v2/balance_of) instead of if/elif branching.
+- **Output schema versioning**: `SCHEMA_VERSION = "1.1"` in positions.json and nav_summary.json for downstream consumer compatibility detection.
+- **Solana constants in config**: All Solana mint addresses and program IDs read from `solana_protocols.json`, not hardcoded.
+
 ---
 
 ## Project Structure
@@ -590,6 +602,21 @@ veris-nav/
 ├── docs/                      # Valuation Policy and reference documents
 └── README.md
 ```
+
+---
+
+## Compliance Testing
+
+The system must have automated tests that verify the valuation methodology matches the Valuation Policy (`docs/reference/23-03-2026_Veris_Capital_AMC_Valuation_Policy DRAFT_v.1.0.pdf`). Tests should be strict and cover:
+
+- **Category classification**: Every token in `tokens.json` must have a valid category (A1-F) matching the Policy Section 5 definitions
+- **Primary pricing source per category**: A1 uses smart contract exchange rate, A2 uses oracle hierarchy (Chainlink → Pyth → Redstone → Issuer NAV → CoinGecko → DEX TWAP), E par-priced tokens have depeg monitoring, F uses Kraken → CoinGecko → DEX TWAP
+- **Fallback source configuration**: Every A2 token must have at least one fallback source configured. Every E token with `method: "par"` should have a depeg check feed (Chainlink or Pyth). Every F token with Kraken primary should have CoinGecko fallback.
+- **Staleness thresholds**: Every A2 token must have `expected_update_freq_hours` configured. The staleness flag threshold is 2x the expected frequency per Section 6.2.
+- **Divergence tolerances**: Output should flag positions exceeding Appendix B thresholds (A1: 2%, A2: 3%, A3: 5%, B: 6%, C: 5%, D: 5%, E: 0.5%, F: 10%)
+- **Category-specific methodology**: A1 = convertToAssets, A3 = manual accrual (not on-chain TP), B = linear amortisation per lot (not AMM price), C = decomposition with PT in LP using AMM rate (not lot amortisation), D = net (collateral − debt)
+
+Run tests with: `python -m unittest discover -s tests -v`
 
 ---
 
