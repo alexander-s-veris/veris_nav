@@ -106,6 +106,16 @@ def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None, expected_freq_hours:
         return kraken_price(feed_cfg["pair"])
     elif feed_type == "coingecko":
         return coingecko_price(feed_cfg["coin_id"])
+    elif feed_type == "dex_twap":
+        chain = feed_cfg.get("chain", "ethereum")
+        if chain != "ethereum":
+            from evm import get_web3
+            w3 = get_web3(chain)
+        else:
+            w3 = w3_eth
+        if not w3:
+            raise ConnectionError(f"No Web3 for chain {chain}")
+        return dex_twap_price(feed_cfg, w3)
     else:
         raise ValueError(f"Unknown feed type: {feed_type}")
 
@@ -462,6 +472,140 @@ def coingecko_price(coin_id: str) -> dict:
         "staleness_hours": None,
         "stale_flag": "",
         "notes": "",
+    }
+
+
+# --- DEX TWAP pricing ---
+
+# Uniswap V3 observe ABI
+_UNI_V3_OBSERVE_ABI = [
+    {"inputs": [{"name": "secondsAgos", "type": "uint32[]"}],
+     "name": "observe",
+     "outputs": [{"name": "tickCumulatives", "type": "int56[]"},
+                 {"name": "secondsPerLiquidityCumulativeX128s", "type": "uint160[]"}],
+     "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "token0", "outputs": [{"name": "", "type": "address"}],
+     "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "slot0",
+     "outputs": [{"name": "sqrtPriceX96", "type": "uint160"},
+                 {"name": "tick", "type": "int24"},
+                 {"name": "observationIndex", "type": "uint16"},
+                 {"name": "observationCardinality", "type": "uint16"},
+                 {"name": "observationCardinalityNext", "type": "uint16"},
+                 {"name": "feeProtocol", "type": "uint8"},
+                 {"name": "unlocked", "type": "bool"}],
+     "stateMutability": "view", "type": "function"},
+]
+
+# Curve get_dy ABI for spot price
+_CURVE_DY_ABI = [
+    {"inputs": [{"name": "i", "type": "int128"}, {"name": "j", "type": "int128"},
+                {"name": "dx", "type": "uint256"}],
+     "name": "get_dy", "outputs": [{"name": "", "type": "uint256"}],
+     "stateMutability": "view", "type": "function"},
+]
+
+
+def dex_twap_price(feed_cfg: dict, w3: Web3) -> dict:
+    """DEX TWAP price — dispatches to Uniswap V3 or Curve based on feed config.
+
+    feed_cfg must have:
+    - dex_type: "uniswap_v3" or "curve"
+    - pool_address: contract address
+    - chain: chain name (default "ethereum")
+    For Uniswap V3: twap_seconds (default 1800 = 30 min)
+    For Curve: token_in_index, token_out_index, amount_in, decimals_in, decimals_out
+    """
+    dex_type = feed_cfg.get("dex_type", "uniswap_v3")
+    if dex_type == "uniswap_v3":
+        return _uniswap_v3_twap(feed_cfg, w3)
+    elif dex_type == "curve":
+        return _curve_spot_price(feed_cfg, w3)
+    else:
+        raise ValueError(f"Unknown dex_type: {dex_type}")
+
+
+def _uniswap_v3_twap(feed_cfg: dict, w3: Web3) -> dict:
+    """Calculate TWAP from Uniswap V3 pool using observe().
+
+    Uses tick cumulative difference over the window to derive average price.
+    Returns price of token0 in terms of token1 (or inverted if invert=True).
+    """
+    import math
+
+    pool_addr = feed_cfg["pool_address"]
+    twap_seconds = feed_cfg.get("twap_seconds", 1800)
+    decimals_0 = feed_cfg.get("decimals_0", 18)
+    decimals_1 = feed_cfg.get("decimals_1", 6)
+    invert = feed_cfg.get("invert", False)
+
+    pool = w3.eth.contract(
+        address=Web3.to_checksum_address(pool_addr),
+        abi=_UNI_V3_OBSERVE_ABI,
+    )
+
+    # Query tick cumulatives at [twap_seconds ago, 0 (now)]
+    tick_cumulatives, _ = pool.functions.observe([twap_seconds, 0]).call()
+
+    # Average tick over the window
+    tick_diff = tick_cumulatives[1] - tick_cumulatives[0]
+    avg_tick = tick_diff // twap_seconds
+
+    # Tick to price: price = 1.0001^tick, adjusted for decimals
+    price_raw = Decimal(str(math.pow(1.0001, avg_tick)))
+    decimal_adjustment = Decimal(10 ** (decimals_0 - decimals_1))
+    price = price_raw * decimal_adjustment
+
+    if invert:
+        price = Decimal(1) / price if price > 0 else Decimal(0)
+
+    return {
+        "price_usd": price,
+        "price_source": f"dex_twap_uniswap_v3 ({twap_seconds}s window)",
+        "depeg_flag": "none",
+        "depeg_deviation_pct": None,
+        "oracle_updated_at": datetime.now(timezone.utc).strftime(TS_FMT),
+        "staleness_hours": 0,
+        "stale_flag": "",
+        "notes": f"Uniswap V3 TWAP from pool {pool_addr[:10]}... over {twap_seconds}s",
+    }
+
+
+def _curve_spot_price(feed_cfg: dict, w3: Web3) -> dict:
+    """Get spot price from a Curve pool using get_dy().
+
+    Queries how much token_out you get for 1 unit of token_in.
+    For stablecoin pools this is effectively the current exchange rate.
+    """
+    pool_addr = feed_cfg["pool_address"]
+    i = feed_cfg.get("token_in_index", 0)
+    j = feed_cfg.get("token_out_index", 1)
+    decimals_in = feed_cfg.get("decimals_in", 18)
+    decimals_out = feed_cfg.get("decimals_out", 6)
+    invert = feed_cfg.get("invert", False)
+
+    pool = w3.eth.contract(
+        address=Web3.to_checksum_address(pool_addr),
+        abi=_CURVE_DY_ABI,
+    )
+
+    # Query: how much token_out for 1 unit of token_in
+    amount_in = 10 ** decimals_in
+    amount_out = pool.functions.get_dy(i, j, amount_in).call()
+    price = Decimal(str(amount_out)) / Decimal(10 ** decimals_out)
+
+    if invert:
+        price = Decimal(1) / price if price > 0 else Decimal(0)
+
+    return {
+        "price_usd": price,
+        "price_source": f"dex_spot_curve",
+        "depeg_flag": "none",
+        "depeg_deviation_pct": None,
+        "oracle_updated_at": datetime.now(timezone.utc).strftime(TS_FMT),
+        "staleness_hours": 0,
+        "stale_flag": "",
+        "notes": f"Curve pool {pool_addr[:10]}... get_dy({i},{j})",
     }
 
 

@@ -313,5 +313,55 @@
       "coin_id": "usdg",
       "description": "USDG. Primary for USDG (E) on Solana (received as Kamino farming rewards)."
     }
+  },
+
+  "dex_twap": {
+    "_doc": "DEX TWAP feeds — last resort per Section 6.2. Uniswap V3 uses observe() for tick-based TWAP. Curve uses get_dy() for spot rate.",
+
+    "dex_twap_usdt_usdc_uni_v3": {
+      "type": "dex_twap",
+      "dex_type": "uniswap_v3",
+      "pool_address": "0x3416cF6C708Da44DB2624D63ea0AAef7113527C6",
+      "chain": "ethereum",
+      "twap_seconds": 1800,
+      "decimals_0": 6,
+      "decimals_1": 6,
+      "invert": false,
+      "description": "USDT/USDC Uniswap V3 0.01% pool, 30min TWAP. token0=USDT, token1=USDC."
+    },
+    "dex_twap_eth_usdc_uni_v3": {
+      "type": "dex_twap",
+      "dex_type": "uniswap_v3",
+      "pool_address": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
+      "chain": "ethereum",
+      "twap_seconds": 1800,
+      "decimals_0": 6,
+      "decimals_1": 18,
+      "invert": true,
+      "description": "USDC/ETH Uniswap V3 0.05% pool, 30min TWAP. token0=USDC, token1=ETH. Inverted to get ETH/USD."
+    },
+    "dex_twap_dai_usdc_uni_v3": {
+      "type": "dex_twap",
+      "dex_type": "uniswap_v3",
+      "pool_address": "0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168",
+      "chain": "ethereum",
+      "twap_seconds": 1800,
+      "decimals_0": 18,
+      "decimals_1": 6,
+      "invert": false,
+      "description": "DAI/USDC Uniswap V3 0.01% pool, 30min TWAP. token0=DAI, token1=USDC."
+    },
+    "dex_twap_pendle_eth_uni_v3": {
+      "type": "dex_twap",
+      "dex_type": "uniswap_v3",
+      "pool_address": "0x57aF956d3E2cCa3B86f3D8C6772C43c5A26b8d0F",
+      "chain": "ethereum",
+      "twap_seconds": 1800,
+      "decimals_0": 18,
+      "decimals_1": 18,
+      "invert": false,
+      "description": "PENDLE/ETH Uniswap V3 0.3% pool, 30min TWAP. Requires ETH price for USD conversion.",
+      "_note": "Returns PENDLE/ETH ratio — multiply by ETH/USD for final price."
+    }
   }
 }
