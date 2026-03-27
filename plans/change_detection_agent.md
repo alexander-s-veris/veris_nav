@@ -25,7 +25,7 @@ A periodic change detection agent that monitors wallet activity and flags change
 
 - Auto-decode protocol positions (each protocol needs hand-coded reading logic)
 - Replace the manual walkthrough for new protocols
-- Cover Solana (different tooling needed)
+- Cover Solana — tooling now exists: `getProgramAccounts` with discriminator filters on public RPC for PDA-based positions (LP, YT), `getTokenAccountsByOwner` for SPL tokens, `getSignaturesForAddress` on token accounts for tx history
 
 ## Why Not Full Auto-Decode
 

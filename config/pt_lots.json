@@ -53,7 +53,7 @@
     "lots_discovered": [
       {"date": "2026-03-04", "type": "lp_net", "pt_qty": 77839.861427, "underlying_paid": 76291.100231, "apy": 0.0833}
     ],
-    "notes": "Underlying is eUSX — value in USD = lot_value_eUSX × eUSX_exchange_rate × USX_price"
+    "notes": "Underlying is eUSX — value in USD = lot_value_eUSX x eUSX_exchange_rate x USX_price"
   },
   "PT-ONyc-13MAY26": {
     "underlying": "ONyc",

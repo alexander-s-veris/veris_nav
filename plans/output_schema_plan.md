@@ -194,7 +194,7 @@ Each chain has a `token_balance_method` that determines how `collect_balances.py
 
 1. **collect_balances.py** — DONE: two-level concurrent scanning — chains in parallel (8 concurrent) + wallets within each chain in parallel (6 concurrent). Per-chain timing logged. Reduced from ~120s to ~45s (bottleneck: Plasma Etherscan V2 at 31s; all Alchemy chains finish in 12-16s). Still needed: refactor `main()` to expose `scan_wallet_balances()` as a callable function. Add the new common columns (`position_id`, `position_type`, `methodology_ref`, `staleness_flag`). Keep `main()` working for standalone use.
 
-2. **pricing.py** — DONE: `get_prices_concurrent()` batches CoinGecko tokens into one API call and prices remaining tokens (Chainlink, Kraken, Pyth) concurrently. Still needed: staleness checking for A2 tokens (compare `oracle_updated_at` against `expected_update_freq_hours`), cross-reference comparison logic, and Exponent PT pricing formula.
+2. **pricing.py** — DONE: `get_prices_concurrent()` batches CoinGecko tokens into one API call and prices remaining tokens (Chainlink, Kraken, Pyth) concurrently. Exponent PT pricing formula implemented in `solana_client.decompose_exponent_lp()`. PT lot-based linear amortisation in `pt_valuation.py`. Still needed: staleness checking for A2 tokens (compare `oracle_updated_at` against `expected_update_freq_hours`), cross-reference comparison logic.
 
 3. **evm.py** + **block_utils.py** — DONE: `block_utils.refine_block()` provides Valuation Block finder (iterative refinement to ±15s). Still needed: contract call helpers and ABIs loaded from `config/abis.json` (see `plans/abi_migration.md`).
 

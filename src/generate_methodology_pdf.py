@@ -9,7 +9,7 @@ import re
 import markdown
 from playwright.sync_api import sync_playwright
 
-DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "docs")
+DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "docs", "methodology")
 MD_PATH = os.path.join(DOCS_DIR, "NAV_Data_Sourcing_Methodology.md")
 PDF_PATH = os.path.join(DOCS_DIR, "NAV_Data_Sourcing_Methodology.pdf")
 

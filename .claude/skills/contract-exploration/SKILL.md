@@ -72,11 +72,25 @@ if shares > 0:
     assets = vault.functions.convertToAssets(shares).call()
 ```
 
-## Step 5: Only use Etherscan as last resort
+## Step 5: Check transaction history
+
+When contract probing is ambiguous — unknown token types, unclear position mechanics, or unrecognised contract interactions — check the wallet's transaction history for that token/contract:
+
+- **EVM**: Etherscan V2 API `tokentx` or `txlist` for the wallet, filtered by contract address. Shows token transfers with from/to/value, revealing what flows in and out of protocol interactions.
+- **Solana**: `getSignaturesForAddress` on the wallet's token account, then `getTransaction` with `jsonParsed` to see pre/post balance changes per mint.
+
+This reveals:
+- What tokens were swapped for what (identifies unknown mints)
+- Whether a token was received from an LP withdrawal, swap, or transfer
+- The purchase price / cost basis for lot tracking (PT tokens, etc.)
+
+More reliable than guessing from struct field ordering or contract ABI analysis alone.
+
+## Step 6: Only use Etherscan as last resort
 
 If direct probing fails (no standard interface, unknown function signatures), then fetch the Etherscan contract page **once** to read the ABI or source code. Do not make multiple Etherscan round-trips.
 
-## Step 6: Document findings
+## Step 7: Document findings
 
 After successful exploration:
 1. Add contracts to `config/contracts.json` with descriptions
@@ -119,8 +133,15 @@ This skill covers EVM contract exploration. For Solana protocols, the approach d
 4. **REST APIs** (e.g. `api.kamino.finance`) for initial discovery, not for NAV
 
 Implemented Solana helpers:
-- `src/solana_client.py` — RPC calls, eUSX exchange rate, Kamino obligation parsing
+- `src/solana_client.py` — RPC calls, eUSX exchange rate, Kamino obligation parsing, Exponent market/LP/YT position reading
 - `src/pt_valuation.py` — PT lot discovery from on-chain tx history + linear amortisation
+
+Key patterns:
+- Use **public RPC** (`api.mainnet-beta.solana.com`) for `getProgramAccounts` (Alchemy rate-limits it)
+- Use **Alchemy** for `getAccountInfo` at specific slots (Valuation Block)
+- Scan binary data for expected value ranges (f64 rates, timestamps) to find field offsets — faster than computing from Rust structs
+- LP and YT positions are PDA accounts, not SPL tokens — invisible to wallet balance scans
+- **Transaction history as token identity fallback**: when struct field analysis is ambiguous about what a token mint is (SY vs PT vs LP), check `getSignaturesForAddress` on the token account and parse the balance changes. Token flows in/out of swaps and LP withdrawals definitively identify each mint (e.g. PT comes out alongside SY from LP pools). This is more reliable than guessing from struct field ordering.
 
 See `protocol_sourcing.md` → "Solana sourcing approach" for the full methodology.
 

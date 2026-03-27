@@ -379,7 +379,7 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 
 ### D Positions (Leveraged / Looping)
 - **Kamino USCC/USDC (Superstate Opening Bell market)**: 737,994 USCC collateral, -6,790,572 USDC debt (largest position)
-- **Kamino PT-USX+PT-eUSX/USX (Solstice market)**: 1,802,168 PT-USX + 77,840 PT-eUSX collateral, USX debt. Collateral priced per Category B lot methodology.
+- **Kamino PT-USX+PT-eUSX/USX (Solstice market)**: 1,802,168 PT-USX + 77,840 PT-eUSX collateral (both B, lot-based), USX debt.
 - **Morpho syrupUSDC/USDT (Arbitrum)**: 10.46M syrupUSDC collateral, -9.85M USDT0 debt
 - **Morpho syrupUSDC/PYUSD**: 778,640 syrupUSDC, -724,736 PYUSD debt
 - **Morpho syrupUSDC/AUSD**: 483,000 syrupUSDC, -450,479 AUSD debt
@@ -406,10 +406,11 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 
 ## Solana-Specific Notes
 
-- Solana positions cannot be queried via simple RPC calls like EVM. Use:
-  - **Kamino REST API** (`api.kamino.finance`) for Kamino lending obligations
-  - **Kamino on-chain** via `getAccountInfo` at specific slot for Valuation Block precision
-  - **Anchorpy + Solana RPC** for Exponent Finance (Program ID: ExponentnaRg3CQbW6dqQNZKXp7gtZ9DGMp1cwC4HAS7). MarketFinancials account stores `last_ln_implied_rate` at byte offset 396.
+- Solana positions cannot be queried via simple RPC calls like EVM. Three sourcing paths:
+  - **REST API** (e.g. `api.kamino.finance`) — for discovery and cross-referencing, not for NAV
+  - **Direct RPC** (`getAccountInfo` at Valuation Block slot) — authoritative for NAV. Raw token amounts are always accurate; on-chain USD values may be stale
+  - **Transaction history** (`getSignaturesForAddress` on token account) — for PT lot discovery and as token identity fallback
+- **Transaction history as fallback** (all chains): When contract probing or struct analysis is ambiguous about what a token is, check transaction history (Etherscan `tokentx` on EVM, `getSignaturesForAddress` on Solana). Token flows in swaps and LP withdrawals definitively identify each token. More reliable than guessing from ABI or struct field ordering.
 
 ### Kamino Lend (Solana)
 

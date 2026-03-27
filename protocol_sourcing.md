@@ -517,7 +517,7 @@ Reserves are identified by pubkey. The metrics/history endpoint returns `mintAdd
 | Market | Market Pubkey | Obligation | Collateral | Debt |
 |--------|--------------|------------|------------|------|
 | Superstate Opening Bell | `CF32kn7AY8X1bW7ZkGcHc4X9ZWTxqKGCJk6QwrQkDcdw` | `D2rcayJTqmZvqaoViEyamQh2vw9T1KYwjbySQZSz6fsS` | USCC (reserve `FQnQgB...`, mint `BTRR3s...`, 6 dec) | USDC (reserve `BnYNV7...`, mint `EPjFWd...`, 6 dec) |
-| Solstice | `9Y7uwXgQ68mGqRtZfuFaP4hc4fxeJ7cE9zTtqTxVhfGU` | `HMMc5d9sMrGrAY18wE5yYTPpJNk72nrBrgqz5mtE3yrq` | PT-USX (reserve `BLKW7x...`, mint `3kctCX...`, 6 dec) + PT-eUSX (reserve `Ezmztx...`, mint `BNR2Fs...`, 6 dec) | USX (reserve `H2pmnD...`, mint `6FrrzD...`, 6 dec) |
+| Solstice | `9Y7uwXgQ68mGqRtZfuFaP4hc4fxeJ7cE9zTtqTxVhfGU` | `HMMc5d9sMrGrAY18wE5yYTPpJNk72nrBrgqz5mtE3yrq` | PT-USX (reserve `BLKW7x...`, mint `3kctCX...`, 6 dec, Cat B) + PT-eUSX (reserve `Ezmztx...`, mint `BNR2Fs...`, 6 dec, Cat B) | USX (reserve `H2pmnD...`, mint `6FrrzD...`, 6 dec) |
 
 **Classification**: Category D. Net value = collateral value − debt value. Collateral priced per its own token category (A2 for USCC, B for PT-USX/PT-eUSX), debt per Category E.
 
@@ -571,11 +571,11 @@ PT and SY are standard SPL tokens (readable via `getTokenAccountsByOwner`). LP a
 
 Pubkeys at offset 8 (32 bytes each):
 - idx 0: authority PDA
-- idx 1: SY mint
-- idx 2: PT mint
+- idx 1-2: token mints (ordering may vary per market — verify against protocol UI)
 - idx 3: vault
 - idx 4: LP mint
 - idx 5+: token accounts, fee receiver, admin, etc.
+- **Note**: Do not assume idx 1 = SY and idx 2 = PT. Use `getTokenSupply` + protocol UI to identify mints.
 
 `MarketFinancials` starts at byte offset **364**:
 ```
@@ -623,6 +623,8 @@ Near-expiry illiquid YTs may be marked to zero per Valuation Policy.
 4. **Valuation Block**: Use `getAccountInfo` at specific slot on Alchemy for both MarketTwo and position accounts
 
 **Implementation**: `src/solana_client.py` → `parse_exponent_market()`, `get_exponent_lp_positions()`, `get_exponent_yt_positions()`
+
+**Production note**: Discovery (`getProgramAccounts`) is slow and rate-limited on Alchemy. For NAV runs, use the known account pubkeys from the table below with `getAccountInfo` only — no discovery step needed. Only re-run discovery when onboarding new positions. No `time.sleep()` needed between Alchemy `getAccountInfo` calls.
 
 ### Known positions
 
@@ -674,4 +676,4 @@ Near-expiry illiquid YTs may be marked to zero per Valuation Policy.
 
 1. **REST API** — for discovery and cross-referencing. Not sufficient for NAV (no slot queries, protocol's oracles not ours).
 2. **Direct RPC** (`getAccountInfo` at Valuation Block slot) — authoritative for NAV. Read raw token amounts, apply our own pricing.
-3. **Transaction history** (`getSignaturesForAddress` on token account) — for lot-based tracking (PT purchases, LP events). Discover once, save to config.
+3. **Transaction history** (`getSignaturesForAddress` on token account) — for lot-based tracking (PT purchases, LP events). Discover once, save to config. Also the definitive fallback for **token identity verification** — when struct field analysis is ambiguous about what a mint is (SY vs PT vs LP), parsing token balance changes in swap/LP withdrawal transactions shows exactly what each mint represents.
