@@ -1,12 +1,12 @@
 """
-Price fetching adapters for the Veris NAV data collection system.
+Price dispatcher for the Veris NAV data collection system.
 
-Implements the Valuation Policy pricing hierarchy driven by config files:
-  - config/price_feeds.json    — feed definitions (Chainlink, Pyth, Redstone, Kraken, CoinGecko)
-  - config/pricing_policy.json — hierarchy rules per category (A1, A2, E_par, E_oracle, F, etc.)
-  - config/tokens.json         — tokens reference feeds by key via pricing.feeds
+Routes pricing requests through a config-driven hierarchy:
+  - config/price_feeds.json    — feed definitions
+  - config/pricing_policy.json — hierarchy rules per category
+  - config/tokens.json         — tokens reference feeds by key
 
-Adapters (chainlink_price, pyth_price, etc.) are unchanged.
+Adapter implementations live in src/adapters/ (one file per provider).
 """
 
 import os
@@ -17,14 +17,21 @@ from datetime import datetime, timezone
 import requests
 from web3 import Web3
 
-from evm import AGGREGATOR_V3_ABI, TS_FMT
 from solana_client import get_eusx_exchange_rate
 from block_utils import concurrent_query
 
-# --- Price cache: keyed by (symbol, policy, feed_key), stores result dict ---
-_price_cache: dict[str, dict] = {}
+# Import all adapters
+from adapters import (
+    chainlink_price, pyth_price, redstone_price,
+    kraken_price, coingecko_price, batch_coingecko_prices,
+    dex_twap_price,
+)
+# Re-export for backward compat (tests import pricing.chainlink_price etc.)
+from adapters.coingecko import COINGECKO_BASE
+from evm import TS_FMT
 
-COINGECKO_BASE = "https://pro-api.coingecko.com/api/v3"
+# --- Price cache ---
+_price_cache: dict[str, dict] = {}
 
 # --- Config loaders (cached) ---
 
@@ -33,12 +40,7 @@ _POLICY_CACHE = None
 
 
 def _load_feeds_registry() -> dict:
-    """Load and flatten config/price_feeds.json.
-
-    The file groups feeds under type keys (chainlink, pyth, etc.).
-    This returns a flat dict: feed_key -> feed_cfg, so callers can look up
-    any feed by its key regardless of type group.
-    """
+    """Load and flatten config/price_feeds.json."""
     global _FEEDS_CACHE
     if _FEEDS_CACHE is None:
         path = os.path.join(os.path.dirname(__file__), "..", "config", "price_feeds.json")
@@ -47,7 +49,7 @@ def _load_feeds_registry() -> dict:
         flat = {}
         for section_key, section_val in raw.items():
             if section_key.startswith("_"):
-                continue  # skip _description
+                continue
             if isinstance(section_val, dict):
                 for feed_key, feed_cfg in section_val.items():
                     if isinstance(feed_cfg, dict):
@@ -69,16 +71,11 @@ def _load_pricing_policy() -> dict:
 # --- Cache key ---
 
 def _cache_key(token_entry: dict) -> str:
-    """Generate a unique cache key for a token's pricing config.
-
-    Uses policy and first feed key to distinguish same-symbol tokens
-    with different feeds (e.g. on different chains).
-    """
+    """Generate a unique cache key for a token's pricing config."""
     symbol = token_entry.get("symbol", "UNKNOWN")
     pricing = token_entry.get("pricing", {}) if isinstance(token_entry.get("pricing"), dict) else {}
     policy = pricing.get("policy", "")
     feeds = pricing.get("feeds", {})
-    # Use first feed key for cache differentiation
     first_feed = next(iter(feeds.values()), "") if feeds else ""
     return f"{symbol}_{policy}_{first_feed}"
 
@@ -123,11 +120,7 @@ def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None, expected_freq_hours:
 # --- Main dispatcher ---
 
 def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
-    """Main dispatcher. Returns a price result dict.
-
-    Reads pricing.policy from the token entry, looks up the method from
-    pricing_policy.json, then routes to the correct adapter or hierarchy walker.
-    """
+    """Main dispatcher. Routes to hierarchy walker or special method."""
     key = _cache_key(token_entry)
     if key in _price_cache:
         return _price_cache[key]
@@ -152,14 +145,10 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     elif method in ("oracle_hierarchy", "market_hierarchy"):
         result = _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_eth, expected_freq)
     elif method == "exchange_rate":
-        # A1: special exchange rate logic
         result = _a1_exchange_rate_price(token_entry)
     elif method == "curve_lp":
         result = _curve_lp_price(token_entry, w3_eth)
     else:
-        # manual_accrual (A3), pt_linear_amortisation (B), lp_decomposition (C),
-        # net_position (D) — these are handled by valuation.py, not pricing.py.
-        # If we reach here, it means no price feed is configured.
         result = _unavailable(symbol)
 
     _price_cache[key] = result
@@ -168,19 +157,8 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
 
 # --- Generic hierarchy walker ---
 
-def _price_with_hierarchy(
-    symbol: str,
-    token_feeds: dict,
-    policy_cfg: dict,
-    feeds_registry: dict,
-    w3_eth: Web3 | None,
-    expected_freq: float | None,
-) -> dict:
-    """Walk the pricing hierarchy, trying each source in order.
-
-    Falls through on error or staleness. Returns the first fresh result,
-    or the best stale result if all sources are stale/failed.
-    """
+def _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_eth, expected_freq):
+    """Walk the pricing hierarchy, trying each source in order."""
     hierarchy = policy_cfg.get("hierarchy", [])
     stale_result = None
 
@@ -195,13 +173,11 @@ def _price_with_hierarchy(
             result = _query_feed(feed_cfg, w3_eth, expected_freq)
             if not result.get("stale_flag"):
                 return result
-            # Stale — save as fallback, note it, try next
             if stale_result is None:
                 stale_result = result
         except Exception:
             continue
 
-    # All sources failed or stale
     if stale_result:
         stale_result["notes"] = f"WARNING: {stale_result.get('stale_flag', 'stale')}. No fresher source in hierarchy."
         return stale_result
@@ -212,11 +188,7 @@ def _price_with_hierarchy(
 # --- Par pricing with depeg check ---
 
 def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
-    """Category E par pricing.
-
-    Price = $1.00, then run depeg check using the depeg_hierarchy from
-    pricing_policy.json. Per Section 9.4: >0.5% deviation = minor, >2% = material.
-    """
+    """Category E par pricing. $1.00 with depeg monitoring."""
     result = {
         "price_usd": Decimal("1.00"),
         "price_source": "par",
@@ -232,8 +204,6 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     if not isinstance(pricing, dict):
         pricing = {}
     token_feeds = pricing.get("feeds", {})
-    if not isinstance(token_feeds, dict):
-        token_feeds = {}
 
     feeds_registry = _load_feeds_registry()
     policy = _load_pricing_policy()
@@ -244,7 +214,7 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     if not depeg_hierarchy or not token_feeds:
         return result
 
-    # Walk depeg hierarchy to find the oracle price
+    # Walk depeg hierarchy to find oracle price
     oracle_price = None
     for source_type in depeg_hierarchy:
         feed_key = token_feeds.get(source_type)
@@ -265,7 +235,6 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     if oracle_price is None:
         return result
 
-    # Depeg thresholds from policy
     minor_threshold = Decimal(str(policy_cfg.get("depeg_threshold_minor_pct", 0.5)))
     material_threshold = Decimal(str(policy_cfg.get("depeg_threshold_material_pct", 2.0)))
     deviation = abs(oracle_price - Decimal("1")) * Decimal("100")
@@ -274,348 +243,20 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         result["price_usd"] = oracle_price
         result["price_source"] = "oracle (de-peg override)"
         result["depeg_flag"] = f"material_{deviation:.2f}%"
-        result["notes"] = f"Material de-peg detected: {deviation:.2f}% deviation. Priced at oracle value per Section 9.4."
+        result["notes"] = f"Material de-peg detected: {deviation:.2f}% deviation. Section 9.4."
     elif deviation > minor_threshold:
         result["price_usd"] = oracle_price
         result["price_source"] = "oracle (de-peg override)"
         result["depeg_flag"] = f"minor_{deviation:.2f}%"
-        result["notes"] = f"Minor de-peg detected: {deviation:.2f}% deviation. Priced at oracle value per Section 9.4."
-    # else: within tolerance, keep par
+        result["notes"] = f"Minor de-peg detected: {deviation:.2f}% deviation. Section 9.4."
 
     return result
 
 
-# --- Individual price adapters (unchanged) ---
-
-def chainlink_price(feed_address: str, w3: Web3, expected_freq_hours: float = None) -> dict:
-    """Query a Chainlink AggregatorV3 feed.
-
-    Returns price as Decimal with metadata.
-    If expected_freq_hours is provided, checks staleness (>2x expected = stale).
-    """
-    contract = w3.eth.contract(
-        address=Web3.to_checksum_address(feed_address),
-        abi=AGGREGATOR_V3_ABI,
-    )
-
-    decimals = contract.functions.decimals().call()
-    _round_id, answer, _started_at, updated_at, _answered_in_round = (
-        contract.functions.latestRoundData().call()
-    )
-
-    price = Decimal(answer) / Decimal(10**decimals)
-    updated_utc = datetime.fromtimestamp(updated_at, tz=timezone.utc)
-
-    # Calculate staleness
-    age_seconds = (datetime.now(timezone.utc) - updated_utc).total_seconds()
-    age_hours = age_seconds / 3600
-
-    stale_flag = ""
-    if expected_freq_hours and age_hours > 2 * expected_freq_hours:
-        stale_flag = (
-            f"STALE ({age_hours:.0f}h old, expected update every "
-            f"{expected_freq_hours}h, threshold {2 * expected_freq_hours}h)"
-        )
-
-    return {
-        "price_usd": price,
-        "price_source": "chainlink",
-        "depeg_flag": "none",
-        "depeg_deviation_pct": None,
-        "oracle_updated_at": updated_utc.strftime(TS_FMT),
-        "staleness_hours": round(age_hours, 1),
-        "stale_flag": stale_flag,
-        "notes": "",
-    }
-
-
-def pyth_price(feed_id: str, expected_freq_hours: float = None) -> dict:
-    """Query Pyth Hermes REST API for a price feed.
-
-    If expected_freq_hours is provided, checks staleness (>2x expected = stale).
-    """
-    url = f"https://hermes.pyth.network/v2/updates/price/latest"
-    resp = requests.get(url, params={"ids[]": feed_id}, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-
-    if not data.get("parsed") or len(data["parsed"]) == 0:
-        raise ValueError(f"No Pyth data for feed {feed_id}")
-
-    price_data = data["parsed"][0]["price"]
-    price = Decimal(price_data["price"]) * Decimal(10) ** Decimal(price_data["expo"])
-
-    # Pyth publish_time is inside the price object
-    publish_time = price_data.get("publish_time")
-
-    oracle_updated_at = None
-    staleness_hours = None
-    stale_flag = ""
-
-    if publish_time and isinstance(publish_time, (int, float)):
-        updated_utc = datetime.fromtimestamp(publish_time, tz=timezone.utc)
-        oracle_updated_at = updated_utc.strftime(TS_FMT)
-        age_hours = (datetime.now(timezone.utc) - updated_utc).total_seconds() / 3600
-        staleness_hours = round(age_hours, 1)
-
-        if expected_freq_hours and age_hours > 2 * expected_freq_hours:
-            stale_flag = (
-                f"STALE ({age_hours:.0f}h old, expected every "
-                f"{expected_freq_hours}h, threshold {2 * expected_freq_hours}h)"
-            )
-
-    return {
-        "price_usd": price,
-        "price_source": "pyth",
-        "depeg_flag": "none",
-        "depeg_deviation_pct": None,
-        "oracle_updated_at": oracle_updated_at,
-        "staleness_hours": staleness_hours,
-        "stale_flag": stale_flag,
-        "notes": "",
-    }
-
-
-def kraken_price(pair: str) -> dict:
-    """Query Kraken public ticker API."""
-    url = f"https://api.kraken.com/0/public/Ticker"
-    resp = requests.get(url, params={"pair": pair}, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-
-    if data.get("error") and len(data["error"]) > 0:
-        raise ValueError(f"Kraken error for {pair}: {data['error']}")
-
-    # Kraken returns results keyed by their internal pair name
-    result_key = list(data["result"].keys())[0]
-    # 'c' = last trade close price [price, lot_volume]
-    last_price = Decimal(data["result"][result_key]["c"][0])
-
-    return {
-        "price_usd": last_price,
-        "price_source": "kraken",
-        "depeg_flag": "none",
-        "depeg_deviation_pct": None,
-        "oracle_updated_at": None,
-        "staleness_hours": None,
-        "stale_flag": "",
-        "notes": "",
-    }
-
-
-def redstone_price(symbol: str) -> dict:
-    """Query Redstone Finance REST API for a price feed.
-
-    Free, no API key needed. Tier 3 in A2 hierarchy (after Chainlink, Pyth).
-    Used as fallback for stablecoins and governance tokens.
-    """
-    url = "https://api.redstone.finance/prices"
-    resp = requests.get(url, params={"symbols": symbol, "provider": "redstone"}, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-
-    if symbol not in data:
-        raise ValueError(f"Redstone: no price for {symbol}")
-
-    entry = data[symbol]
-    price = Decimal(str(entry["value"]))
-
-    # Redstone timestamp is in milliseconds
-    ts_ms = entry.get("timestamp")
-    oracle_updated_at = None
-    staleness_hours = None
-    if ts_ms:
-        updated_utc = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
-        oracle_updated_at = updated_utc.strftime(TS_FMT)
-        age_hours = (datetime.now(timezone.utc) - updated_utc).total_seconds() / 3600
-        staleness_hours = round(age_hours, 1)
-
-    return {
-        "price_usd": price,
-        "price_source": "redstone",
-        "depeg_flag": "none",
-        "depeg_deviation_pct": None,
-        "oracle_updated_at": oracle_updated_at,
-        "staleness_hours": staleness_hours,
-        "stale_flag": "",
-        "notes": "",
-    }
-
-
-def coingecko_price(coin_id: str) -> dict:
-    """Query CoinGecko simple price API (paid Demo plan with API key)."""
-    api_key = os.getenv("COINGECKO_API_KEY")
-    headers = {}
-    if api_key:
-        headers["x-cg-pro-api-key"] = api_key
-
-    resp = requests.get(
-        f"{COINGECKO_BASE}/simple/price",
-        params={"ids": coin_id, "vs_currencies": "usd"},
-        headers=headers,
-        timeout=10,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-
-    if coin_id not in data or "usd" not in data[coin_id]:
-        raise ValueError(f"CoinGecko: no price for {coin_id}")
-
-    price = Decimal(str(data[coin_id]["usd"]))
-
-    return {
-        "price_usd": price,
-        "price_source": "coingecko",
-        "depeg_flag": "none",
-        "depeg_deviation_pct": None,
-        "oracle_updated_at": None,
-        "staleness_hours": None,
-        "stale_flag": "",
-        "notes": "",
-    }
-
-
-# --- DEX TWAP pricing ---
-
-# Uniswap V3 observe ABI
-_UNI_V3_OBSERVE_ABI = [
-    {"inputs": [{"name": "secondsAgos", "type": "uint32[]"}],
-     "name": "observe",
-     "outputs": [{"name": "tickCumulatives", "type": "int56[]"},
-                 {"name": "secondsPerLiquidityCumulativeX128s", "type": "uint160[]"}],
-     "stateMutability": "view", "type": "function"},
-    {"inputs": [], "name": "token0", "outputs": [{"name": "", "type": "address"}],
-     "stateMutability": "view", "type": "function"},
-    {"inputs": [], "name": "slot0",
-     "outputs": [{"name": "sqrtPriceX96", "type": "uint160"},
-                 {"name": "tick", "type": "int24"},
-                 {"name": "observationIndex", "type": "uint16"},
-                 {"name": "observationCardinality", "type": "uint16"},
-                 {"name": "observationCardinalityNext", "type": "uint16"},
-                 {"name": "feeProtocol", "type": "uint8"},
-                 {"name": "unlocked", "type": "bool"}],
-     "stateMutability": "view", "type": "function"},
-]
-
-# Curve get_dy ABI for spot price
-_CURVE_DY_ABI = [
-    {"inputs": [{"name": "i", "type": "int128"}, {"name": "j", "type": "int128"},
-                {"name": "dx", "type": "uint256"}],
-     "name": "get_dy", "outputs": [{"name": "", "type": "uint256"}],
-     "stateMutability": "view", "type": "function"},
-]
-
-
-def dex_twap_price(feed_cfg: dict, w3: Web3) -> dict:
-    """DEX TWAP price — dispatches to Uniswap V3 or Curve based on feed config.
-
-    feed_cfg must have:
-    - dex_type: "uniswap_v3" or "curve"
-    - pool_address: contract address
-    - chain: chain name (default "ethereum")
-    For Uniswap V3: twap_seconds (default 1800 = 30 min)
-    For Curve: token_in_index, token_out_index, amount_in, decimals_in, decimals_out
-    """
-    dex_type = feed_cfg.get("dex_type", "uniswap_v3")
-    if dex_type == "uniswap_v3":
-        return _uniswap_v3_twap(feed_cfg, w3)
-    elif dex_type == "curve":
-        return _curve_spot_price(feed_cfg, w3)
-    else:
-        raise ValueError(f"Unknown dex_type: {dex_type}")
-
-
-def _uniswap_v3_twap(feed_cfg: dict, w3: Web3) -> dict:
-    """Calculate TWAP from Uniswap V3 pool using observe().
-
-    Uses tick cumulative difference over the window to derive average price.
-    Returns price of token0 in terms of token1 (or inverted if invert=True).
-    """
-    import math
-
-    pool_addr = feed_cfg["pool_address"]
-    twap_seconds = feed_cfg.get("twap_seconds", 1800)
-    decimals_0 = feed_cfg.get("decimals_0", 18)
-    decimals_1 = feed_cfg.get("decimals_1", 6)
-    invert = feed_cfg.get("invert", False)
-
-    pool = w3.eth.contract(
-        address=Web3.to_checksum_address(pool_addr),
-        abi=_UNI_V3_OBSERVE_ABI,
-    )
-
-    # Query tick cumulatives at [twap_seconds ago, 0 (now)]
-    tick_cumulatives, _ = pool.functions.observe([twap_seconds, 0]).call()
-
-    # Average tick over the window
-    tick_diff = tick_cumulatives[1] - tick_cumulatives[0]
-    avg_tick = tick_diff // twap_seconds
-
-    # Tick to price: price = 1.0001^tick, adjusted for decimals
-    price_raw = Decimal(str(math.pow(1.0001, avg_tick)))
-    decimal_adjustment = Decimal(10 ** (decimals_0 - decimals_1))
-    price = price_raw * decimal_adjustment
-
-    if invert:
-        price = Decimal(1) / price if price > 0 else Decimal(0)
-
-    return {
-        "price_usd": price,
-        "price_source": f"dex_twap_uniswap_v3 ({twap_seconds}s window)",
-        "depeg_flag": "none",
-        "depeg_deviation_pct": None,
-        "oracle_updated_at": datetime.now(timezone.utc).strftime(TS_FMT),
-        "staleness_hours": 0,
-        "stale_flag": "",
-        "notes": f"Uniswap V3 TWAP from pool {pool_addr[:10]}... over {twap_seconds}s",
-    }
-
-
-def _curve_spot_price(feed_cfg: dict, w3: Web3) -> dict:
-    """Get spot price from a Curve pool using get_dy().
-
-    Queries how much token_out you get for 1 unit of token_in.
-    For stablecoin pools this is effectively the current exchange rate.
-    """
-    pool_addr = feed_cfg["pool_address"]
-    i = feed_cfg.get("token_in_index", 0)
-    j = feed_cfg.get("token_out_index", 1)
-    decimals_in = feed_cfg.get("decimals_in", 18)
-    decimals_out = feed_cfg.get("decimals_out", 6)
-    invert = feed_cfg.get("invert", False)
-
-    pool = w3.eth.contract(
-        address=Web3.to_checksum_address(pool_addr),
-        abi=_CURVE_DY_ABI,
-    )
-
-    # Query: how much token_out for 1 unit of token_in
-    amount_in = 10 ** decimals_in
-    amount_out = pool.functions.get_dy(i, j, amount_in).call()
-    price = Decimal(str(amount_out)) / Decimal(10 ** decimals_out)
-
-    if invert:
-        price = Decimal(1) / price if price > 0 else Decimal(0)
-
-    return {
-        "price_usd": price,
-        "price_source": f"dex_spot_curve",
-        "depeg_flag": "none",
-        "depeg_deviation_pct": None,
-        "oracle_updated_at": datetime.now(timezone.utc).strftime(TS_FMT),
-        "staleness_hours": 0,
-        "stale_flag": "",
-        "notes": f"Curve pool {pool_addr[:10]}... get_dy({i},{j})",
-    }
-
-
-# --- A1 exchange rate pricing ---
+# --- Special pricing methods ---
 
 def _curve_lp_price(token_entry: dict, w3_eth: Web3 | None) -> dict:
-    """Category C: Curve LP token priced via get_virtual_price().
-
-    For stablecoin pools, virtual_price * $1 gives a good approximation.
-    """
+    """Category C: Curve LP token priced via get_virtual_price()."""
     pricing = token_entry["pricing"]
     symbol = token_entry["symbol"]
     pool_addr = pricing.get("pool_address")
@@ -648,13 +289,7 @@ def _curve_lp_price(token_entry: dict, w3_eth: Web3 | None) -> dict:
 
 
 def _a1_exchange_rate_price(token_entry: dict) -> dict:
-    """Category A1: query on-chain exchange rate, then price underlying.
-
-    Supports:
-    - eUSX (Solana): eUSX/USX rate from vault, then USX price from Pyth
-    - sUSDe (Ethereum): convertToAssets on ERC-4626, underlying USDe at par
-    - Other ERC-4626 vaults with coingecko fallback via feeds
-    """
+    """Category A1: on-chain exchange rate, then price underlying."""
     pricing = token_entry["pricing"]
     symbol = token_entry["symbol"]
     underlying_feed = pricing.get("underlying_pyth_feed_id")
@@ -676,8 +311,8 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
                 "stale_flag": underlying_price.get("stale_flag", ""),
                 "notes": f"eUSX/USX rate: {exchange_rate:.6f}, USX/USD: {usx_usd}",
             }
-        except Exception as e:
-            pass  # fall through to CoinGecko
+        except Exception:
+            pass
 
     # sUSDe — ERC-4626 on Ethereum, convertToAssets
     if symbol.lower() == "susde":
@@ -688,10 +323,8 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
             abi = [{"inputs": [{"name": "shares", "type": "uint256"}], "name": "convertToAssets",
                     "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"}]
             vault = w3.eth.contract(address=Web3.to_checksum_address(contract_addr), abi=abi)
-            # Exchange rate: assets per 1e18 shares
             assets = vault.functions.convertToAssets(10**18).call()
             exchange_rate = Decimal(str(assets)) / Decimal(10**18)
-            # USDe at par (~$1)
             price = exchange_rate
             return {
                 "price_usd": price,
@@ -703,8 +336,8 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
                 "stale_flag": "",
                 "notes": f"sUSDe/USDe rate: {exchange_rate:.6f}, USDe at par",
             }
-        except Exception as e:
-            pass  # fall through to CoinGecko
+        except Exception:
+            pass
 
     # Fallback: CoinGecko via feeds registry
     feeds = pricing.get("feeds", {})
@@ -742,17 +375,7 @@ def _unavailable(symbol: str) -> dict:
 # --- Batch / concurrent pricing ---
 
 def _batch_coingecko(tokens: dict[str, dict]) -> dict[str, dict]:
-    """Batch-fetch CoinGecko prices for multiple tokens in one API call.
-
-    CoinGecko supports comma-separated IDs, so we can price all CoinGecko
-    tokens in a single request instead of N requests.
-
-    Args:
-        tokens: {symbol: token_entry} for tokens using coingecko pricing.
-
-    Returns:
-        {symbol: price_result} for successfully priced tokens.
-    """
+    """Batch-fetch CoinGecko prices for multiple tokens in one API call."""
     feeds_registry = _load_feeds_registry()
     cg_map = {}  # coingecko coin_id -> symbol
     for symbol, entry in tokens.items():
@@ -769,36 +392,13 @@ def _batch_coingecko(tokens: dict[str, dict]) -> dict[str, dict]:
     if not cg_map:
         return {}
 
-    api_key = os.getenv("COINGECKO_API_KEY")
-    headers = {}
-    if api_key:
-        headers["x-cg-pro-api-key"] = api_key
-
-    try:
-        resp = requests.get(
-            f"{COINGECKO_BASE}/simple/price",
-            params={"ids": ",".join(cg_map.keys()), "vs_currencies": "usd"},
-            headers=headers,
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        return {}
+    # Use batch adapter
+    batch_results = batch_coingecko_prices(list(cg_map.keys()))
 
     results = {}
     for cg_id, symbol in cg_map.items():
-        if cg_id in data and "usd" in data[cg_id]:
-            results[symbol] = {
-                "price_usd": Decimal(str(data[cg_id]["usd"])),
-                "price_source": "coingecko",
-                "depeg_flag": "none",
-                "depeg_deviation_pct": None,
-                "oracle_updated_at": None,
-                "staleness_hours": None,
-                "stale_flag": "",
-                "notes": "",
-            }
+        if cg_id in batch_results:
+            results[symbol] = batch_results[cg_id]
 
     return results
 
@@ -808,42 +408,24 @@ def get_prices_concurrent(
     w3_eth: Web3 | None = None,
     max_workers: int = 10,
 ) -> dict[str, dict]:
-    """Price all tokens concurrently with CoinGecko batching.
-
-    Strategy:
-    1. Batch all CoinGecko-only tokens into one API call
-    2. Pre-populate cache with batched results
-    3. Price remaining tokens (Chainlink, Kraken, Pyth, par, A1) concurrently
-
-    Args:
-        unique_tokens: {symbol: token_entry} from the balance scanner.
-        w3_eth: Web3 instance for Chainlink calls (can be None).
-        max_workers: Concurrent threads for non-CoinGecko pricing.
-
-    Returns:
-        {symbol: price_result} for all tokens.
-    """
+    """Price all tokens concurrently with CoinGecko batching."""
     results = {}
 
-    # Step 1: Identify CoinGecko-only tokens (tokens whose only feed is coingecko)
-    # and batch them in one call
+    # Step 1: Identify CoinGecko-only tokens and batch them
     cg_tokens = {}
     non_cg_tokens = {}
     for symbol, entry in unique_tokens.items():
         feeds = entry.get("pricing", {}).get("feeds", {})
         if not isinstance(feeds, dict):
             feeds = {}
-        # Tokens whose primary source is coingecko (no higher-priority feeds)
         if "coingecko" in feeds and "kraken" not in feeds and "chainlink" not in feeds and "pyth" not in feeds:
             cg_tokens[symbol] = entry
         else:
             non_cg_tokens[symbol] = entry
 
-    # Batch CoinGecko
     if cg_tokens:
         cg_results = _batch_coingecko(cg_tokens)
         results.update(cg_results)
-        # Pre-populate cache so get_price() won't re-fetch
         for symbol, result in cg_results.items():
             _price_cache[_cache_key(cg_tokens[symbol])] = result
 
@@ -864,7 +446,7 @@ def get_prices_concurrent(
         for symbol, result in concurrent_results:
             results[symbol] = result
 
-    # Also add any CoinGecko tokens that failed the batch (price them individually)
+    # Also add any CoinGecko tokens that failed the batch
     for symbol in cg_tokens:
         if symbol not in results:
             results[symbol] = get_price(cg_tokens[symbol], w3_eth)
