@@ -537,11 +537,16 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
 
     share_pct = Decimal(str(veris_shares)) / Decimal(str(total_supply))
 
-    # --- Read accrual NAV from supporting workbook ---
-    xlsx_path = os.path.join(
-        os.path.dirname(__file__), "..", "outputs", "falconx_position.xlsx")
+    # --- Read accrual NAV from SQLite (primary) or xlsx (fallback) ---
+    accrual_value = _read_falconx_sqlite("gauntlet_levered", "veris_share")
+    source_note = "from data/falconx.db gauntlet_levered"
 
-    accrual_value = _read_falconx_xlsx(xlsx_path, "Gauntlet_LeveredX", col_index=17)
+    if accrual_value is None:
+        xlsx_path = os.path.join(
+            os.path.dirname(__file__), "..", "outputs", "falconx_position.xlsx")
+        accrual_value = _read_falconx_xlsx(xlsx_path, "Gauntlet_LeveredX", col_index=17)
+        source_note = "from outputs/falconx_position.xlsx Gauntlet_LeveredX col R (fallback)"
+
     if accrual_value is None:
         accrual_value = Decimal(0)
 
@@ -558,12 +563,38 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
         "accrual_value": accrual_value,
         "block_number": block_number, "block_timestamp_utc": block_ts,
         "price_source": "a3_workbook_accrual",
-        "notes": f"Value from outputs/falconx_position.xlsx Gauntlet_LeveredX col R (Veris share). TP on-chain is cross-reference only (stale, not used for valuation).",
+        "notes": f"Value {source_note} (Veris share). TP on-chain is cross-reference only (stale, not used for valuation).",
     }]
 
 
+def _read_falconx_sqlite(table_name, value_column):
+    """Read the latest value from the FalconX SQLite database.
+
+    Args:
+        table_name: 'gauntlet_levered' or 'direct_accrual'
+        value_column: column name to read (e.g. 'veris_share' or 'running_balance')
+    """
+    import sqlite3
+    db_path = os.path.join(os.path.dirname(__file__), "..", "data", "falconx.db")
+    if not os.path.exists(db_path):
+        return None
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute(
+            f"SELECT {value_column} FROM {table_name} ORDER BY timestamp_utc DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row and row[0] is not None:
+            return Decimal(str(row[0]))
+    except Exception:
+        pass
+    return None
+
+
 def _read_falconx_xlsx(xlsx_path, sheet_name, col_index):
-    """Read the NAV value from the FalconX workbook.
+    """Read the NAV value from the FalconX workbook (fallback if SQLite unavailable).
 
     First tries formula result columns (openpyxl data_only=True).
     If formula columns are empty (newly written rows), computes the value
@@ -876,11 +907,16 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
 
     balance_human = _fmt(balance, 18)
 
-    # Read accrual value from supporting workbook (col H = Running Balance, index 7)
-    xlsx_path = os.path.join(
-        os.path.dirname(__file__), "..", "outputs", "falconx_position.xlsx")
+    # Read accrual value from SQLite (primary) or xlsx (fallback)
+    running_balance = _read_falconx_sqlite("direct_accrual", "running_balance")
+    source_note = "from data/falconx.db direct_accrual"
 
-    running_balance = _read_falconx_xlsx(xlsx_path, "Direct Accrual", col_index=7)
+    if running_balance is None:
+        xlsx_path = os.path.join(
+            os.path.dirname(__file__), "..", "outputs", "falconx_position.xlsx")
+        running_balance = _read_falconx_xlsx(xlsx_path, "Direct Accrual", col_index=7)
+        source_note = "from outputs/falconx_position.xlsx Direct Accrual col H (fallback)"
+
     if running_balance is None:
         running_balance = Decimal(0)
 
@@ -896,7 +932,7 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
         "accrual_value": running_balance,
         "price_source": "a3_workbook_accrual",
         "block_number": block_number, "block_timestamp_utc": block_ts,
-        "notes": f"Value from outputs/falconx_position.xlsx Direct Accrual sheet col H. Running Balance={running_balance:,.2f}",
+        "notes": f"Value {source_note}. Running Balance={running_balance:,.2f}",
     }]
 
 

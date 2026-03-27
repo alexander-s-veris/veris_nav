@@ -4,19 +4,21 @@ Optimized FalconX/Pareto position updater.
 Uses block pre-computation (Option 1) and concurrent RPC queries (Option 4)
 from src/block_utils.py. Typically 5-8x faster than the serial approach.
 
+Writes to data/falconx.db (SQLite). All values computed in Python — no formulas.
+
 Usage:
     python src/temp/update_falconx_optimized.py [--start YYYY-MM-DD-HH] [--end YYYY-MM-DD-HH]
 
-Defaults: start = last timestamp in xlsx + 1 hour, end = now (rounded down to hour).
+Defaults: start = last timestamp in SQLite + 1 hour, end = now (rounded down to hour).
 """
 import sys
 import os
 import time
 import argparse
+import sqlite3
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 
-import openpyxl
 from web3 import Web3
 
 # Load .env
@@ -92,7 +94,72 @@ MC_ABI = [{
 }]
 mc = w3.eth.contract(address=MULTICALL3, abi=MC_ABI)
 
-XLSX_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'outputs', 'falconx_position.xlsx')
+DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'falconx.db')
+
+
+def _ensure_db():
+    """Ensure database and tables exist."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS gauntlet_levered (
+            timestamp_utc TEXT PRIMARY KEY,
+            block INTEGER,
+            collateral REAL,
+            borrow REAL,
+            vault_total_supply REAL,
+            veris_balance REAL,
+            veris_pct REAL,
+            net_rate REAL,
+            veris_aa_falconx REAL,
+            tranche_price REAL,
+            period_days REAL,
+            opening_value REAL,
+            interest REAL,
+            running_balance REAL,
+            tp_reengineered REAL,
+            collateral_usd REAL,
+            net REAL,
+            veris_share REAL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS direct_accrual (
+            timestamp_utc TEXT PRIMARY KEY,
+            token_balance REAL,
+            tranche_price REAL,
+            opening_value REAL,
+            net_rate REAL,
+            period_days REAL,
+            interest REAL,
+            running_balance REAL,
+            tp_reengineered REAL
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+def _get_last_gauntlet(conn):
+    """Get last row from gauntlet_levered. Returns (timestamp_utc, block, running_balance) or None."""
+    row = conn.execute(
+        "SELECT timestamp_utc, block, running_balance FROM gauntlet_levered ORDER BY timestamp_utc DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    ts = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+    return ts, int(row[1]), row[2]
+
+
+def _get_last_direct(conn):
+    """Get last row from direct_accrual. Returns (timestamp_utc, running_balance) or None."""
+    row = conn.execute(
+        "SELECT timestamp_utc, running_balance FROM direct_accrual ORDER BY timestamp_utc DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    ts = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+    return ts, row[1]
 
 
 def query_at_block(block):
@@ -129,27 +196,26 @@ def main():
     parser.add_argument("--batch", type=int, default=50, help="Batch size for concurrent queries")
     args = parser.parse_args()
 
-    wb = openpyxl.load_workbook(XLSX_PATH)
+    conn = _ensure_db()
 
     # ========================================
-    # Find last Gauntlet row
+    # Find last Gauntlet row from SQLite
     # ========================================
-    ws_g = wb['Gauntlet_LeveredX']
-    last_row_g = 1
-    for r in range(ws_g.max_row, 1, -1):
-        if ws_g.cell(row=r, column=1).value is not None:
-            last_row_g = r
-            break
+    last_g = _get_last_gauntlet(conn)
+    if last_g is None:
+        print("ERROR: No existing data in gauntlet_levered table.")
+        print("Run import_falconx_xlsx_to_sqlite.py first to seed the database.")
+        conn.close()
+        return
 
-    last_ts_g = ws_g.cell(row=last_row_g, column=1).value
-    last_block_g = ws_g.cell(row=last_row_g, column=2).value
-    print(f"Gauntlet last row: {last_row_g}, ts: {last_ts_g}, block: {last_block_g}")
+    last_ts_g, last_block_g, prev_running_balance_g = last_g
+    print(f"Gauntlet last: ts={last_ts_g.strftime('%Y-%m-%d %H:%M')}, block={last_block_g}, running_balance={prev_running_balance_g:,.2f}")
 
     # Determine time range
     if args.start:
         start = datetime.strptime(args.start, "%Y-%m-%d-%H").replace(tzinfo=timezone.utc)
     else:
-        start = last_ts_g.replace(tzinfo=timezone.utc) + timedelta(hours=1)
+        start = last_ts_g + timedelta(hours=1)
 
     if args.end:
         end = datetime.strptime(args.end, "%Y-%m-%d-%H").replace(tzinfo=timezone.utc)
@@ -166,6 +232,7 @@ def main():
     total = len(timestamps)
     if total == 0:
         print("No new rows to append.")
+        conn.close()
         return
 
     print(f"Period: {start.strftime('%Y-%m-%d %H:%M')} to {end.strftime('%Y-%m-%d %H:%M')} ({total} hours)")
@@ -216,66 +283,56 @@ def main():
     print(f"Query phase: {total} calls in {query_time:.1f}s ({total/query_time:.1f}/s)")
 
     # ========================================
-    # Write Gauntlet_LeveredX rows
+    # Compute and write Gauntlet rows to SQLite
     # ========================================
-    for i, (ts, block, data) in enumerate(zip(timestamps, estimated_blocks, results)):
+    prev_ts_g = last_ts_g
+    gauntlet_rows = []
+
+    for ts, block, data in zip(timestamps, estimated_blocks, results):
         coll, borrow, supply, tp = data
-        r = last_row_g + 1 + i
         net_rate = get_net_rate(ts)
 
-        ws_g.cell(row=r, column=1, value=ts.replace(tzinfo=None))
-        ws_g.cell(row=r, column=1).number_format = 'yyyy-mm-dd hh:mm:ss'
-        ws_g.cell(row=r, column=2, value=block)
-        ws_g.cell(row=r, column=3, value=coll)
-        ws_g.cell(row=r, column=3).number_format = '#,##0.00'
-        ws_g.cell(row=r, column=4, value=borrow)
-        ws_g.cell(row=r, column=4).number_format = '#,##0.00'
-        ws_g.cell(row=r, column=5, value=supply)
-        ws_g.cell(row=r, column=5).number_format = '#,##0.00'
-        ws_g.cell(row=r, column=6, value=VERIS_GP_BALANCE)
-        ws_g.cell(row=r, column=6).number_format = '#,##0.0000'
-        ws_g.cell(row=r, column=7).value = f'=IF(E{r}>0,F{r}/E{r},0)'
-        ws_g.cell(row=r, column=7).number_format = '0.0000000000%'
-        ws_g.cell(row=r, column=8, value=net_rate)
-        ws_g.cell(row=r, column=8).number_format = '0.000%'
-        ws_g.cell(row=r, column=9, value=VERIS_AA_TOKENS_GAUNTLET)
-        ws_g.cell(row=r, column=9).number_format = '#,##0.0000'
-        ws_g.cell(row=r, column=10, value=tp)
-        ws_g.cell(row=r, column=11).value = f'=A{r}-A{r-1}'
-        ws_g.cell(row=r, column=11).number_format = '0.000000000'
-        ws_g.cell(row=r, column=12).value = f'=N{r-1}'
-        ws_g.cell(row=r, column=12).number_format = '#,##0.00'
-        ws_g.cell(row=r, column=13).value = f'=L{r}*H{r}*K{r}/365'
-        ws_g.cell(row=r, column=13).number_format = '#,##0.00'
-        ws_g.cell(row=r, column=14).value = f'=L{r}+M{r}'
-        ws_g.cell(row=r, column=14).number_format = '#,##0.00'
-        ws_g.cell(row=r, column=15).value = f'=IF(I{r}>0,N{r}/I{r},0)'
-        ws_g.cell(row=r, column=16).value = f'=C{r}*O{r}'
-        ws_g.cell(row=r, column=16).number_format = '#,##0.00'
-        ws_g.cell(row=r, column=17).value = f'=P{r}-D{r}'
-        ws_g.cell(row=r, column=17).number_format = '#,##0.00'
-        ws_g.cell(row=r, column=18).value = f'=Q{r}*G{r}'
-        ws_g.cell(row=r, column=18).number_format = '#,##0.00'
+        veris_pct = VERIS_GP_BALANCE / supply if supply > 0 else 0
+        period_days = (ts - prev_ts_g).total_seconds() / 86400.0
+        opening_value = prev_running_balance_g
+        interest = opening_value * net_rate * period_days / 365.0
+        running_balance = opening_value + interest
+        tp_reengineered = running_balance / VERIS_AA_TOKENS_GAUNTLET if VERIS_AA_TOKENS_GAUNTLET > 0 else 0
+        collateral_usd = coll * tp_reengineered
+        net = collateral_usd - borrow
+        veris_share = net * veris_pct
 
-    print(f"Gauntlet: {total} rows written (rows {last_row_g+1}-{last_row_g+total})")
+        gauntlet_rows.append((
+            ts.strftime('%Y-%m-%d %H:%M:%S'),
+            block, coll, borrow, supply, VERIS_GP_BALANCE, veris_pct,
+            net_rate, VERIS_AA_TOKENS_GAUNTLET, tp,
+            period_days, opening_value, interest, running_balance,
+            tp_reengineered, collateral_usd, net, veris_share
+        ))
+
+        prev_running_balance_g = running_balance
+        prev_ts_g = ts
+
+    conn.executemany("""
+        INSERT OR REPLACE INTO gauntlet_levered (
+            timestamp_utc, block, collateral, borrow, vault_total_supply,
+            veris_balance, veris_pct, net_rate, veris_aa_falconx, tranche_price,
+            period_days, opening_value, interest, running_balance,
+            tp_reengineered, collateral_usd, net, veris_share
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, gauntlet_rows)
+    conn.commit()
+    print(f"Gauntlet: {total} rows written to SQLite")
 
     # ========================================
     # Direct Accrual — append if active
     # ========================================
-    ws_d = wb['Direct Accrual']
-    last_row_d = 1
-    for r in range(ws_d.max_row, 1, -1):
-        if ws_d.cell(row=r, column=1).value is not None:
-            last_row_d = r
-            break
+    last_d = _get_last_direct(conn)
+    if last_d is not None:
+        last_ts_d, prev_running_balance_d = last_d
+        print(f"\nDirect Accrual last: ts={last_ts_d.strftime('%Y-%m-%d %H:%M')}, running_balance={prev_running_balance_d:,.2f}")
 
-    last_ts_d = ws_d.cell(row=last_row_d, column=1).value
-    print(f"\nDirect Accrual last row: {last_row_d}, ts: {last_ts_d}")
-
-    # Determine if Direct Accrual needs rows in our time range
-    if last_ts_d is not None:
-        last_dt_d = last_ts_d.replace(tzinfo=timezone.utc) if last_ts_d.tzinfo is None else last_ts_d
-        da_start = last_dt_d + timedelta(hours=1)
+        da_start = last_ts_d + timedelta(hours=1)
 
         if da_start <= end:
             da_timestamps = []
@@ -287,51 +344,47 @@ def main():
             total_d = len(da_timestamps)
             print(f"Appending {total_d} rows to Direct Accrual")
 
-            # Check current direct balance
-            # (If tokens are in wallet, position is active)
             tp_direct = 1.067961  # TP unchanged since Mar 3
+            prev_ts_d = last_ts_d
+            direct_rows = []
 
-            for i, ts in enumerate(da_timestamps):
-                r = last_row_d + 1 + i
+            for ts in da_timestamps:
                 net_rate = get_net_rate(ts)
+                period_days = (ts - prev_ts_d).total_seconds() / 86400.0
+                opening_value = prev_running_balance_d
+                interest = opening_value * net_rate * period_days / 365.0
+                running_balance = opening_value + interest
+                tp_reengineered = running_balance / VERIS_AA_TOKENS_DIRECT if VERIS_AA_TOKENS_DIRECT > 0 else 0
 
-                ws_d.cell(row=r, column=1, value=ts.replace(tzinfo=None))
-                ws_d.cell(row=r, column=1).number_format = 'yyyy-mm-dd hh:mm:ss'
-                ws_d.cell(row=r, column=2, value=VERIS_AA_TOKENS_DIRECT)
-                ws_d.cell(row=r, column=2).number_format = '#,##0.00'
-                ws_d.cell(row=r, column=3, value=tp_direct)
-                ws_d.cell(row=r, column=5, value=net_rate)
-                ws_d.cell(row=r, column=5).number_format = '0.000%'
-                ws_d.cell(row=r, column=4).value = f'=H{r-1}'
-                ws_d.cell(row=r, column=4).number_format = '#,##0.00'
-                ws_d.cell(row=r, column=6).value = f'=A{r}-A{r-1}'
-                ws_d.cell(row=r, column=6).number_format = '0.000000000'
-                ws_d.cell(row=r, column=7).value = f'=D{r}*E{r}*F{r}/365'
-                ws_d.cell(row=r, column=7).number_format = '#,##0.00'
-                ws_d.cell(row=r, column=8).value = f'=D{r}+G{r}'
-                ws_d.cell(row=r, column=8).number_format = '#,##0.00'
-                ws_d.cell(row=r, column=9).value = f'=IF(B{r}>0,H{r}/B{r},0)'
+                direct_rows.append((
+                    ts.strftime('%Y-%m-%d %H:%M:%S'),
+                    VERIS_AA_TOKENS_DIRECT, tp_direct,
+                    opening_value, net_rate, period_days, interest,
+                    running_balance, tp_reengineered
+                ))
 
-            print(f"Direct Accrual: {total_d} rows written (rows {last_row_d+1}-{last_row_d+total_d})")
+                prev_running_balance_d = running_balance
+                prev_ts_d = ts
+
+            conn.executemany("""
+                INSERT OR REPLACE INTO direct_accrual (
+                    timestamp_utc, token_balance, tranche_price,
+                    opening_value, net_rate, period_days, interest,
+                    running_balance, tp_reengineered
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, direct_rows)
+            conn.commit()
+            print(f"Direct Accrual: {total_d} rows written to SQLite")
         else:
             print("Direct Accrual already up to date.")
+    else:
+        print("\nDirect Accrual: no existing data in table.")
 
-    # ========================================
-    # Save
-    # ========================================
-    for _ in range(3):
-        try:
-            wb.save(XLSX_PATH)
-            print(f"\nSaved to {XLSX_PATH}")
-            break
-        except PermissionError:
-            alt = XLSX_PATH.replace('.xlsx', '_updated.xlsx')
-            wb.save(alt)
-            print(f"\nOriginal locked. Saved to {alt}")
-            break
+    conn.close()
 
     total_time = time.time() - t0
-    print(f"\nTotal time: {total_time:.1f}s ({total/total_time:.1f} rows/s)")
+    print(f"\nSaved to {DB_PATH}")
+    print(f"Total time: {total_time:.1f}s ({total/total_time:.1f} rows/s)")
 
 
 if __name__ == "__main__":
