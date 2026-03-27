@@ -136,6 +136,8 @@ Tokenised fund shares. Each product has a token + a Chainlink-style oracle.
 
 **Config**: Token addresses and oracles are in `contracts.json` under `_midas` sections per chain (with `_query_type: "midas_oracle"`). Handler: `midas_oracle` in `HANDLER_REGISTRY`. Adding a new Midas token = add entry to the `_midas` section with address, symbol, decimals, oracle, oracle_chain.
 
+**Issuer fallback (tier 2)**: Midas publishes daily reports as image-based PDFs in public Google Drive folders. mF-ONE reports: `https://drive.google.com/drive/folders/1NnrtI39fO2XuaNvnnZurvGskTYv_B4i_`. Filename: `mfone_reporting_public_YYYYMMDD.pdf`. Key field: "Price as of report Date: $X.XXXXXXXX". Snapshot at 5pm ET. Reports are image PDFs (no extractable text layer — OCR required for automation). Local copies saved to `docs/reference/midas/mf-one/`.
+
 **Known tokens**:
 | Token | Address | Oracle | Chain |
 |-------|---------|--------|-------|

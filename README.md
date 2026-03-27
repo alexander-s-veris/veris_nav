@@ -54,7 +54,7 @@ Flags: new/disappeared positions, zero-value positions, value changes >10%, pric
 # Wallet balance scanner (standalone quick check, ~45s)
 python src/collect_balances.py
 
-# FalconX/Pareto A3 hourly accrual updater (run before collect.py)
+# FalconX/Pareto A3 hourly accrual updater (writes to data/falconx.db, run before collect.py)
 python src/temp/update_falconx_optimized.py
 ```
 
@@ -84,6 +84,12 @@ The system uses a **config-driven handler registry** pattern. Adding a new posit
 4. `solana_protocols.json` configures Solana positions (Kamino, Exponent)
 5. `tokens.json` defines pricing config per token (method, feed IDs, fallback sources)
 6. `valuation.py` builds pricing indices from config at init — no hardcoded prices or feed IDs
+
+Additional features:
+- **Oracle staleness checking**: A2 tokens flag stale prices (>2x expected update frequency) and fall through to next source in hierarchy
+- **Valuation Policy compliance tests**: 31 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
+- **Chain health tracking**: Reports per-chain success/failure in `nav_summary.json`
+- **Snapshot diff tool**: `python src/diff_snapshots.py --latest` catches disappeared/changed positions before submission
 
 See `protocol_sourcing.md` for the "Adding a New Position" quick reference table.
 

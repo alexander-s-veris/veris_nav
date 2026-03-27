@@ -31,6 +31,8 @@ This project builds a Python-based data collection system for the Veris Capital 
 
 **First NAV date**: 31 March 2026.
 
+**Midas mF-ONE daily reports**: Published as image-based PDFs (no extractable text) in a public Google Drive folder. Filename format: `mfone_reporting_public_YYYYMMDD.pdf`. Key field: "Price as of report Date: $X.XXXXXXXX". Reports are daily (business days), taken at 5pm ET snapshot. The PDF requires OCR to extract the price programmatically. Folder: `https://drive.google.com/drive/folders/1NnrtI39fO2XuaNvnnZurvGskTYv_B4i_`. Local copies saved to `docs/reference/midas/mf-one/`.
+
 **NAV Report deadline**: Within 7 business days of the Valuation Date.
 
 ---
@@ -556,6 +558,8 @@ No hardcoded Pyth feed IDs or fallback prices — all pricing is config-driven v
 - **Balance method registry**: `collect.py` dispatches balance queries via a `balance_scanners` dict (alchemy/etherscan_v2/balance_of) instead of if/elif branching.
 - **Output schema versioning**: `SCHEMA_VERSION = "1.1"` in positions.json and nav_summary.json for downstream consumer compatibility detection.
 - **Solana constants in config**: All Solana mint addresses and program IDs read from `solana_protocols.json`, not hardcoded.
+- **Oracle staleness checking**: A2 tokens have `expected_update_freq_hours` in tokens.json. Prices older than 2x the expected frequency are flagged and fall through to the next source in the hierarchy (Chainlink → Pyth → Issuer NAV → CoinGecko → DEX TWAP per Section 6.2). Output includes `staleness_hours` and `stale_flag` columns.
+- **Valuation Policy compliance tests**: 26 automated tests in `tests/test_valuation_policy_compliance.py` validate config against the Valuation Policy v1.0 — category classification, pricing methodology, fallback sources, staleness thresholds, divergence tolerances, handler registry completeness.
 
 ---
 
