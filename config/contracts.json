@@ -32,7 +32,7 @@
       }
     },
     "_gauntlet_pareto": {
-      "_query_type": "manual_accrual",
+      "_query_type": "manual_accrual_gauntlet",
       "gauntlet_vault": {
         "address": "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44",
         "abi": "erc20",
