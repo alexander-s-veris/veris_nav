@@ -30,8 +30,8 @@ def _cache_key(token_entry: dict) -> str:
     Includes the pricing method and primary feed ID to distinguish
     same-symbol tokens with different feeds (e.g. on different chains).
     """
-    symbol = token_entry["symbol"]
-    pricing = token_entry.get("pricing", {})
+    symbol = token_entry.get("symbol", "UNKNOWN")
+    pricing = token_entry.get("pricing", {}) if isinstance(token_entry.get("pricing", {}), dict) else {}
     method = pricing.get("method", "")
     # Include the primary feed ID to distinguish same-symbol tokens with different feeds
     feed = (pricing.get("chainlink_feed") or pricing.get("pyth_feed_id") or
