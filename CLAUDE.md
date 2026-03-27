@@ -165,7 +165,7 @@ Pricing is **category-driven, not a single waterfall**. The category determines 
 - **Result**: Exchange rate × token balance = value in underlying stablecoin
 - **Then**: Price the underlying stablecoin per Category E
 - **Includes**: Accrued but unclaimed lending/supply interest. Governance rewards excluded (→ Category F)
-- **Examples**: sUSDe (Ethena), Morpho vault shares, Euler vaults, Upshift vaults
+- **Examples**: sUSDe (Ethena), Morpho vault shares, Euler vaults, Upshift vaults, Credit Coop/Rain vault (reclassified from A3 — on-chain exchange rate is authoritative despite underlying private credit)
 
 ### A2: Off-Chain Yield-Bearing Tokens
 - **Source hierarchy** (use highest-priority available):
@@ -181,7 +181,7 @@ Pricing is **category-driven, not a single waterfall**. The category determines 
 - **No price feed** — depends on loan agreements provided by Investment Manager
 - **On-chain tranche price** (e.g. Pareto `convertToAssets`) used as cross-reference only, NOT as primary
 - **Impairment**: If credit event occurs, mark to estimated recovery value (may be zero)
-- **Examples**: FalconX/Pareto vault, Credit Coop/Rain vault
+- **Examples**: FalconX/Pareto vault (Gauntlet gpAAFalconX and direct AA_FalconXUSDC)
 
 ### B: PT Tokens (hold-to-maturity)
 - **Formula**: `PT value = Underlying Value / (1 + Implied Rate at Purchase × (Days to Maturity / 365))`
@@ -355,10 +355,13 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **ONyc (OnRe reinsurance)**: On Solana (Exponent LPs + standalone). Weekly NAV updates.
 - **mHYPER (Midas Hyperithm)**: Small positions.
 
+### A1 Positions — Credit Coop / Rain
+- **Credit Coop / Rain**: ~$3.87M in Veris Credit Vault (0xb21e), wallet 0xec0b. **Reclassified A3 → A1** (rationale below). ERC-4626/7540 vault with deterministic `convertToAssets`. Sub-strategies: Rain credit line ($3.75M principal, 14% rate, 10% perf fee) + Gauntlet USDC Core liquid reserve (~$113K). Interest collected periodically from Rain and reinvested into liquid strategy.
+- **Reclassification rationale (per Valuation Policy Section 6.1)**: The vault's on-chain exchange rate (`convertToAssets`) is authoritative and deterministic — it reflects both collected and uncollected interest from the Rain credit line, plus yield from the Gauntlet USDC Core liquid reserve, net of performance fees. This is analogous to sUSDe (classified A1 even though underlying yield is off-chain). The credit strategy's `getPositionActiveCredit()` provides granular principal/interest breakdown for the methodology log, but `convertToAssets` is the primary valuation source.
+
 ### A3 Positions (Private credit)
 - **FalconX / Pareto (Gauntlet)**: gpAAFalconX shares (2,507,115). Gauntlet vault holds 55.56M AA_FalconXUSDC as Morpho collateral, borrows ~$30.9M USDC. Veris share ~9.38%. Manual accrual at 8.325% net (Mar 2026: 9.25% gross × 0.90). On-chain TP (1.067961) is cross-reference only.
 - **FalconX / Pareto (Direct)**: 1,894,970 AA_FalconXUSDC held directly in wallet 0x0c16 (since Mar 6 2026). Opening value $2,024,989 (actual USDC deposited). Same accrual rate as Gauntlet.
-- **Credit Coop / Rain**: ~$3.85M in Veris Credit Vault. 13.99% rate + 5% incentive.
 
 ### B Positions (PT tokens)
 - **PT-USX (Exponent, Solana)**: 7 tranches totaling 1,802,168 PT-USX, maturity 01-Jun-2026. Individual lot tracking with linear amortisation.

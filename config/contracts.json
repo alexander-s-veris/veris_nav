@@ -56,7 +56,19 @@
       "vault": {
         "address": "0xb21eAFB126cEf15CB99fe2D23989b58e40097919",
         "abi": "credit_coop_vault",
-        "description": "Veris Credit Vault — ERC-4626 convertToAssets as cross-reference"
+        "description": "Veris Credit Vault — ERC-4626/7540. Category A1 (convertToAssets is primary). Sub-strategies: Rain credit line + Gauntlet USDC Core liquid reserve."
+      },
+      "liquid_strategy": {
+        "address": "0x671B5B6F01C5FEe16E6F9De2eb85AC027Dc9fE0e",
+        "description": "LiquidStrategy — deploys idle capital into Gauntlet USDC Core (ERC-4626)"
+      },
+      "credit_strategy": {
+        "address": "0x433E415b0fA54C570C450DD976E2402e408cB6db",
+        "description": "CreditStrategy — Line-of-Credit-v2 to Rain. getPositionActiveCredit(line, tokenId) for breakdown."
+      },
+      "rain_credit_line": {
+        "address": "0x1e86E49780Dd5FF522B43889A7C196caa0CABd85",
+        "description": "Rain Line-of-Credit-v2. Borrower for the credit strategy."
       }
     },
     "_morpho_vaults": {

@@ -67,7 +67,8 @@
       "Bash(PYTHONIOENCODING=utf-8 python src/temp/hourly_convert_units.py)",
       "Bash(PYTHONIOENCODING=utf-8 python src/temp/supplement_convert_units.py)",
       "Bash(mv:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "WebFetch(domain:app.creditcoop.xyz)"
     ]
   }
 }

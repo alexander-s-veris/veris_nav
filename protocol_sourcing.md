@@ -354,6 +354,49 @@ Net_Rate = Gross_Rate × 0.90 (10% pool fee)
 
 ---
 
+## Credit Coop / Rain (Ethereum)
+
+ERC-4626/7540 vault that deploys capital into two sub-strategies: a Rain credit line (private credit) and a Gauntlet USDC Core vault (liquid reserve).
+
+**Reclassified A3 → A1**: The vault's `convertToAssets` is deterministic and authoritative — it reflects collected + uncollected interest from Rain, yield from the liquid strategy, and performance fee deductions. Analogous to sUSDe being A1 despite off-chain underlying yield.
+
+### Contracts
+
+| Contract | Address | Purpose |
+|----------|---------|---------|
+| Veris Credit Vault | `0xb21eAFB126cEf15CB99fe2D23989b58e40097919` | ERC-4626/7540 vault. Primary valuation via `convertToAssets`. |
+| LiquidStrategy | `0x671B5B6F01C5FEe16E6F9De2eb85AC027Dc9fE0e` | Deploys idle capital into Gauntlet USDC Core. `totalAssets()` for balance. |
+| CreditStrategy | `0x433E415b0fA54C570C450DD976E2402e408cB6db` | Line-of-Credit-v2 to Rain. `totalActiveCredit()` for deployed amount. |
+| Rain Credit Line | `0x1e86E49780Dd5FF522B43889A7C196caa0CABd85` | Borrower address for the credit position. |
+| Gauntlet USDC Core | `0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458` | ERC-4626 Morpho vault where liquid strategy deposits. |
+
+### How to read — primary valuation (A1)
+
+1. `balanceOf(wallet)` on vault → shares (6 decimals)
+2. `convertToAssets(shares)` on vault → USDC value (6 decimals)
+3. Underlying is USDC → Category E at par
+
+### How to read — sub-allocation breakdown (for methodology log)
+
+For the NAV methodology log, document the breakdown:
+
+1. **Vault level**: `totalAssets()` → total USDC across all strategies. `totalLiquidAssets()` → liquid portion only.
+2. **Credit strategy**: `totalActiveCredit()` on CreditStrategy → principal + uncollected interest in Rain credit line. For granular breakdown: `numCreditPositions()` then `tokenIds(i)` → `creditTokenIdToLine(tokenId)` → `getPositionActiveCredit(line, tokenId)` returns `(deposit, interest)`.
+3. **Liquid strategy**: `totalAssets()` on LiquidStrategy → amount in Gauntlet USDC Core.
+4. **Cash**: USDC `balanceOf` on credit strategy address (undeployed cash) + USDC `balanceOf` on vault address (undeployed in vault).
+
+Interest on the Rain credit line accrues on-chain and is periodically collected by the vault, which reinvests it into the liquid strategy. The share price (`convertToAssets`) automatically reflects all of this.
+
+### Current terms (as of Mar 2026)
+
+- Rain credit line: $3.75M principal, 14% annual rate, 10% performance fee
+- Gauntlet USDC Core: ~$113K liquid reserve yielding ~4.77%
+- Single wallet: 0xec0b
+
+**Classification**: Category A1. Value = `convertToAssets(shares)` (USDC, at par).
+
+---
+
 ## Fluid (Ethereum)
 
 Uses NFT positions, not fungible shares. Each position is an NFT with its own collateral/debt state.

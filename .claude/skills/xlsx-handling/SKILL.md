@@ -42,3 +42,29 @@ cat cache/VerisCapitalAMC_NAV_20260316_working/_metadata.json
 - Each xlsx gets its own subfolder named after the source file
 - Custom root: `python src/cache_xlsx.py file.xlsx --output-dir /path/to/cache`
 - The `cache/` folder is gitignored
+
+## PowerQuery / M Code
+
+Cached CSVs only contain cell values — they do NOT include PowerQuery definitions,
+formulas, or VBA. If you need to analyse PowerQuery M code:
+
+1. Run: `python src/extract_powerquery.py <path_to_xlsx>`
+2. This saves to `cache/<workbook>/powerquery/`:
+   - `Section1.m` — full combined M code
+   - `<query_name>.m` — one file per shared definition (42 in the NAV workbook)
+   - `_index.txt` — list of all definitions with type (parameter/function/query)
+3. Read the individual `.m` files directly — they are plain text
+
+Naming convention in the workbook: `p_` = parameters, `fn_` = reusable functions,
+`q_` = output queries, `cg_` = CoinGecko helpers.
+
+```bash
+# Extract Power Query from the NAV workbook
+python src/extract_powerquery.py docs/reference/VerisCapitalAMC_NAV_20260316_working.xlsx
+
+# Check what was extracted
+# (use Read tool on cache/VerisCapitalAMC_NAV_20260316_working/powerquery/_index.txt)
+
+# Read a specific query definition
+# (use Read tool on cache/VerisCapitalAMC_NAV_20260316_working/powerquery/fn_BalanceOfUnderlying.m)
+```
