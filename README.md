@@ -35,7 +35,7 @@ SOLSCAN_API_KEY=your_key
 | 0xeC0B | Credit Positions 2 | Pending |
 | 0xaca2 | Open Market Positions 3 | ARMA proxy (Arbitrum) |
 | 0x8055 | Open Market Positions 2 | Aave Horizon D, Clearstar A1, mHYPER A2 |
-| ASQ4... | Solana Vault 1 | Kamino D (2 obligations: USCC/USDC + PT-USX/PT-eUSX/USX), PT-USX B (7 lots), PT-eUSX B (1 lot), farming rewards F |
+| ASQ4... | Solana Vault 1 | Kamino D (2 obligations: USCC/USDC + PT-USX/PT-eUSX/USX), PT-USX B (7 lots), PT-eUSX B (1 lot), Exponent C (2 LPs: ONyc + eUSX), Exponent F (2 YTs: ONyc + eUSX), farming rewards F |
 
 ## Project Structure
 
@@ -43,7 +43,7 @@ SOLSCAN_API_KEY=your_key
 src/
   evm.py                   # Shared EVM utilities (cached Web3, block queries)
   block_utils.py           # Block estimation + concurrent RPC utilities
-  solana_client.py         # Solana RPC helpers (balances, eUSX exchange rate, Kamino obligation parsing)
+  solana_client.py         # Solana RPC helpers (balances, eUSX rate, Kamino obligations, Exponent markets/LP/YT)
   pt_valuation.py          # PT token lot-based valuation (Category B linear amortisation)
   pricing.py               # Price adapters (Chainlink, Pyth, Kraken, CoinGecko, par+depeg)
   collect_balances.py      # Production wallet balance scanner (Cat E + F + A1/A2)

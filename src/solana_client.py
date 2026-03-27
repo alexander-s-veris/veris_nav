@@ -220,3 +220,203 @@ def get_kamino_obligation(obligation_pubkey: str, slot: int | None = None) -> di
     result["obligation_pubkey"] = obligation_pubkey
     result["query_slot"] = slot or "latest"
     return result
+
+
+# --- Exponent Finance ---
+# Program: ExponentnaRg3CQbW6dqQNZKXp7gtZ9DGMp1cwC4HAS7
+# Yield-splitting protocol: SY → PT + YT. Markets are AMM pools (SY vs PT).
+# LP and YT positions are PDA accounts, not SPL tokens.
+
+EXPONENT_PROGRAM_ID = "ExponentnaRg3CQbW6dqQNZKXp7gtZ9DGMp1cwC4HAS7"
+_EXPONENT_PUBLIC_RPC = "https://api.mainnet-beta.solana.com"
+
+# Account discriminators (from IDL)
+_LP_POSITION_DISC = bytes([105, 241, 37, 200, 224, 2, 252, 90])
+_YT_POSITION_DISC = bytes([227, 92, 146, 49, 29, 85, 71, 94])
+_MARKET_TWO_DISC = bytes([212, 4, 132, 126, 169, 121, 121, 20])
+
+# MarketFinancials byte offsets within MarketTwo account
+_MF_OFFSET = 364  # offset of expiration_ts in MarketTwo
+_YEAR_SECONDS = 31_536_000  # 365 days exactly (Exponent convention)
+
+
+def _exponent_rpc(method: str, params: list) -> dict:
+    """RPC call using public Solana RPC for heavy queries (getProgramAccounts).
+    Falls back to Alchemy for lighter calls.
+    """
+    url = _EXPONENT_PUBLIC_RPC if method == "getProgramAccounts" else get_solana_rpc_url()
+    resp = requests.post(
+        url,
+        json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    result = resp.json()
+    if "error" in result:
+        raise ValueError(f"Solana RPC error: {result['error']}")
+    return result
+
+
+def parse_exponent_market(raw: bytes) -> dict:
+    """Parse an Exponent MarketTwo account to extract pool state and implied rate.
+
+    Returns dict with pubkeys (vault, sy_mint, pt_mint, lp_mint),
+    pool balances, expiration timestamp, and last_ln_implied_rate.
+    """
+    # Pubkeys at offset 8, 32 bytes each
+    vault = _bytes_to_b58(raw[8 + 3 * 32: 8 + 4 * 32])  # idx 3
+    sy_mint = _bytes_to_b58(raw[8 + 1 * 32: 8 + 2 * 32])  # idx 1
+    pt_mint = _bytes_to_b58(raw[8 + 2 * 32: 8 + 3 * 32])  # idx 2
+    lp_mint = _bytes_to_b58(raw[8 + 4 * 32: 8 + 5 * 32])  # idx 4
+
+    # MarketFinancials at offset 364
+    expiration_ts = struct.unpack_from("<Q", raw, _MF_OFFSET)[0]
+    pt_balance = struct.unpack_from("<Q", raw, _MF_OFFSET + 8)[0]
+    sy_balance = struct.unpack_from("<Q", raw, _MF_OFFSET + 16)[0]
+    ln_fee_rate_root = struct.unpack_from("<d", raw, _MF_OFFSET + 24)[0]
+    last_ln_implied_rate = struct.unpack_from("<d", raw, _MF_OFFSET + 32)[0]
+    rate_scalar_root = struct.unpack_from("<d", raw, _MF_OFFSET + 40)[0]
+
+    return {
+        "vault": vault,
+        "sy_mint": sy_mint,
+        "pt_mint": pt_mint,
+        "lp_mint": lp_mint,
+        "expiration_ts": expiration_ts,
+        "pt_balance": pt_balance,
+        "sy_balance": sy_balance,
+        "ln_fee_rate_root": ln_fee_rate_root,
+        "last_ln_implied_rate": last_ln_implied_rate,
+        "rate_scalar_root": rate_scalar_root,
+    }
+
+
+def get_exponent_market(market_pubkey: str, slot: int | None = None) -> dict:
+    """Fetch and parse an Exponent MarketTwo account."""
+    params = [market_pubkey, {"encoding": "base64"}]
+    if slot is not None:
+        params[1]["minContextSlot"] = slot
+
+    resp = solana_rpc("getAccountInfo", params)
+    value = resp["result"]["value"]
+    if value is None:
+        raise ValueError(f"Market account not found: {market_pubkey}")
+
+    raw = base64.b64decode(value["data"][0])
+    result = parse_exponent_market(raw)
+    result["market_pubkey"] = market_pubkey
+    result["query_slot"] = slot or "latest"
+    return result
+
+
+def get_exponent_lp_positions(wallet: str) -> list[dict]:
+    """Find all Exponent LP positions for a wallet via getProgramAccounts.
+
+    Uses public RPC to avoid Alchemy rate limits on getProgramAccounts.
+    Returns list of dicts with market pubkey and lp_balance.
+    """
+    resp = _exponent_rpc("getProgramAccounts", [
+        EXPONENT_PROGRAM_ID,
+        {
+            "encoding": "base64",
+            "filters": [
+                {"memcmp": {"offset": 0, "bytes": base64.b64encode(_LP_POSITION_DISC).decode(), "encoding": "base64"}},
+                {"memcmp": {"offset": 8, "bytes": wallet, "encoding": "base58"}},
+            ],
+        },
+    ])
+
+    positions = []
+    for acc in resp["result"]:
+        raw = base64.b64decode(acc["account"]["data"][0])
+        offset = 8  # skip discriminator
+        owner = _bytes_to_b58(raw[offset:offset + 32]); offset += 32
+        market = _bytes_to_b58(raw[offset:offset + 32]); offset += 32
+        lp_balance = struct.unpack_from("<Q", raw, offset)[0]
+
+        if lp_balance > 0:
+            positions.append({
+                "account_pubkey": acc["pubkey"],
+                "market": market,
+                "lp_balance": lp_balance,
+            })
+
+    return positions
+
+
+def get_exponent_yt_positions(wallet: str) -> list[dict]:
+    """Find all Exponent YT positions for a wallet via getProgramAccounts.
+
+    Uses public RPC to avoid Alchemy rate limits.
+    Returns list of dicts with vault pubkey and yt_balance.
+    """
+    resp = _exponent_rpc("getProgramAccounts", [
+        EXPONENT_PROGRAM_ID,
+        {
+            "encoding": "base64",
+            "filters": [
+                {"memcmp": {"offset": 0, "bytes": base64.b64encode(_YT_POSITION_DISC).decode(), "encoding": "base64"}},
+                {"memcmp": {"offset": 8, "bytes": wallet, "encoding": "base58"}},
+            ],
+        },
+    ])
+
+    positions = []
+    for acc in resp["result"]:
+        raw = base64.b64decode(acc["account"]["data"][0])
+        offset = 8
+        owner = _bytes_to_b58(raw[offset:offset + 32]); offset += 32
+        vault = _bytes_to_b58(raw[offset:offset + 32]); offset += 32
+        yt_balance = struct.unpack_from("<Q", raw, offset)[0]
+
+        if yt_balance > 0:
+            positions.append({
+                "account_pubkey": acc["pubkey"],
+                "vault": vault,
+                "yt_balance": yt_balance,
+            })
+
+    return positions
+
+
+def decompose_exponent_lp(
+    market: dict,
+    lp_balance: int,
+    lp_total_supply: int,
+) -> dict:
+    """Decompose an Exponent LP position into SY and PT components.
+
+    Args:
+        market: Parsed MarketTwo dict from get_exponent_market()
+        lp_balance: User's LP token balance (raw)
+        lp_total_supply: Total LP supply from getTokenSupply (raw)
+
+    Returns dict with user_sy, user_pt amounts and PT price ratio.
+    """
+    import math
+
+    user_sy = market["sy_balance"] * lp_balance // lp_total_supply
+    user_pt = market["pt_balance"] * lp_balance // lp_total_supply
+
+    # PT price using AMM implied rate
+    import time
+    sec_remaining = market["expiration_ts"] - int(time.time())
+    if sec_remaining > 0 and market["last_ln_implied_rate"] > 0:
+        exchange_rate = math.exp(
+            market["last_ln_implied_rate"] * sec_remaining / _YEAR_SECONDS
+        )
+        pt_price_ratio = 1.0 / exchange_rate
+    else:
+        # At or past maturity — PT = 1:1 underlying
+        exchange_rate = 1.0
+        pt_price_ratio = 1.0
+
+    return {
+        "user_sy": user_sy,
+        "user_pt": user_pt,
+        "pt_price_ratio": pt_price_ratio,
+        "exchange_rate": exchange_rate,
+        "seconds_remaining": max(0, sec_remaining),
+        "last_ln_implied_rate": market["last_ln_implied_rate"],
+        "lp_share": lp_balance / lp_total_supply if lp_total_supply > 0 else 0,
+    }

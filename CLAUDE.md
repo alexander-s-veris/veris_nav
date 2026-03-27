@@ -194,7 +194,7 @@ Pricing is **category-driven, not a single waterfall**. The category determines 
 ### C: LP Positions
 - **Source**: Decompose LP into constituent tokens at the Valuation Block, price each per its own category
 - **Yield-splitting LPs** (Pendle, Exponent): PT component priced using protocol's current implied rate (NOT linear amortisation), SY component priced per A1/A2
-- **Exponent PT-in-LP formula**: `PT Price = Underlying Price × EXP(-last_ln_implied_rate × Days to Maturity / 365.25)`
+- **Exponent PT-in-LP formula**: `PT Price = Underlying Price × EXP(-last_ln_implied_rate × Days to Maturity / 365)`
 - **Includes**: Accrued but unclaimed trading fees. Governance rewards excluded (→ Category F)
 - **YT tokens** encountered in LPs: Priced per Category F methodology
 - **Examples**: Exponent ONyc-13MAY26 LP, Exponent eUSX-01JUN26 LP
@@ -374,7 +374,7 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **PT-ONyc-13MAY26 (Exponent, Solana)**: In LP position.
 
 ### C Positions (LP)
-- **Exponent ONyc-13MAY26 LP**: 1,063,938 ONyc + 709,406 PT-ONyc. PT priced using Exponent formula: `underlying_price × EXP(-last_ln_implied_rate × days/365.25)`.
+- **Exponent ONyc-13MAY26 LP**: 1,063,938 ONyc + 709,406 PT-ONyc. PT priced using Exponent formula: `underlying_price × EXP(-last_ln_implied_rate × days/365)`.
 - **Exponent eUSX-01JUN26 LP**: 195,927 eUSX + 41,422 PT-eUSX.
 
 ### D Positions (Leveraged / Looping)
@@ -398,6 +398,7 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **GIZA**: 223,251 tokens on Base
 - **RLP (Resolv)**: 204,746 tokens
 - **YT-ONyc-13MAY26**: ~725,568 tokens
+- **YT-eUSX-01JUN26**: ~141,771 tokens
 - **Kamino farming rewards** (Solana): Unclaimed USDG (~6,035) and USX from farming. Included if claimable at Valuation Block. KMNO season rewards excluded.
 - All whitelisted tokens with balance >$0 included in valuation
 
@@ -436,7 +437,7 @@ Kamino lending markets are isolated markets under the same program. "Solstice", 
 
 ### Exponent Finance (Solana)
 
-- Exponent PT formula: `PT_price = underlying_price × EXP(-last_ln_implied_rate × days/365.25)`
+- Exponent PT formula: `PT_price = underlying_price × EXP(-last_ln_implied_rate × days/365)`
 - Exponent YT formula: `YT_price = underlying_price × (1 - PT_ratio)`
 
 ---

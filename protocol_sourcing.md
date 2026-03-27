@@ -548,6 +548,100 @@ Kamino farming rewards accrue to obligations via a separate Farms program (`Farm
 
 ---
 
+## Exponent Finance (Solana)
+
+Yield-splitting protocol on Solana. Wraps yield-bearing positions into SY (Standardized Yield) tokens, then splits into PT (Principal Token) and YT (Yield Token). Markets are AMM pools trading SY against PT.
+
+**Program ID**: `ExponentnaRg3CQbW6dqQNZKXp7gtZ9DGMp1cwC4HAS7`
+**No REST API, no SDK** — all data read from on-chain accounts via RPC.
+**Source code**: `github.com/exponent-finance/exponent-core` (Anchor program, open source)
+
+### Key account types
+
+| Account | Discriminator | Seeds | Contains |
+|---------|--------------|-------|----------|
+| MarketTwo | `[212,4,132,126,169,121,121,20]` | `["market", vault, seed_id]` | Pool state, `MarketFinancials` (implied rate, PT/SY balances) |
+| LpPosition | `[105,241,37,200,224,2,252,90]` | `["lp_position", market, owner]` | User's LP balance for a market |
+| YieldTokenPosition | `[227,92,146,49,29,85,71,94]` | `["yield_position", vault, owner]` | User's YT balance and accrued yield |
+| Vault | (keypair-based) | N/A | PT/YT/SY mints, exchange rate, maturity |
+
+PT and SY are standard SPL tokens (readable via `getTokenAccountsByOwner`). LP and YT positions are PDA accounts — must use `getProgramAccounts` with discriminator + owner filter to discover.
+
+### MarketTwo layout (MarketFinancials at offset 364)
+
+Pubkeys at offset 8 (32 bytes each):
+- idx 0: authority PDA
+- idx 1: SY mint
+- idx 2: PT mint
+- idx 3: vault
+- idx 4: LP mint
+- idx 5+: token accounts, fee receiver, admin, etc.
+
+`MarketFinancials` starts at byte offset **364**:
+```
+offset 364: expiration_ts     (u64, 8 bytes) — maturity as unix timestamp
+offset 372: pt_balance        (u64, 8 bytes) — PT tokens in AMM pool
+offset 380: sy_balance        (u64, 8 bytes) — SY tokens in AMM pool
+offset 388: ln_fee_rate_root  (f64, 8 bytes)
+offset 396: last_ln_implied_rate (f64, 8 bytes) — natural log of implied APY
+offset 404: rate_scalar_root  (f64, 8 bytes)
+```
+
+### PT pricing within LPs (Category C)
+
+Uses the AMM implied rate, NOT linear amortisation (which is for held-to-maturity lots):
+```
+exchange_rate = exp(last_ln_implied_rate × seconds_remaining / 31,536,000)
+pt_price = underlying_price / exchange_rate
+```
+Note: on-chain uses exactly 365 days (31,536,000 seconds), not 365.25.
+
+### LP decomposition (Category C)
+
+```
+user_sy = pool_sy_balance × user_lp_balance / total_lp_supply
+user_pt = pool_pt_balance × user_lp_balance / total_lp_supply
+```
+
+Total LP supply: query `getTokenSupply` on the LP mint (idx 4 in MarketTwo).
+
+Value = `user_sy × sy_price + user_pt × pt_price_from_amm`
+
+### YT pricing (Category F)
+
+```
+yt_price = underlying_price × (1 − 1/exchange_rate)
+```
+
+Near-expiry illiquid YTs may be marked to zero per Valuation Policy.
+
+### How to read positions
+
+1. **Discovery** (one-time): `getProgramAccounts` on public RPC with discriminator + owner filters to find all LpPosition and YieldTokenPosition accounts
+2. **LP valuation**: Read MarketTwo for pool state → decompose LP → price SY per its category, PT via AMM implied rate
+3. **YT valuation**: Read YT balance from YieldTokenPosition, price using formula above
+4. **Valuation Block**: Use `getAccountInfo` at specific slot on Alchemy for both MarketTwo and position accounts
+
+**Implementation**: `src/solana_client.py` → `parse_exponent_market()`, `get_exponent_lp_positions()`, `get_exponent_yt_positions()`
+
+### Known positions
+
+| Market | Market Pubkey | Vault | Position Type | User Account |
+|--------|-------------|-------|---------------|-------------|
+| ONyc-13MAY26 | `8QJRc12BDXHRLghZXFyPtYtAQeRwnZGKMJQa3G2NVQoC` | `J2apQJvz...` | LP (C) | `Bim2Q4nJ...` (lp_balance ~821T raw, 9 dec) |
+| eUSX-01JUN26 | `rBbzpGk3PTX8mvQg95VWJ24EDgvxyDJYrEo9jtauvjP` | `7NviQEEi...` | LP (C) | `A5Cf2QFy...` (lp_balance ~119B raw, 6 dec) |
+| ONyc-13MAY26 | — | `J2apQJvz...` | YT (F) | `FoiWPd6H...` (yt_balance ~726T raw = 725,568 tokens, 9 dec) |
+| eUSX-01JUN26 | — | `7NviQEEi...` | YT (F) | `Bz2FoHme...` (yt_balance ~142B raw = 141,771 tokens, 6 dec) |
+
+### LP mint addresses
+
+| Market | LP Mint | Decimals |
+|--------|---------|----------|
+| ONyc-13MAY26 | `3gqhwFZtkU1dUyNN6taFp8sbnu3E5bmkumfjtoF9P9JD` | 9 |
+| eUSX-01JUN26 | `4GT6g1iKx2TyYCkwt1tERkReQjSUuVE7uh14M5W8v2nn` | 6 |
+
+---
+
 ## General Patterns
 
 ### EVM
@@ -572,7 +666,8 @@ Kamino farming rewards accrue to obligations via a separate Farms program (`Farm
 | Kamino farming rewards | REST API `/farms/users/{wallet}/transactions` | F | Manual / API |
 | PT token (hold-to-maturity) | Lot discovery via token account tx history, then linear amortisation from config | B | `pt_valuation.discover_pt_lots()` + `value_pt_from_config()` |
 | eUSX exchange rate | `total USX in vault / total eUSX supply` on-chain | A1 | `solana_client.get_eusx_exchange_rate()` |
-| Exponent LP | Decompose into constituent tokens | C | TBD |
+| Exponent LP | `getProgramAccounts` (LpPosition) → decompose via MarketTwo pool state | C | `solana_client.get_exponent_lp_positions()` + `decompose_exponent_lp()` |
+| Exponent YT | `getProgramAccounts` (YieldTokenPosition) → price via `1 - 1/exchange_rate` | F | `solana_client.get_exponent_yt_positions()` |
 | Plain SPL token | `getTokenAccountsByOwner` | per token | `collect_balances.query_balances_solana()` |
 
 ### Solana sourcing approach (3 paths)
