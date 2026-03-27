@@ -137,6 +137,17 @@ def main():
     all_positions = []
     t_start = _time.time()
 
+    # Chain health tracking — populated during steps 1+2, included in output
+    chain_health = {}  # chain -> {"balances": int, "positions": int, "errors": [str]}
+
+    def _track_chain(chain_name, balances=0, positions=0, error=None):
+        if chain_name not in chain_health:
+            chain_health[chain_name] = {"balances": 0, "positions": 0, "errors": []}
+        chain_health[chain_name]["balances"] += balances
+        chain_health[chain_name]["positions"] += positions
+        if error:
+            chain_health[chain_name]["errors"].append(error)
+
     # =========================================================================
     # STEPS 1+2: Run wallet balances and protocol positions CONCURRENTLY
     # =========================================================================
@@ -164,8 +175,8 @@ def main():
                 for w in evm_wallets:
                     chain_rows.extend(query_balances_alchemy(
                         w3, chain_name, w["address"], bn, bts, registry))
-            except ConnectionError:
-                pass
+            except ConnectionError as e:
+                _track_chain(chain_name, error=f"balance scan: {e}")
             return chain_rows
 
         def _scan_etherscan(chain_name, chain_cfg):
@@ -194,6 +205,7 @@ def main():
         evm_results = concurrent_query(lambda fn: fn(), evm_tasks, max_workers=len(evm_tasks))
 
         for chain_name, chain_rows in evm_results:
+            _track_chain(chain_name, balances=len(chain_rows))
             if chain_rows:
                 log.append(f"  [{chain_name}] {len(chain_rows)} token balances")
             for r in chain_rows:
@@ -212,8 +224,13 @@ def main():
 
         # Solana
         for w in solana_wallets:
-            sol_rows = query_balances_solana(w["address"], registry,
-                                            slot_override=solana_valuation_slot)
+            try:
+                sol_rows = query_balances_solana(w["address"], registry,
+                                                slot_override=solana_valuation_slot)
+            except Exception as e:
+                sol_rows = []
+                _track_chain("solana", error=f"balance scan: {e}")
+            _track_chain("solana", balances=len(sol_rows))
             log.append(f"  [solana] {len(sol_rows)} token balances")
             for r in sol_rows:
                 rows.append({
@@ -266,14 +283,17 @@ def main():
         for chain_name in evm_chains:
             t_chain = _time.time()
             block_override = valuation_blocks.get(chain_name)
+            chain_pos_count = 0
             for w in evm_wallets:
                 wallet = w["address"]
                 chain_rows = query_evm_wallet_positions(
                     chain_name, wallet, block_override=block_override)
                 active = [r for r in chain_rows if r.get("status") != "CLOSED"]
+                chain_pos_count += len(active)
                 if active:
                     log.append(f"  [{chain_name}] {wallet[:8]}...: {len(active)} active positions")
                 rows.extend(chain_rows)
+            _track_chain(chain_name, positions=chain_pos_count)
             elapsed = _time.time() - t_chain
             if elapsed > 1:
                 log.append(f"  [{chain_name}] ({elapsed:.1f}s)")
@@ -298,10 +318,14 @@ def main():
 
         # Solana
         for w in solana_wallets:
-            sol_rows = query_solana_positions(
-                w["address"], valuation_date,
-                block_ts_override=solana_valuation_slot)
-            rows.extend(sol_rows)
+            try:
+                sol_rows = query_solana_positions(
+                    w["address"], valuation_date,
+                    block_ts_override=solana_valuation_slot)
+                _track_chain("solana", positions=len(sol_rows))
+                rows.extend(sol_rows)
+            except Exception as e:
+                _track_chain("solana", error=f"protocol scan: {e}")
 
         return rows, log
 
@@ -430,7 +454,8 @@ def main():
         vb_metadata["solana"] = {"slot": sol_slot, "slot_timestamp_utc": sol_ts}
 
     summary_path = write_nav_summary(all_positions, output_dir, run_ts_cet,
-                                     valuation_blocks=vb_metadata)
+                                     valuation_blocks=vb_metadata,
+                                     chain_health=chain_health)
     print(f"  {summary_path}")
 
     # =========================================================================
@@ -440,6 +465,16 @@ def main():
     print(f"\n{'=' * 80}")
     print(f"COLLECTION COMPLETE — {t_end - t_start:.1f}s")
     print(f"{'=' * 80}")
+
+    # Chain health summary
+    failed_chains = {c: h for c, h in chain_health.items() if h["errors"]}
+    if failed_chains:
+        print(f"\n*** CHAIN HEALTH — {len(failed_chains)} CHAIN(S) HAD ERRORS ***")
+        for chain, health in sorted(failed_chains.items()):
+            print(f"  [{chain}] {health['balances']} balances, {health['positions']} positions")
+            for err in health["errors"]:
+                print(f"    ERROR: {err}")
+        print("  Run diff_snapshots.py to check for missing positions.")
 
     # Print summary table
     total_positive = Decimal(0)

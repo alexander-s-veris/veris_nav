@@ -244,7 +244,8 @@ def write_lp_decomposition(positions, output_dir):
     return csv_path
 
 
-def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None):
+def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None,
+                      chain_health=None):
     """Write nav_summary.json with aggregations by category and wallet.
 
     Args:
@@ -252,6 +253,7 @@ def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None):
         output_dir: Output directory path.
         run_ts_cet: Run timestamp in CET.
         valuation_blocks: Optional dict of chain -> block info for methodology log.
+        chain_health: Optional dict of chain -> {balances, positions, errors}.
     """
     by_category = {}
     by_wallet = {}
@@ -324,6 +326,20 @@ def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None):
             "at run time. For official NAV calculation, re-run with --date YYYY-MM-DD "
             "to pin all queries to the Valuation Block (15:00 UTC)."
         )
+
+    # Chain health report
+    if chain_health:
+        health_summary = {}
+        for chain, health in sorted(chain_health.items()):
+            entry = {
+                "balances": health["balances"],
+                "positions": health["positions"],
+                "status": "ERROR" if health["errors"] else "OK",
+            }
+            if health["errors"]:
+                entry["errors"] = health["errors"]
+            health_summary[chain] = entry
+        summary["chain_health"] = health_summary
 
     json_path = os.path.join(output_dir, "nav_summary.json")
     with open(json_path, "w", encoding="utf-8") as f:
