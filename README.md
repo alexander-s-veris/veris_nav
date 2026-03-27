@@ -29,6 +29,9 @@ python src/collect.py
 
 # Pinned to Valuation Block at 15:00 UTC on a specific date (production)
 python src/collect.py --date 2026-03-31
+
+# Enforce strict config validation (recommended in CI)
+python src/collect.py --date 2026-03-31 --strict-config
 ```
 
 When `--date` is provided, all on-chain queries are pinned to the block/slot closest to but not exceeding 15:00 UTC on that date, per the Valuation Policy. Without `--date`, queries run at latest block.
