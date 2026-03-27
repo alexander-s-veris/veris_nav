@@ -46,8 +46,9 @@ Query Etherscan for ERC-20 transfers of:
 
 Any new deposit increases the **Opening Value (USD)** at the deposit timestamp:
 ```
-Additional deposit (USDC) = delta_tokens × tranche_price_at_deposit_block
+Additional deposit (USDC) = actual USDC deposited (from on-chain tx)
 ```
+**Important**: Use the actual USDC amount deposited, NOT `delta_tokens × stale_on-chain_TP`. The on-chain TP is only updated at epoch end (~monthly) and understates the true value between updates. The effective deposit TP (= USDC / tokens) captures accrued interest since the last epoch.
 
 Any withdrawal reduces the position proportionally.
 
@@ -153,9 +154,14 @@ This verification is logged in the NAV Methodology Report but does NOT change th
 - Veris share = (collateral × re-engineered TP − debt) × veris %
 
 ### Period 3: Direct Accrual revival (Mar 2026)
-- Veris supplied AA_FalconXUSDC directly as Morpho collateral (separate from Gauntlet)
-- Then withdrew before month end
-- Treatment: same Direct Accrual methodology, token balance = wallet balance + Morpho collateral
+- 2026-03-06 12:06–12:26: Veris received 1,894,969.859499 AA_FalconXUSDC (deposited $2,024,989.23 USDC)
+- 2026-03-06 12:48: Supplied to Morpho as collateral (borrowed ~$1.275M USDC against it)
+- 2026-03-22 18:10: Withdrew from Morpho, debt repaid. Tokens held in wallet 0x0c16.
+- Token balance (wallet + Morpho collateral) constant at 1,894,969.859499 throughout
+- Treatment: same Direct Accrual methodology. Opening value = **actual USDC deposited** ($2,024,989.23), NOT tokens × stale on-chain TP
+- Morpho borrowing is a financing overlay — does not affect the credit accrual. Net leverage position tracked separately at NAV time
+- Net rate: 8.325% (Mar 2026 loan notice: 9.25% gross × 0.90)
+- Data starts row 823 in xlsx (after Period 3 label at row 822)
 
 ---
 
@@ -175,6 +181,53 @@ This verification is logged in the NAV Methodology Report but does NOT change th
 7. Query hourly on-chain data (Multicall3) from last cut-off to now
 8. Append rows with formulas
 9. Save
+```
+
+---
+
+## RPC Optimization
+
+Implemented in `src/block_utils.py` and `src/temp/update_falconx_optimized.py`.
+
+### Benchmarks (100 queries)
+
+| Method | Speed | Speedup | 500-row ETA |
+|--------|-------|---------|-------------|
+| Old (serial + block finding) | 2.1/s | 1x | ~4 min |
+| Option 1 only (pre-compute blocks) | 5.6/s | 2.7x | ~90s |
+| **Options 1+4 (10 workers)** | **22.2/s** | **10.6x** | **~23s** |
+
+### Option 1: Pre-compute block numbers (implemented)
+Ethereum block time is ~12 seconds. From a single known (block, timestamp) pair, estimate all target blocks via `block_utils.estimate_blocks()`:
+```python
+from block_utils import estimate_blocks
+blocks = estimate_blocks(ref_block, ref_ts, target_timestamps, chain="ethereum")
+```
+Eliminates the iterative `find_block_near` loop (2-10 RPC calls per row → 0).
+
+**Accuracy**: ±25 min at 100 hours from reference, ±36s near reference. Fine for hourly monitoring. For the Valuation Block (exact alignment required), use `block_utils.refine_block()` which does a 5-iteration binary search.
+
+### Option 2: Skip constant fields (not yet implemented)
+Between events, only borrow changes. Could reduce Multicall from 4 to 2 calls per row.
+
+### Option 3: Reduce query frequency (not yet implemented)
+For monitoring, query every 4-6h instead of hourly. Borrow accrues at ~$7/hour.
+
+### Option 4: Concurrent RPC via ThreadPoolExecutor (implemented)
+Uses `block_utils.concurrent_query_batched()` with configurable workers:
+```python
+from block_utils import concurrent_query_batched
+results = concurrent_query_batched(query_fn, blocks, batch_size=50, max_workers=10)
+```
+- **10 workers** is optimal for Alchemy growth plan (~22 rows/s)
+- **20 workers** slightly slower (hits rate limits)
+- No new dependencies (uses stdlib `concurrent.futures`)
+
+### Optimized update script
+```bash
+python src/temp/update_falconx_optimized.py                          # Auto: last row + 1h to now
+python src/temp/update_falconx_optimized.py --start 2026-03-06-00 --end 2026-03-26-22
+python src/temp/update_falconx_optimized.py --workers 10 --batch 50  # Tune concurrency
 ```
 
 ---

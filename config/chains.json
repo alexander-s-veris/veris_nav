@@ -33,6 +33,7 @@
   "katana": {
     "chain_id": 747474,
     "rpc_env_var": "KATANA_RPC_URL",
+    "token_balance_method": "balance_of",
     "explorer": "https://katanascan.com"
   },
   "solana": {

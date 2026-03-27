@@ -8,9 +8,17 @@ How to read balances and positions from each protocol encountered in the portfol
 
 **All position data is sourced via RPC endpoints** (Alchemy) as configured in `config/chains.json`. This is the primary and only method for reading on-chain balances and positions.
 
-- **EVM chains**: Alchemy RPC (Ethereum, Arbitrum, Base, Avalanche, Plasma, HyperEVM)
-- **Katana**: Public RPC endpoint (env var)
-- **Solana**: Alchemy Solana RPC
+- **EVM chains (Alchemy)**: Ethereum, Arbitrum, Base, Avalanche, HyperEVM — uses `alchemy_getTokenBalances` + direct `balanceOf` fallback
+- **Plasma**: Etherscan V2 API `addresstokenbalance` endpoint (Alchemy `alchemy_getTokenBalances` not available)
+- **Katana**: Direct `balanceOf` per registry token (`config/chains.json` → `token_balance_method: "balance_of"`)
+- **Solana**: Alchemy Solana RPC `getTokenAccountsByOwner`
+
+**Performance**: `src/block_utils.py` provides reusable concurrency utilities:
+- `estimate_blocks()` pre-computes block numbers from a single reference (no per-row RPC)
+- `concurrent_query()` / `concurrent_query_batched()` fire queries in parallel via ThreadPoolExecutor
+- Hourly data collection: 10 workers, ~22 queries/s (10.6x faster). See `plans/falconx_position_flow.md`.
+- Balance scanner: two-level parallelism (chains + wallets within each chain), ~120s → ~45s (2.7x)
+- Pricing: CoinGecko batched into 1 API call + concurrent Chainlink/Kraken/Pyth queries
 
 **DeBank is NOT used for data sourcing.** DeBank is a verification source only (per Valuation Policy Section 7) — used to cross-check aggregate portfolio value against our independently sourced data.
 
@@ -65,7 +73,7 @@ Isolated lending markets. Each market has a unique `market_id` (bytes32). A posi
 | Market | Closed | Notes |
 |--------|--------|-------|
 | mF-ONE/USDC | 26 Mar 2026 | Collateral moved to wallet |
-| AA_FalconXUSDC/USDC | 16 Mar 2026 | Gauntlet/Pareto position |
+| AA_FalconXUSDC/USDC (Veris direct) | 22 Mar 2026 | Veris 0x0c16 withdrew collateral, repaid debt. Gauntlet vault's position in same market remains active. |
 
 ### Morpho Vaults / MetaMorpho (Category A1 — Yield-Bearing)
 

@@ -165,15 +165,42 @@ All ABIs centralised: erc20, erc4626, morpho_core, chainlink, aave_pool, pareto_
 
 ## Integration with Existing Code
 
-1. **collect_balances.py** — refactor `main()` to expose `scan_wallet_balances()` as a callable function. Add the new common columns (`position_id`, `position_type`, `methodology_ref`, `staleness_flag`). Keep `main()` working for standalone use.
+### Performance infrastructure — DONE
 
-2. **pricing.py** — extend with staleness checking for A2 tokens (compare `oracle_updated_at` against `expected_update_freq_hours`), cross-reference comparison logic, and Exponent PT pricing formula.
+`src/block_utils.py` provides two optimizations used across all collection scripts:
 
-3. **evm.py** — add Valuation Block finder (binary search for block closest to but not exceeding 15:00 UTC) and contract call helpers. ABIs loaded from `config/abis.json` (see `plans/abi_migration.md`).
+1. **`estimate_blocks()`** — Pre-compute block numbers from a single (block, timestamp) reference. Eliminates iterative block-finding RPC calls. Accuracy: ±25 min at 100h distance, ±36s near reference. For the Valuation Block (exact alignment required), use `refine_block()`.
+
+2. **`concurrent_query()` / `concurrent_query_batched()`** — ThreadPoolExecutor-based concurrent RPC. 10 workers optimal for Alchemy (~22 queries/s, 10.6x faster than serial). No new dependencies (stdlib `concurrent.futures`).
+
+| Script | Optimization | Status |
+|--------|-------------|--------|
+| `collect_balances.py` | Concurrent chain scanning + parallel wallets within each chain | DONE |
+| `pricing.py` | CoinGecko batch API (N tokens in 1 call) + concurrent oracle queries | DONE |
+| `update_falconx_optimized.py` | Block pre-computation + concurrent Multicall | DONE |
+| `collect.py` (planned) | Will use both for protocol position queries | Planned |
+
+### Chain balance methods (`config/chains.json`)
+
+Each chain has a `token_balance_method` that determines how `collect_balances.py` queries balances:
+
+| Method | Chains | How it works |
+|--------|--------|-------------|
+| (default/none) | Ethereum, Arbitrum, Base, Avalanche, HyperEVM | Alchemy `alchemy_getTokenBalances` + direct `balanceOf` fallback |
+| `etherscan_v2` | Plasma | Etherscan V2 API `addresstokenbalance` endpoint |
+| `balance_of` | Katana | Direct `balanceOf` per registry token (no Alchemy) |
+
+### Module changes
+
+1. **collect_balances.py** — DONE: two-level concurrent scanning — chains in parallel (8 concurrent) + wallets within each chain in parallel (6 concurrent). Per-chain timing logged. Reduced from ~120s to ~45s (bottleneck: Plasma Etherscan V2 at 31s; all Alchemy chains finish in 12-16s). Still needed: refactor `main()` to expose `scan_wallet_balances()` as a callable function. Add the new common columns (`position_id`, `position_type`, `methodology_ref`, `staleness_flag`). Keep `main()` working for standalone use.
+
+2. **pricing.py** — DONE: `get_prices_concurrent()` batches CoinGecko tokens into one API call and prices remaining tokens (Chainlink, Kraken, Pyth) concurrently. Still needed: staleness checking for A2 tokens (compare `oracle_updated_at` against `expected_update_freq_hours`), cross-reference comparison logic, and Exponent PT pricing formula.
+
+3. **evm.py** + **block_utils.py** — DONE: `block_utils.refine_block()` provides Valuation Block finder (iterative refinement to ±15s). Still needed: contract call helpers and ABIs loaded from `config/abis.json` (see `plans/abi_migration.md`).
 
 4. **New files**:
    - `src/valuation.py` — category-specific valuation functions (value_a1, value_a2, value_a3, value_b, value_c, value_d)
-   - `src/collect.py` — orchestrator that calls balance scanner + valuation modules, deduplicates, writes all outputs
+   - `src/collect.py` — orchestrator that calls balance scanner + valuation modules, deduplicates, writes all outputs. Should use `concurrent_query_batched` for protocol position queries across chains/wallets.
    - `src/output.py` — output writers (JSON, CSV, optional XLSX with per-category sheets)
 
 5. **Deduplication rule**: tokens appearing in both wallet balances AND protocol positions get the protocol-level row (richer metadata). E.g., USCC held as Kamino collateral appears as a D-collateral row, not an E token_balance row.

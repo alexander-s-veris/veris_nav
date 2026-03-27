@@ -42,6 +42,7 @@ Source: Falcon Labs Ltd monthly loan notices at `docs/reference/loans/`
 | Jan 2026 | 10.50%     | 9.450%           | Jan 1       | Jan 31      | 31   |
 | Feb 2026 | 10.00%     | 9.000%           | Feb 1       | Mar 3       | 30   |
 | Mar 2026 | 9.25%      | 8.325%           | Mar 3       | Apr 1       | 29   |
+| Apr 2026 | (pending)  | (pending)        | Apr 1       | (pending)   | —    |
 
 **Net rate** = Gross rate × 0.90 (10% pool-level performance fee deducted before tranche price update).
 
@@ -78,10 +79,16 @@ Contract Value, Last Epoch APR, Last Epoch Interest, and Epoch End Date are quer
 | 2025-09-03 18:54:35   | Gauntlet first supply to Morpho              | —                     | —                  |
 | 2025-10-31 09:33:35   | Additional AA_FalconXUSDC (tx `0x48d1...`)   | +484,570.3014         | —                  |
 | 2025-10-31 ~15:44     | Additional gpAAFalconX shares                | —                     | +489,226.7758      |
+| 2026-03-06 12:06:35   | Period 3: received AA_FalconXUSDC (28.07)    | +28.0739              | —                  |
+| 2026-03-06 12:26:11   | Period 3: received AA_FalconXUSDC (main)     | +1,894,941.7856       | —                  |
+| 2026-03-06 12:48:35   | Supplied to Morpho as collateral             | (→ Morpho)            | —                  |
+| 2026-03-22 18:10:59   | Withdrew from Morpho to wallet               | (← Morpho)            | —                  |
 
-Veris gpAAFalconX balance: **2,017,888.0087** (Sep 3 – Oct 31), then **2,507,114.7845** (Oct 31 onward, constant through Feb 2026).
+Veris gpAAFalconX balance: **2,017,888.0087** (Sep 3 – Oct 31), then **2,507,114.7845** (Oct 31 onward, constant through Mar 2026).
 
-Veris AA_FalconXUSDC tokens (for column I): **1,988,498.5245** (Sep 3 – Oct 31 09:33), then **2,473,068.8259** (Oct 31 09:34 onward).
+Veris AA_FalconXUSDC tokens (for Gauntlet column I): **1,988,498.5245** (Sep 3 – Oct 31 09:33), then **2,473,068.8259** (Oct 31 09:34 onward).
+
+Veris AA_FalconXUSDC tokens (Direct Accrual Period 3): **1,894,969.8595** (Mar 6 onward). Deposited $2,024,989.23 USDC total (effective deposit TP = 1.068613, higher than stale on-chain TP of 1.067961 due to ~3 days of accrued interest since last epoch end).
 
 ---
 
@@ -97,7 +104,7 @@ Verified against on-chain tranche price updates: < 0.1% divergence in clean peri
 ## Key Assumptions
 
 1. **Net rate = Gross rate × 0.90**: Pool-level performance fee ~10%. Verified by comparing accrual vs successive tranche price updates across 8 epochs.
-2. **Interest accrues continuously** on the running balance. Deposits add to the base at deposit-time tranche price.
+2. **Interest accrues continuously** on the running balance. Deposits add to the base at **actual USDC deposited**, not at the stale on-chain tranche price. The effective deposit TP (= USDC / tokens) is more accurate because the on-chain TP is only updated at epoch end (~monthly) and does not reflect interest accrued since the last update.
 3. **Tranche price** updates ~monthly (31-day vault cycle via `epochDuration()`). Between updates, on-chain TP is stale — the accrual captures interest that the TP has not yet reflected.
 4. **Morpho borrow interest** accrues continuously on-chain, reducing the Gauntlet vault net position between epochs.
 5. **Cross-reference** (`convertUnitsToToken` on PriceFeeCalculator) is valid only at epoch end, NOT at NAV date. It serves as post-facto verification that the accrual was correct.
@@ -116,6 +123,7 @@ For each loan notice period: expected TP = `Open_TP × (1 + Gross_Rate × 0.90 �
 | Dec 2025 | 11.50% | 30   | 1.042583 | 1.051452    | 1.052037  | +0.056% |
 | Jan 2026 | 10.50% | 31   | 1.052037 | 1.060481    | 1.059607  | -0.083% |
 | Feb 2026 | 10.00% | 30   | 1.059607 | 1.067445    | 1.067961  | +0.049% |
+| Mar 2026 | 9.25%  | 29   | 1.067961 | (pending)   | (pending) | —       |
 
 All within 0.1% except Jan (-0.083%, TP update on Jan 30 before period end) and Dec (+0.056%, TP update on Jan 2 covers extra days).
 

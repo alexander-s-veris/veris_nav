@@ -26,7 +26,8 @@ from evm import (
     ETHERSCAN_V2_BASE, NATIVE_TOKEN,
     load_chains, get_evm_chains, get_web3, get_block_info, get_rpc_url,
 )
-from pricing import get_price
+from pricing import get_price, get_prices_concurrent
+from block_utils import concurrent_query
 
 OUTPUT_FIELDS = [
     "wallet",
@@ -466,70 +467,211 @@ def main():
 
     raw_rows = []
 
-    # --- EVM chains ---
-    for chain_name in evm_chains:
-        print(f"[{chain_name}]")
-        chain_cfg = chains[chain_name]
+    # --- Scan all chains concurrently, wallets within each chain also concurrent ---
+    import time as _time
 
-        if chain_cfg.get("token_balance_method") == "etherscan_v2":
-            for w_entry in evm_wallets:
-                wallet = w_entry["address"]
-                rows = query_balances_etherscan(
-                    chain_name, chain_cfg["chain_id"], wallet, registry)
-                raw_rows.extend(rows)
-                if rows:
-                    for r in rows:
-                        print(f"  {w_entry['description']}: {r['token_symbol']} = {r['balance']}")
-        else:
+    def _scan_single_wallet_alchemy(args):
+        """Scan one wallet on one Alchemy chain. Thread-safe."""
+        w3, chain_name, w_entry, block_number, block_ts = args
+        wallet = w_entry["address"]
+        wallet_rows = query_balances_alchemy(
+            w3, chain_name, wallet, block_number, block_ts, registry)
+        log = []
+        for r in wallet_rows:
+            log.append(f"  {w_entry['description']}: {r['token_symbol']} = {r['balance']}")
+        return wallet_rows, log
+
+    def _scan_single_wallet_etherscan(args):
+        """Scan one wallet on one Etherscan chain. Thread-safe."""
+        chain_name, chain_id, w_entry = args
+        wallet = w_entry["address"]
+        wallet_rows = query_balances_etherscan(
+            chain_name, chain_id, wallet, registry)
+        log = []
+        for r in wallet_rows:
+            log.append(f"  {w_entry['description']}: {r['token_symbol']} = {r['balance']}")
+        return wallet_rows, log
+
+    def _scan_single_wallet_balanceof(args):
+        """Scan one wallet via direct balanceOf. Thread-safe."""
+        w3, chain_name, w_entry, block_number, block_ts, chain_registry = args
+        wallet = w_entry["address"]
+        checksum = Web3.to_checksum_address(wallet)
+        rows = []
+        log = []
+        ERC20_ABI = [{"inputs": [{"name": "account", "type": "address"}],
+                      "name": "balanceOf", "outputs": [{"name": "", "type": "uint256"}],
+                      "stateMutability": "view", "type": "function"}]
+        for contract_addr, token_entry in chain_registry.items():
+            if contract_addr == "native":
+                native_wei = w3.eth.get_balance(checksum)
+                if native_wei > 0:
+                    bal = Decimal(native_wei) / Decimal(10**18)
+                    rows.append({
+                        "wallet": wallet, "chain": chain_name,
+                        "token_contract": "native",
+                        "token_symbol": token_entry["symbol"],
+                        "token_name": token_entry["name"],
+                        "category": token_entry["category"],
+                        "balance": bal,
+                        "block_number": block_number, "block_timestamp_utc": block_ts,
+                        "_registry_entry": token_entry,
+                    })
+                    log.append(f"  {w_entry['description']}: {token_entry['symbol']} = {bal}")
+                continue
+            try:
+                contract = w3.eth.contract(
+                    address=Web3.to_checksum_address(contract_addr), abi=ERC20_ABI)
+                raw = contract.functions.balanceOf(checksum).call()
+                if raw > 0:
+                    decimals = token_entry.get("decimals", 18)
+                    bal = Decimal(raw) / Decimal(10**decimals)
+                    rows.append({
+                        "wallet": wallet, "chain": chain_name,
+                        "token_contract": contract_addr,
+                        "token_symbol": token_entry["symbol"],
+                        "token_name": token_entry["name"],
+                        "category": token_entry["category"],
+                        "balance": bal,
+                        "block_number": block_number, "block_timestamp_utc": block_ts,
+                        "_registry_entry": token_entry,
+                    })
+                    log.append(f"  {w_entry['description']}: {token_entry['symbol']} = {bal}")
+            except Exception:
+                pass
+        return rows, log
+
+    def scan_evm_chain(chain_name):
+        """Scan all wallets on a single EVM chain concurrently."""
+        t0 = _time.time()
+        chain_cfg = chains[chain_name]
+        log = []
+        rows = []
+
+        balance_method = chain_cfg.get("token_balance_method")
+
+        if balance_method == "etherscan_v2":
+            wallet_tasks = [
+                (chain_name, chain_cfg["chain_id"], w) for w in evm_wallets
+            ]
+            wallet_results = concurrent_query(
+                _scan_single_wallet_etherscan, wallet_tasks,
+                max_workers=len(evm_wallets))
+            for wallet_rows, wallet_log in wallet_results:
+                rows.extend(wallet_rows)
+                log.extend(wallet_log)
+
+        elif balance_method == "balance_of":
             try:
                 w3 = get_web3(chain_name)
                 block_number, block_ts = get_block_info(w3)
-                print(f"  Block: {block_number} ({block_ts})")
+                log.append(f"  Block: {block_number} ({block_ts})")
             except ConnectionError as e:
-                print(f"  SKIP — {e}")
-                continue
+                log.append(f"  SKIP — {e}")
+                elapsed = _time.time() - t0
+                log.append(f"  ({elapsed:.1f}s)")
+                return chain_name, rows, log
 
-            for w_entry in evm_wallets:
-                wallet = w_entry["address"]
-                rows = query_balances_alchemy(
-                    w3, chain_name, wallet, block_number, block_ts, registry)
-                raw_rows.extend(rows)
-                if rows:
-                    for r in rows:
-                        print(f"  {w_entry['description']}: {r['token_symbol']} = {r['balance']}")
-        print()
+            chain_registry = registry.get(chain_name, {})
+            wallet_tasks = [
+                (w3, chain_name, w, block_number, block_ts, chain_registry)
+                for w in evm_wallets
+            ]
+            wallet_results = concurrent_query(
+                _scan_single_wallet_balanceof, wallet_tasks,
+                max_workers=len(evm_wallets))
+            for wallet_rows, wallet_log in wallet_results:
+                rows.extend(wallet_rows)
+                log.extend(wallet_log)
 
-    # --- Solana ---
-    if solana_wallets:
-        print("[solana]")
+        else:
+            # Alchemy path
+            try:
+                w3 = get_web3(chain_name)
+                block_number, block_ts = get_block_info(w3)
+                log.append(f"  Block: {block_number} ({block_ts})")
+            except ConnectionError as e:
+                log.append(f"  SKIP — {e}")
+                elapsed = _time.time() - t0
+                log.append(f"  ({elapsed:.1f}s)")
+                return chain_name, rows, log
+
+            wallet_tasks = [
+                (w3, chain_name, w, block_number, block_ts) for w in evm_wallets
+            ]
+            wallet_results = concurrent_query(
+                _scan_single_wallet_alchemy, wallet_tasks,
+                max_workers=len(evm_wallets))
+            for wallet_rows, wallet_log in wallet_results:
+                rows.extend(wallet_rows)
+                log.extend(wallet_log)
+
+        elapsed = _time.time() - t0
+        log.append(f"  ({elapsed:.1f}s)")
+        return chain_name, rows, log
+
+    def scan_solana():
+        """Scan all Solana wallets."""
+        t0 = _time.time()
+        log = []
+        rows = []
         for w_entry in solana_wallets:
             wallet = w_entry["address"]
-            rows = query_balances_solana(wallet, registry)
-            raw_rows.extend(rows)
-            if rows:
-                for r in rows:
-                    print(f"  {w_entry['description']}: {r['token_symbol']} = {r['balance']}")
+            sol_rows = query_balances_solana(wallet, registry)
+            rows.extend(sol_rows)
+            for r in sol_rows:
+                log.append(f"  {w_entry['description']}: {r['token_symbol']} = {r['balance']}")
+        elapsed = _time.time() - t0
+        log.append(f"  ({elapsed:.1f}s)")
+        return "solana", rows, log
+
+    # Build task list: all EVM chains + Solana
+    all_tasks = [lambda cn=cn: scan_evm_chain(cn) for cn in evm_chains]
+    if solana_wallets:
+        all_tasks.append(scan_solana)
+
+    t_start = _time.time()
+
+    print(f"Scanning {len(all_tasks)} chains concurrently (wallets parallel within each)...")
+    chain_results = concurrent_query(
+        query_fn=lambda fn: fn(),
+        items=all_tasks,
+        max_workers=len(all_tasks),
+    )
+
+    t_chains = _time.time()
+    print(f"Chain scanning: {t_chains - t_start:.1f}s")
+
+    # Print results in chain order and collect rows
+    for chain_name, rows, log_lines in chain_results:
+        print(f"[{chain_name}]")
+        for line in log_lines:
+            print(line)
+        raw_rows.extend(rows)
         print()
 
-    # --- Pricing ---
+    # --- Pricing (concurrent) ---
     print("Pricing tokens...")
-    # Get Ethereum Web3 for Chainlink queries (feeds are on Ethereum mainnet)
     try:
         w3_eth = get_web3("ethereum")
     except ConnectionError:
         w3_eth = None
         print("  WARNING: Cannot connect to Ethereum — Chainlink de-peg checks unavailable")
 
-    # Price each unique token once
+    # Collect unique tokens
     unique_tokens = {}
     for row in raw_rows:
         symbol = row["token_symbol"]
         if symbol not in unique_tokens:
             unique_tokens[symbol] = row["_registry_entry"]
 
-    for symbol, entry in unique_tokens.items():
-        price_result = get_price(entry, w3_eth)
-        print(f"  {symbol}: ${price_result['price_usd']} ({price_result['price_source']})")
+    # Price all tokens concurrently
+    t_price_start = _time.time()
+    price_results = get_prices_concurrent(unique_tokens, w3_eth)
+    t_price_end = _time.time()
+    for symbol, result in price_results.items():
+        print(f"  {symbol}: ${result['price_usd']} ({result['price_source']})")
+    print(f"Pricing: {t_price_end - t_price_start:.1f}s ({len(price_results)} tokens)")
 
     # --- Build output rows ---
     output_rows = []
@@ -583,8 +725,10 @@ def main():
             writer.writerows(output_rows)
         print(f"CSV  written: {csv_path}")
 
+    t_end = _time.time()
     print(f"\nTotal: {len(output_rows)} registered token balances across {len(chains_queried)} chains")
     print(f"Skipped: {len(raw_rows) - len(output_rows)} rows (if any from pricing failures)")
+    print(f"Total time: {t_end - t_start:.1f}s")
 
 
 if __name__ == "__main__":

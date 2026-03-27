@@ -20,7 +20,9 @@ KATANA_RPC_URL=https://rpc.katana.network
 
 ## Current Status
 
-**Wallet balance scanner** (`src/collect_balances.py`) is production-ready, covering 7 wallets across 7 EVM chains + Solana. Scans wallet-level token balances (Categories E and F), prices via Chainlink, Pyth, Kraken, and CoinGecko, and outputs to JSON + CSV.
+**Wallet balance scanner** (`src/collect_balances.py`) is production-ready, covering 7 wallets across 7 EVM chains + Solana. Scans wallet-level token balances (Categories E and F), prices via Chainlink, Pyth, Kraken, and CoinGecko, and outputs to JSON + CSV. Uses two-level concurrency (chains + wallets in parallel) — runs in ~45s.
+
+**FalconX/Pareto A3 position** (`src/temp/update_falconx_optimized.py`) tracks both Gauntlet vault (indirect) and Direct Accrual positions with hourly on-chain data and manual accrual. Updated through March 2026. Total position: ~$4.73M.
 
 **Protocol position collection** is in progress. The output schema is defined (see `plans/output_schema_plan.md`) and position configs are being registered wallet by wallet:
 
@@ -39,11 +41,14 @@ KATANA_RPC_URL=https://rpc.katana.network
 ```
 src/
   evm.py                   # Shared EVM utilities (cached Web3, block queries)
+  block_utils.py           # Block estimation + concurrent RPC utilities
   solana_client.py         # Solana RPC helpers (balances, eUSX exchange rate)
   pricing.py               # Price adapters (Chainlink, Pyth, Kraken, CoinGecko, par+depeg)
   collect_balances.py      # Production wallet balance scanner (Cat E + F + A1/A2)
   cache_xlsx.py            # Cache xlsx sheets as CSVs for fast access
   temp/                    # Temporary query scripts (deleted after final build)
+    update_falconx_optimized.py  # FalconX/Pareto A3 hourly data updater
+    query_pareto_tranche_history.py  # Pareto tranche price history
     query_positions.py     # Reusable position query script for wallet walkthrough
   collect.py               # [Planned] Main orchestrator for full NAV collection
   valuation.py             # [Planned] Category-specific valuation logic (A1-D)
@@ -73,7 +78,7 @@ docs/
 
 ## Configuration Files
 
-- `config/chains.json` — RPC endpoints per chain (Ethereum, Arbitrum, Base, Avalanche, Plasma, HyperEVM, Katana, Solana)
+- `config/chains.json` — RPC endpoints per chain, including `token_balance_method` (default=Alchemy, `etherscan_v2` for Plasma, `balance_of` for Katana)
 - `config/wallets.json` — Wallet addresses per chain, plus ARMA smart account proxy addresses
 - `config/tokens.json` — Token registry per chain with category (A1-F) and pricing config
 - `config/contracts.json` — Protocol contracts grouped by chain and protocol, with ABI references

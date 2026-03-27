@@ -356,7 +356,8 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **mHYPER (Midas Hyperithm)**: Small positions.
 
 ### A3 Positions (Private credit)
-- **FalconX / Pareto**: Gauntlet vault exposure. Manual accrual at ~9.62%. On-chain tranche price (1.067961) used as cross-reference only.
+- **FalconX / Pareto (Gauntlet)**: gpAAFalconX shares (2,507,115). Gauntlet vault holds 55.56M AA_FalconXUSDC as Morpho collateral, borrows ~$30.9M USDC. Veris share ~9.38%. Manual accrual at 8.325% net (Mar 2026: 9.25% gross × 0.90). On-chain TP (1.067961) is cross-reference only.
+- **FalconX / Pareto (Direct)**: 1,894,970 AA_FalconXUSDC held directly in wallet 0x0c16 (since Mar 6 2026). Opening value $2,024,989 (actual USDC deposited). Same accrual rate as Gauntlet.
 - **Credit Coop / Rain**: ~$3.85M in Veris Credit Vault. 13.99% rate + 5% incentive.
 
 ### B Positions (PT tokens)
@@ -411,6 +412,13 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **Fluid**: Uses NFT positions (not fungible shares). Query by NFT ID.
 - **Aave**: `getUserAccountData(wallet)` for aggregate, or per-reserve queries.
 
+### Block Estimation & Concurrent RPC (`src/block_utils.py`)
+- **`estimate_blocks(ref_block, ref_ts, targets, chain)`**: Pre-compute block numbers from a single reference. Accuracy: ±25 min at 100h distance, ±36s near reference. Eliminates iterative block-finding RPC calls.
+- **`refine_block(w3, est_block, target_ts)`**: 5-iteration binary search for exact block. Use only for Valuation Block.
+- **`concurrent_query(fn, items, max_workers)`**: ThreadPoolExecutor-based concurrent RPC. Used for parallel chain scanning, wallet scanning, and pricing.
+- **`concurrent_query_batched(fn, items, batch_size, max_workers)`**: Same with batching and progress reporting. 10 workers optimal for Alchemy (~22 queries/s, 10.6x faster than serial).
+- Chain-specific block times: Ethereum 12s, Arbitrum 0.25s, Base 2s, Avalanche 2s.
+
 ### Balance Query Methods
 - **Primary (EVM)**: Alchemy `alchemy_getTokenBalances` — returns all ERC-20 balances for a wallet in one RPC call
 - **Fallback (EVM)**: Direct `balanceOf` contract call for each registered token. Used when Alchemy hasn't indexed a token (e.g. GIZA on Base)
@@ -459,6 +467,7 @@ veris-nav/
 ├── requirements.txt           # Python dependencies
 ├── src/
 │   ├── evm.py                 # Shared EVM utilities (cached Web3, block queries, constants)
+│   ├── block_utils.py         # Block estimation + concurrent RPC (Options 1 & 4)
 │   ├── solana_client.py       # Solana RPC helpers (balances, eUSX exchange rate)
 │   ├── pricing.py             # Price adapters (Chainlink, Pyth, Kraken, CoinGecko Pro, par+depeg)
 │   ├── collect_balances.py    # Production wallet balance scanner (Cat E + F + A1/A2 tokens)

@@ -16,6 +16,7 @@ from web3 import Web3
 
 from evm import AGGREGATOR_V3_ABI, TS_FMT
 from solana_client import get_eusx_exchange_rate
+from block_utils import concurrent_query
 
 # --- Price cache: keyed by symbol, stores result dict ---
 _price_cache: dict[str, dict] = {}
@@ -316,3 +317,125 @@ def _unavailable(symbol: str) -> dict:
         "oracle_updated_at": None,
         "notes": f"No price source available for {symbol}",
     }
+
+
+# --- Batch / concurrent pricing ---
+
+def _batch_coingecko(tokens: dict[str, dict]) -> dict[str, dict]:
+    """Batch-fetch CoinGecko prices for multiple tokens in one API call.
+
+    CoinGecko supports comma-separated IDs, so we can price all CoinGecko
+    tokens in a single request instead of N requests.
+
+    Args:
+        tokens: {symbol: token_entry} for tokens using coingecko pricing.
+
+    Returns:
+        {symbol: price_result} for successfully priced tokens.
+    """
+    # Collect CoinGecko IDs
+    cg_map = {}  # coingecko_id -> symbol
+    for symbol, entry in tokens.items():
+        cg_id = entry.get("pricing", {}).get("coingecko_id")
+        if cg_id:
+            cg_map[cg_id] = symbol
+
+    if not cg_map:
+        return {}
+
+    api_key = os.getenv("COINGECKO_API_KEY")
+    headers = {}
+    if api_key:
+        headers["x-cg-pro-api-key"] = api_key
+
+    try:
+        resp = requests.get(
+            f"{COINGECKO_BASE}/simple/price",
+            params={"ids": ",".join(cg_map.keys()), "vs_currencies": "usd"},
+            headers=headers,
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return {}
+
+    results = {}
+    for cg_id, symbol in cg_map.items():
+        if cg_id in data and "usd" in data[cg_id]:
+            results[symbol] = {
+                "price_usd": Decimal(str(data[cg_id]["usd"])),
+                "price_source": "coingecko",
+                "depeg_flag": "none",
+                "depeg_deviation_pct": None,
+                "oracle_updated_at": None,
+                "notes": "",
+            }
+
+    return results
+
+
+def get_prices_concurrent(
+    unique_tokens: dict[str, dict],
+    w3_eth: Web3 | None = None,
+    max_workers: int = 10,
+) -> dict[str, dict]:
+    """Price all tokens concurrently with CoinGecko batching.
+
+    Strategy:
+    1. Batch all CoinGecko-eligible tokens into one API call
+    2. Pre-populate cache with batched results
+    3. Price remaining tokens (Chainlink, Kraken, Pyth, par, A1) concurrently
+
+    Args:
+        unique_tokens: {symbol: token_entry} from the balance scanner.
+        w3_eth: Web3 instance for Chainlink calls (can be None).
+        max_workers: Concurrent threads for non-CoinGecko pricing.
+
+    Returns:
+        {symbol: price_result} for all tokens.
+    """
+    results = {}
+
+    # Step 1: Identify CoinGecko-only tokens (method=coingecko or fallback)
+    # and batch them in one call
+    cg_tokens = {}
+    non_cg_tokens = {}
+    for symbol, entry in unique_tokens.items():
+        method = entry.get("pricing", {}).get("method", "")
+        if method == "coingecko":
+            cg_tokens[symbol] = entry
+        else:
+            non_cg_tokens[symbol] = entry
+
+    # Batch CoinGecko
+    if cg_tokens:
+        cg_results = _batch_coingecko(cg_tokens)
+        results.update(cg_results)
+        # Pre-populate cache so get_price() won't re-fetch
+        for symbol, result in cg_results.items():
+            _price_cache[symbol] = result
+
+    # Step 2: Price non-CoinGecko tokens concurrently
+    remaining = [(s, e) for s, e in non_cg_tokens.items() if s not in results]
+
+    if remaining:
+        def price_one(item):
+            symbol, entry = item
+            return symbol, get_price(entry, w3_eth)
+
+        concurrent_results = concurrent_query(
+            query_fn=price_one,
+            items=remaining,
+            max_workers=max_workers,
+        )
+
+        for symbol, result in concurrent_results:
+            results[symbol] = result
+
+    # Also add any CoinGecko tokens that failed the batch (price them individually)
+    for symbol in cg_tokens:
+        if symbol not in results:
+            results[symbol] = get_price(cg_tokens[symbol], w3_eth)
+
+    return results
