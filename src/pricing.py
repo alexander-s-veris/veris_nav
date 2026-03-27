@@ -62,6 +62,8 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
             result = _unavailable(symbol)
     elif method == "a1_exchange_rate":
         result = _a1_exchange_rate_price(token_entry)
+    elif method == "curve_lp":
+        result = _curve_lp_price(token_entry, w3_eth)
     else:
         result = _unavailable(symbol)
 
@@ -222,38 +224,106 @@ def coingecko_price(coin_id: str) -> dict:
 
 # --- A1 exchange rate pricing ---
 
-def _a1_exchange_rate_price(token_entry: dict) -> dict:
-    """Category A1: query on-chain exchange rate, then price underlying via Pyth.
+def _curve_lp_price(token_entry: dict, w3_eth: Web3 | None) -> dict:
+    """Category C: Curve LP token priced via get_virtual_price().
 
-    Currently supports eUSX (Solana): eUSX/USX rate from vault, then USX price from Pyth.
+    For stablecoin pools, virtual_price × $1 gives a good approximation.
+    """
+    pricing = token_entry["pricing"]
+    symbol = token_entry["symbol"]
+    pool_addr = pricing.get("pool_address")
+
+    if not pool_addr or not w3_eth:
+        return _unavailable(symbol)
+
+    try:
+        abi = [{"inputs": [], "name": "get_virtual_price",
+                "outputs": [{"name": "", "type": "uint256"}],
+                "stateMutability": "view", "type": "function"}]
+        pool = w3_eth.eth.contract(
+            address=Web3.to_checksum_address(pool_addr), abi=abi)
+        vp = pool.functions.get_virtual_price().call()
+        price = Decimal(str(vp)) / Decimal(10**18)
+        return {
+            "price_usd": price,
+            "price_source": "curve_virtual_price",
+            "depeg_flag": "none",
+            "depeg_deviation_pct": None,
+            "oracle_updated_at": None,
+            "notes": f"Curve virtual price: {price:.6f}",
+        }
+    except Exception as e:
+        result = _unavailable(symbol)
+        result["notes"] = f"Curve virtual price failed: {e}"
+        return result
+
+
+def _a1_exchange_rate_price(token_entry: dict) -> dict:
+    """Category A1: query on-chain exchange rate, then price underlying.
+
+    Supports:
+    - eUSX (Solana): eUSX/USX rate from vault, then USX price from Pyth
+    - sUSDe (Ethereum): convertToAssets on ERC-4626, underlying USDe at par
+    - Other ERC-4626 vaults with coingecko_id fallback
     """
     pricing = token_entry["pricing"]
     symbol = token_entry["symbol"]
     underlying_feed = pricing.get("underlying_pyth_feed_id")
 
-    try:
-        # Get exchange rate (eUSX → USX)
-        exchange_rate = get_eusx_exchange_rate()
+    # eUSX — Solana-specific exchange rate
+    if symbol.lower() == "eusx":
+        try:
+            exchange_rate = get_eusx_exchange_rate()
+            underlying_price = pyth_price(underlying_feed)
+            usx_usd = underlying_price["price_usd"]
+            price = exchange_rate * usx_usd
+            return {
+                "price_usd": price,
+                "price_source": f"a1_exchange_rate (rate={exchange_rate:.6f}) x pyth",
+                "depeg_flag": "none",
+                "depeg_deviation_pct": None,
+                "oracle_updated_at": underlying_price.get("oracle_updated_at"),
+                "notes": f"eUSX/USX rate: {exchange_rate:.6f}, USX/USD: {usx_usd}",
+            }
+        except Exception as e:
+            pass  # fall through to CoinGecko
 
-        # Get underlying price (USX → USD) via Pyth
-        underlying_price = pyth_price(underlying_feed)
-        usx_usd = underlying_price["price_usd"]
+    # sUSDe — ERC-4626 on Ethereum, convertToAssets
+    if symbol.lower() == "susde":
+        try:
+            from evm import get_web3
+            w3 = get_web3("ethereum")
+            contract_addr = pricing.get("exchange_rate_contract", "0x9d39a5de30e57443bff2a8307a4256c8797a3497")
+            abi = [{"inputs": [{"name": "shares", "type": "uint256"}], "name": "convertToAssets",
+                    "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"}]
+            vault = w3.eth.contract(address=Web3.to_checksum_address(contract_addr), abi=abi)
+            # Exchange rate: assets per 1e18 shares
+            assets = vault.functions.convertToAssets(10**18).call()
+            exchange_rate = Decimal(str(assets)) / Decimal(10**18)
+            # USDe at par (~$1)
+            price = exchange_rate
+            return {
+                "price_usd": price,
+                "price_source": f"a1_convertToAssets (rate={exchange_rate:.6f})",
+                "depeg_flag": "none",
+                "depeg_deviation_pct": None,
+                "oracle_updated_at": None,
+                "notes": f"sUSDe/USDe rate: {exchange_rate:.6f}, USDe at par",
+            }
+        except Exception as e:
+            pass  # fall through to CoinGecko
 
-        # eUSX price = exchange_rate x USX/USD
-        price = exchange_rate * usx_usd
+    # Fallback: CoinGecko
+    cg_id = pricing.get("coingecko_id")
+    if cg_id:
+        try:
+            return coingecko_price(cg_id)
+        except Exception:
+            pass
 
-        return {
-            "price_usd": price,
-            "price_source": f"a1_exchange_rate (rate={exchange_rate:.6f}) x pyth",
-            "depeg_flag": "none",
-            "depeg_deviation_pct": None,
-            "oracle_updated_at": underlying_price.get("oracle_updated_at"),
-            "notes": f"eUSX/USX rate: {exchange_rate:.6f}, USX/USD: {usx_usd}",
-        }
-    except Exception as e:
-        result = _unavailable(symbol)
-        result["notes"] = f"A1 exchange rate failed: {e}"
-        return result
+    result = _unavailable(symbol)
+    result["notes"] = f"A1 exchange rate: no handler for {symbol}"
+    return result
 
 
 # --- Internal fallback helpers ---
@@ -263,11 +333,21 @@ def _price_chainlink_with_fallback(token_entry: dict, w3_eth: Web3 | None) -> di
     pricing = token_entry["pricing"]
 
     # Try Chainlink
-    if pricing.get("chainlink_feed") and w3_eth:
-        try:
-            return chainlink_price(pricing["chainlink_feed"], w3_eth)
-        except Exception as e:
-            pass  # fall through to Pyth
+    if pricing.get("chainlink_feed"):
+        feed_chain = pricing.get("chainlink_feed_chain")
+        if feed_chain and feed_chain != "ethereum":
+            # Oracle on a non-Ethereum chain — need that chain's Web3
+            try:
+                from evm import get_web3
+                w3_chain = get_web3(feed_chain)
+                return chainlink_price(pricing["chainlink_feed"], w3_chain)
+            except Exception:
+                pass  # fall through to Pyth
+        elif w3_eth:
+            try:
+                return chainlink_price(pricing["chainlink_feed"], w3_eth)
+            except Exception:
+                pass  # fall through to Pyth
 
     # Try Pyth
     if pricing.get("pyth_feed_id"):

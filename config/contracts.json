@@ -83,6 +83,13 @@
         "description": "Steakhouse USDT (steakUSDT)"
       }
     },
+    "_morpho_vaults_0xec0b": {
+      "hyperithm_usdc_apex": {
+        "address": "0x777791c4d6dc2ce140d00d2828a7c93503c67777",
+        "abi": "erc4626",
+        "description": "Hyperithm USDC Apex (hyperUSDCa) — MetaMorpho vault, ~1,152 USDC for wallet 0xec0b"
+      }
+    },
     "_ethena": {
       "susde": {
         "address": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",

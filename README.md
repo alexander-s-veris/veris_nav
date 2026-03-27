@@ -52,9 +52,10 @@ src/
     update_falconx_optimized.py  # FalconX/Pareto A3 hourly data updater
     query_pareto_tranche_history.py  # Pareto tranche price history
     query_positions.py     # Reusable position query script for wallet walkthrough
-  collect.py               # [Planned] Main orchestrator for full NAV collection
-  valuation.py             # [Planned] Category-specific valuation logic (A1-D)
-  output.py                # [Planned] NAV snapshot and methodology log writer
+  collect.py               # Production orchestrator — queries all positions, values, outputs NAV snapshot
+  protocol_queries.py      # Config-driven position queries (Morpho, Aave, Euler, Kamino, Exponent, CreditCoop)
+  valuation.py             # Category-specific valuation logic (A1-F)
+  output.py                # NAV snapshot writer (positions, leverage detail, PT lots, LP decomposition, summary)
 config/
   chains.json              # Chain configs (RPC URLs, chain IDs, explorers)
   wallets.json             # Wallet addresses per chain + ARMA proxy wallets

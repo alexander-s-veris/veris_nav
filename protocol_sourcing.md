@@ -395,6 +395,18 @@ Interest on the Rain credit line accrues on-chain and is periodically collected 
 
 **Classification**: Category A1. Value = `convertToAssets(shares)` (USDC, at par).
 
+**Implementation**: `src/protocol_queries.py` → `query_creditcoop()` — queries aggregate `convertToAssets` + sub-strategy breakdown (`totalActiveCredit`, `totalAssets` on LiquidStrategy, USDC cash). Breakdown included in position notes for the methodology log.
+
+### Hyperithm USDC Apex (Ethereum, wallet 0xec0b)
+
+MetaMorpho vault. Standard ERC-4626.
+
+| Contract | Address | Description |
+|----------|---------|-------------|
+| Hyperithm USDC Apex | `0x777791c4d6dc2ce140d00d2828a7c93503c67777` | MetaMorpho vault (hyperUSDCa), ~1,152 USDC |
+
+**Classification**: Category A1. Value = `convertToAssets(shares)` (USDC, at par).
+
 ---
 
 ## Fluid (Ethereum)

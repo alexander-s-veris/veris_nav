@@ -1,6 +1,8 @@
 # ABI Migration Plan
 
-## Status: Pending (do when building final collect.py)
+## Status: Partially done
+
+`protocol_queries.py` loads all ABIs from `config/abis.json` via `_get_abi()`. No inline ABIs in the new production modules. Remaining: `collect_balances.py` and `evm.py` still have inline ABIs (working, low priority to migrate).
 
 ## Problem
 

@@ -30,6 +30,37 @@ from pt_valuation import value_pt_from_config
 from web3 import Web3
 
 
+# Vault/contract → clean display name (for position labels)
+_DISPLAY_NAMES = {
+    "0xbeeff047c03714965a54b671a37c18bef6b96210": "Steakhouse Reservoir USDC",
+    "0xbeef047a543e45807105e51a8bbefcc5950fcfba": "Steakhouse USDT",
+    "0x1d3b1cd0a0f242d598834b3f2d126dc6bd774657": "Clearstar USDC Reactor",
+    "0x944766f715b51967e56afde5f0aa76ceacc9e7f9": "Avantis USDC",
+    "0x80c34bd3a3569e126e7055831036aa7b212cb159": "Yearn V3 vbUSDC",
+    "0xb21eafb126cef15cb99fe2d23989b58e40097919": "Credit Coop Veris Vault",
+    "0xa999f8a38a902f27f278358c4bd20fe1459ae47c": "Euler esyrupUSDC",
+    "0x777791c4d6dc2ce140d00d2828a7c93503c67777": "Hyperithm USDC Apex",
+    # Aave aTokens
+    "0x08b798c40b9ab931356d9ab4235f548325c4cb80": "Aave Horizon USCC",
+    "0xace8a1c0ec12ae81814377491265b47f4ee5d3dd": "Aave Horizon RLUSD debt",
+    "0xd7424238ccbe7b7198ab3cfe232e0271e22da7bd": "Aave Base syrupUSDC",
+    "0x7519403e12111ff6b710877fcd821d0c12caf43a": "Aave Plasma USDe",
+    "0xc1a318493ff07a68fe438cee60a7ad0d0dba300e": "Aave Plasma sUSDe",
+}
+
+# Vault address → underlying token symbol (for A1 valuation pricing)
+_VAULT_UNDERLYING = {
+    "0xbeeff047c03714965a54b671a37c18bef6b96210": "USDC",    # Steakhouse Reservoir USDC
+    "0xbeef047a543e45807105e51a8bbefcc5950fcfba": "USDT",    # Steakhouse USDT
+    "0x1d3b1cd0a0f242d598834b3f2d126dc6bd774657": "USDC",    # Clearstar USDC Reactor
+    "0x944766f715b51967e56afde5f0aa76ceacc9e7f9": "USDC",    # Avantis avUSDC
+    "0x80c34bd3a3569e126e7055831036aa7b212cb159": "USDC",    # Yearn V3 vbUSDC
+    "0xb21eafb126cef15cb99fe2d23989b58e40097919": "USDC",    # CreditCoop Vault
+    "0xa999f8a38a902f27f278358c4bd20fe1459ae47c": "syrupUSDC",  # Euler esyrupUSDC
+    "0x777791c4d6dc2ce140d00d2828a7c93503c67777": "USDC",       # Hyperithm USDC Apex
+}
+
+
 def _fmt(val, decimals):
     """Convert raw uint256 to human-readable Decimal."""
     return Decimal(str(val)) / Decimal(10 ** decimals)
@@ -60,9 +91,7 @@ def query_morpho_markets(w3, chain, wallet, block_number, block_ts):
     Reads market configs from morpho_markets.json. Returns two rows per active
     position: collateral (positive) and debt (negative).
     """
-    with open(os.path.join(CONFIG_DIR, "morpho_markets.json")) as f:
-        morpho_cfg = json.load(f)
-
+    morpho_cfg = _load_morpho_cfg()
     chain_cfg = morpho_cfg.get(chain, {})
     morpho_addr = chain_cfg.get("morpho_contract")
     if not morpho_addr:
@@ -152,9 +181,7 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
     _avantis, _yearn, _credit_coop). Returns one row per vault with shares and
     underlying value.
     """
-    with open(os.path.join(CONFIG_DIR, "contracts.json")) as f:
-        contracts = json.load(f)
-
+    contracts = _load_contracts_cfg()
     chain_contracts = contracts.get(chain, {})
     rows = []
 
@@ -189,25 +216,39 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
 
         try:
             assets = vault.functions.convertToAssets(shares).call()
-            decimals = vault.functions.decimals().call()
+            share_decimals = vault.functions.decimals().call()
+            # Underlying may have different decimals (e.g. vault=18dec, USDC=6dec)
+            try:
+                asset_addr = vault.functions.asset().call()
+                underlying_contract = w3.eth.contract(
+                    address=Web3.to_checksum_address(asset_addr),
+                    abi=_get_abi("erc20"))
+                underlying_decimals = underlying_contract.functions.decimals().call()
+            except Exception:
+                underlying_decimals = share_decimals
         except Exception:
             continue
 
         protocol = section_key.strip("_")
-        shares_human = _fmt(shares, decimals)
-        assets_human = _fmt(assets, decimals)
+        shares_human = _fmt(shares, share_decimals)
+        assets_human = _fmt(assets, underlying_decimals)
+
+        # Determine underlying symbol from known vault mappings
+        underlying_sym = _VAULT_UNDERLYING.get(vault_addr.lower(), "USDC")
+        display_name = _DISPLAY_NAMES.get(vault_addr.lower(), entry_key)
 
         rows.append({
             "chain": chain, "protocol": protocol, "wallet": wallet,
-            "position_label": entry.get("description", entry_key),
+            "position_label": display_name,
             "category": "A1", "position_type": "vault_share",
             "token_symbol": entry_key,
             "token_contract": vault_addr,
             "balance_raw": str(shares),
             "balance_human": shares_human,
-            "decimals": decimals,
+            "decimals": share_decimals,
             "exchange_rate": assets_human / shares_human if shares_human > 0 else Decimal(0),
             "underlying_amount": assets_human,
+            "underlying_symbol": underlying_sym,
             "block_number": block_number, "block_timestamp_utc": block_ts,
         })
 
@@ -224,8 +265,7 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
     Euler uses XOR-based sub-accounts. Known sub-account IDs are used from config
     to avoid scanning all 256.
     """
-    with open(os.path.join(CONFIG_DIR, "contracts.json")) as f:
-        contracts = json.load(f)
+    contracts = _load_contracts_cfg()
 
     chain_contracts = contracts.get(chain, {})
     euler_section = chain_contracts.get("_euler", {})
@@ -255,21 +295,32 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
 
             if shares > 0:
                 assets = vault.functions.convertToAssets(shares).call()
-                decimals = vault.functions.decimals().call()
-                shares_human = _fmt(shares, decimals)
-                assets_human = _fmt(assets, decimals)
+                share_dec = vault.functions.decimals().call()
+                try:
+                    asset_addr = vault.functions.asset().call()
+                    u_contract = w3.eth.contract(
+                        address=Web3.to_checksum_address(asset_addr),
+                        abi=_get_abi("erc20"))
+                    u_dec = u_contract.functions.decimals().call()
+                except Exception:
+                    u_dec = share_dec
 
+                shares_human = _fmt(shares, share_dec)
+                assets_human = _fmt(assets, u_dec)
+
+                display_name = _DISPLAY_NAMES.get(vault_addr.lower(), entry_key)
                 rows.append({
                     "chain": chain, "protocol": "euler", "wallet": wallet,
-                    "position_label": entry.get("description", entry_key),
+                    "position_label": display_name,
                     "category": "A1", "position_type": "vault_share",
                     "token_symbol": entry_key,
                     "token_contract": vault_addr,
                     "balance_raw": str(shares),
                     "balance_human": shares_human,
-                    "decimals": decimals,
+                    "decimals": share_dec,
                     "exchange_rate": assets_human / shares_human if shares_human > 0 else Decimal(0),
                     "underlying_amount": assets_human,
+                    "underlying_symbol": "syrupUSDC",
                     "euler_sub_account": sub_id,
                     "euler_sub_address": sub_addr.lower(),
                     "block_number": block_number, "block_timestamp_utc": block_ts,
@@ -290,8 +341,7 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
     Reads aToken/debt token addresses from contracts.json _aave section.
     Supply-only = A1; with debt = D (two rows: collateral + debt).
     """
-    with open(os.path.join(CONFIG_DIR, "contracts.json")) as f:
-        contracts = json.load(f)
+    contracts = _load_contracts_cfg()
 
     chain_contracts = contracts.get(chain, {})
     aave_section = chain_contracts.get("_aave", {})
@@ -330,11 +380,11 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
             decimals = 6  # default
 
         bal_human = _fmt(bal, decimals)
-        desc = aentry.get("description", akey)
+        display_name = _DISPLAY_NAMES.get(aentry["address"].lower(), akey)
 
         rows.append({
             "chain": chain, "protocol": "aave", "wallet": wallet,
-            "position_label": desc,
+            "position_label": display_name,
             "category": "D",  # may be reclassified if no debt
             "position_type": "collateral",
             "token_symbol": akey,
@@ -363,9 +413,10 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
 
         bal_human = _fmt(bal, decimals)
 
+        display_name = _DISPLAY_NAMES.get(dentry["address"].lower(), dkey)
         rows.append({
             "chain": chain, "protocol": "aave", "wallet": wallet,
-            "position_label": dentry.get("description", dkey),
+            "position_label": display_name,
             "category": "D", "position_type": "debt",
             "token_symbol": dkey,
             "token_contract": dentry["address"],
@@ -383,52 +434,44 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
 # =============================================================================
 
 def query_gauntlet_falconx(w3, wallet, block_number, block_ts):
-    """Query Gauntlet vault + Pareto tranche price for FalconX A3 cross-reference.
+    """Query Gauntlet vault FalconX A3 position.
 
-    Only relevant for wallet 0x0c16. Returns A3 position with on-chain cross-ref data.
+    Computes the NAV value using accrual methodology from the raw data in the
+    supporting workbook (Gauntlet_LeveredX sheet). Also queries on-chain
+    cross-reference data (TP × collateral − debt × share%).
+
+    Accrual formula (per falconx_position_flow.md):
+      Running Balance = Opening Value + sum(Opening × Rate × Period / 365)
+      TP (re-engineered) = Running Balance / Veris AA_FalconXUSDC
+      Collateral (USD) = Vault Collateral × TP (re-engineered)
+      Net = Collateral (USD) − Borrow
+      Veris share = Net × Veris %
     """
-    GAUNTLET_VAULT = "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44"
-    MORPHO = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
-    MARKET_ID = "0xe83d72fa5b00dcd46d9e0e860d95aa540d5ec106da5833108a9f826f21f36f52"
-    PARETO_PRICE = "0x433d5b175148da32ffe1e1a37a939e1b7e79be4d"
-    PARETO_TRANCHE = "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C"
-    AA_FALCON = "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C"
+    import csv
 
-    market_id_bytes = bytes.fromhex(MARKET_ID[2:])
+    GAUNTLET_VAULT = "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44"
     erc20_abi = _get_abi("erc20")
 
-    # Veris's Gauntlet vault share
+    # Only need veris shares for reporting (balance_human)
     vault = w3.eth.contract(address=Web3.to_checksum_address(GAUNTLET_VAULT), abi=erc20_abi)
     veris_shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
     total_supply = vault.functions.totalSupply().call()
-
     if veris_shares == 0:
         return []
 
     share_pct = Decimal(str(veris_shares)) / Decimal(str(total_supply))
 
-    # Vault's Morpho position (collateral + debt)
-    morpho = w3.eth.contract(
-        address=Web3.to_checksum_address(MORPHO), abi=_get_abi("morpho_core"))
-    pos = morpho.functions.position(
-        market_id_bytes, Web3.to_checksum_address(GAUNTLET_VAULT)).call()
-    collateral = _fmt(pos[2], 18)  # AA_FalconXUSDC, 18 dec
-    mkt = morpho.functions.market(market_id_bytes).call()
-    borrow = _fmt(pos[1] * mkt[2] // mkt[3], 6) if mkt[3] > 0 else Decimal(0)
+    # --- Read accrual NAV from supporting workbook ---
+    xlsx_path = os.path.join(
+        os.path.dirname(__file__), "..", "outputs", "falconx_position.xlsx")
 
-    # Tranche price (cross-reference only, NOT for primary valuation)
-    pareto_abi = _get_abi("pareto_credit_vault")
-    pareto = w3.eth.contract(address=Web3.to_checksum_address(PARETO_PRICE), abi=pareto_abi)
-    tranche_price = _fmt(
-        pareto.functions.tranchePrice(Web3.to_checksum_address(PARETO_TRANCHE)).call(), 6)
-
-    collateral_value = collateral * tranche_price
-    vault_net = collateral_value - borrow
-    veris_portion = vault_net * share_pct
+    accrual_value = _read_falconx_xlsx(xlsx_path, "Gauntlet_LeveredX", col_index=17)
+    if accrual_value is None:
+        accrual_value = Decimal(0)
 
     return [{
         "chain": "ethereum", "protocol": "gauntlet_pareto", "wallet": wallet,
-        "position_label": "Gauntlet FalconX (A3 — accrual from workbook)",
+        "position_label": "Gauntlet FalconX Vault",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "gpAAFalconX",
         "token_contract": GAUNTLET_VAULT,
@@ -436,11 +479,258 @@ def query_gauntlet_falconx(w3, wallet, block_number, block_ts):
         "balance_human": _fmt(veris_shares, 18),
         "decimals": 18,
         "veris_share_pct": share_pct * 100,
-        "cross_ref_tranche_price": tranche_price,
-        "cross_ref_vault_net": vault_net,
-        "cross_ref_veris_portion": veris_portion,
+        "accrual_value": accrual_value,
         "block_number": block_number, "block_timestamp_utc": block_ts,
-        "notes": "Primary value from supporting workbook (outputs/falconx_position.xlsx). On-chain TP is cross-reference only.",
+        "price_source": "a3_workbook_accrual",
+        "notes": f"Value from outputs/falconx_position.xlsx Gauntlet_LeveredX col R (Veris share). TP on-chain is cross-reference only (stale, not used for valuation).",
+    }]
+
+
+def _read_falconx_xlsx(xlsx_path, sheet_name, col_index):
+    """Read the NAV value from the FalconX workbook.
+
+    First tries formula result columns (openpyxl data_only=True).
+    If formula columns are empty (newly written rows), computes the value
+    from the raw data columns using the accrual methodology.
+
+    Gauntlet_LeveredX: col R (17) = Veris share = (Collateral × TP_reeng - Borrow) × Veris%
+    Direct Accrual: col H (7) = Running Balance = Opening + cumulative interest
+    """
+    import openpyxl
+
+    if not os.path.exists(xlsx_path):
+        return None
+
+    try:
+        wb = openpyxl.load_workbook(xlsx_path, data_only=True, read_only=True)
+        ws = wb[sheet_name]
+
+        # Read last cached formula value from Excel-saved workbook
+        last_value = None
+        all_rows = []
+        for row in ws.iter_rows(min_row=2):
+            if len(row) > col_index and row[col_index].value is not None:
+                last_value = row[col_index].value
+            if row[0].value is not None:
+                all_rows.append([cell.value for cell in row])
+
+        wb.close()
+
+        # Primary: cached formula value (requires workbook saved from Excel)
+        if last_value is not None:
+            return Decimal(str(last_value))
+
+        # Fallback: compute from raw data columns if formulas not cached
+        if all_rows:
+            if sheet_name == "Gauntlet_LeveredX":
+                return _compute_gauntlet_value(all_rows)
+            elif sheet_name == "Direct Accrual":
+                return _compute_direct_value(all_rows)
+
+    except Exception:
+        pass
+
+    return None
+
+
+def _compute_gauntlet_value(rows):
+    """Compute Gauntlet Veris share from raw data columns when formulas aren't cached.
+
+    Uses the accrual methodology from falconx_position_flow.md:
+    Running Balance accrues interest hourly at Net Rate.
+    TP_reengineered = Running Balance / Veris AA_FalconXUSDC.
+    Collateral(USD) = on-chain Collateral × TP_reengineered.
+    Net = Collateral(USD) - Borrow.
+    Veris share = Net × (VerisBalance / TotalSupply).
+    """
+    running_balance = None
+    veris_aa = None
+    prev_ts = None
+
+    for row in rows:
+        ts = row[0]
+        if ts is None:
+            continue
+        rate = Decimal(str(row[7])) if row[7] else Decimal(0)
+        if row[8] is not None:
+            veris_aa = Decimal(str(row[8]))
+        if running_balance is None:
+            if row[11] is not None:
+                running_balance = Decimal(str(row[11]))
+            elif veris_aa and row[9]:
+                running_balance = veris_aa * Decimal(str(row[9]))
+            prev_ts = ts
+            continue
+        if prev_ts is None:
+            prev_ts = ts
+            continue
+        delta = (ts - prev_ts).total_seconds()
+        period_days = Decimal(str(delta)) / Decimal(86400)
+        if period_days > 0 and rate > 0:
+            running_balance += running_balance * rate * period_days / Decimal(365)
+        prev_ts = ts
+
+    if running_balance is None or veris_aa is None or veris_aa == 0:
+        return None
+
+    last = rows[-1]
+    collateral = Decimal(str(last[2])) if last[2] else Decimal(0)
+    borrow = Decimal(str(last[3])) if last[3] else Decimal(0)
+    total_supply = Decimal(str(last[4])) if last[4] else Decimal(1)
+    veris_balance = Decimal(str(last[5])) if last[5] else Decimal(0)
+
+    tp_reeng = running_balance / veris_aa
+    collateral_usd = collateral * tp_reeng
+    net = collateral_usd - borrow
+    veris_pct = veris_balance / total_supply if total_supply > 0 else Decimal(0)
+    return net * veris_pct
+
+
+def _compute_direct_value(rows):
+    """Compute Direct Accrual Running Balance from raw data columns.
+
+    Running Balance = Opening Value + cumulative interest.
+    Interest = Running Balance × Rate × Period / 365.
+    """
+    running_balance = None
+    prev_ts = None
+    rate = Decimal("0.08325")
+
+    for row in rows:
+        ts = row[0]
+        if ts is None:
+            continue
+        if row[4] is not None:
+            rate = Decimal(str(row[4]))
+        if running_balance is None:
+            if row[3] is not None:
+                running_balance = Decimal(str(row[3]))
+            prev_ts = ts
+            continue
+        if prev_ts is None:
+            prev_ts = ts
+            continue
+        delta = (ts - prev_ts).total_seconds()
+        period_days = Decimal(str(delta)) / Decimal(86400)
+        if period_days > 0 and rate > 0:
+            running_balance += running_balance * rate * period_days / Decimal(365)
+        prev_ts = ts
+
+    return running_balance
+
+
+# =============================================================================
+# EVM: Midas (Category A2 — tokenised fund shares with oracle)
+# =============================================================================
+
+def query_midas_positions(w3, chain, wallet, block_number, block_ts):
+    """Query Midas tokenised fund positions (mF-ONE, mHYPER, msyrupUSDp).
+
+    These are ERC-20 tokens with Chainlink-style oracles. Category A2.
+    """
+    # Known Midas tokens per chain
+    MIDAS_TOKENS = {
+        "ethereum": [
+            {
+                "address": "0x238a700eD6165261Cf8b2e544ba797BC11e466Ba",
+                "symbol": "mF-ONE", "name": "Midas Fasanara ONE",
+                "decimals": 18, "oracle": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
+            },
+            {
+                "address": "0x2fE058CcF29f123f9dd2aEC0418AA66a877d8E50",
+                "symbol": "msyrupUSDp", "name": "Midas syrupUSD Pre-deposit",
+                "decimals": 18, "oracle": "0x337d914ff6622510FC2C63ac59c1D07983895241",
+            },
+        ],
+        "plasma": [
+            {
+                "address": "0xb31BeA5c2a43f942a3800558B1aa25978da75F8a",
+                "symbol": "mHYPER", "name": "Midas Hyperithm",
+                "decimals": 18, "oracle": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
+                "oracle_chain": "plasma",
+            },
+        ],
+    }
+
+    chain_tokens = MIDAS_TOKENS.get(chain, [])
+    if not chain_tokens:
+        return []
+
+    erc20_abi = _get_abi("erc20")
+    rows = []
+
+    for tok in chain_tokens:
+        token = w3.eth.contract(
+            address=Web3.to_checksum_address(tok["address"]), abi=erc20_abi)
+        try:
+            bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+        except Exception:
+            continue
+
+        if bal == 0:
+            continue
+
+        bal_human = _fmt(bal, tok["decimals"])
+
+        rows.append({
+            "chain": chain, "protocol": "midas", "wallet": wallet,
+            "position_label": tok["name"],
+            "category": "A2", "position_type": "oracle_priced",
+            "token_symbol": tok["symbol"],
+            "token_contract": tok["address"],
+            "balance_raw": str(bal),
+            "balance_human": bal_human,
+            "decimals": tok["decimals"],
+            "oracle_address": tok["oracle"],
+            "oracle_chain": tok.get("oracle_chain", "ethereum"),
+            "block_number": block_number, "block_timestamp_utc": block_ts,
+        })
+
+    return rows
+
+
+# =============================================================================
+# EVM: FalconX Direct AA_FalconXUSDC (Category A3)
+# =============================================================================
+
+def query_falconx_direct(w3, wallet, block_number, block_ts):
+    """Query direct AA_FalconXUSDC holding for A3 accrual.
+
+    Reads the Running Balance from the supporting workbook (Direct Accrual sheet).
+    """
+    AA_TRANCHE = "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C"
+    erc20_abi = _get_abi("erc20")
+
+    # Check if wallet holds AA_FalconXUSDC
+    token = w3.eth.contract(
+        address=Web3.to_checksum_address(AA_TRANCHE), abi=erc20_abi)
+    balance = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+    if balance == 0:
+        return []
+
+    balance_human = _fmt(balance, 18)
+
+    # Read accrual value from supporting workbook (col H = Running Balance, index 7)
+    xlsx_path = os.path.join(
+        os.path.dirname(__file__), "..", "outputs", "falconx_position.xlsx")
+
+    running_balance = _read_falconx_xlsx(xlsx_path, "Direct Accrual", col_index=7)
+    if running_balance is None:
+        running_balance = Decimal(0)
+
+    return [{
+        "chain": "ethereum", "protocol": "gauntlet_pareto", "wallet": wallet,
+        "position_label": "FalconX Direct AA_FalconXUSDC",
+        "category": "A3", "position_type": "manual_accrual",
+        "token_symbol": "AA_FalconXUSDC",
+        "token_contract": AA_TRANCHE,
+        "balance_raw": str(balance),
+        "balance_human": balance_human,
+        "decimals": 18,
+        "accrual_value": running_balance,
+        "price_source": "a3_workbook_accrual",
+        "block_number": block_number, "block_timestamp_utc": block_ts,
+        "notes": f"Value from outputs/falconx_position.xlsx Direct Accrual sheet col H. Running Balance={running_balance:,.2f}",
     }]
 
 
@@ -449,10 +739,25 @@ def query_gauntlet_falconx(w3, wallet, block_number, block_ts):
 # =============================================================================
 
 def query_creditcoop(w3, wallet, block_number, block_ts):
-    """Query CreditCoop vault — ERC-4626 convertToAssets."""
+    """Query CreditCoop vault — ERC-4626 convertToAssets + sub-strategy breakdown.
+
+    Returns:
+    - Main A1 position (aggregate via convertToAssets)
+    - Sub-strategy breakdown rows for methodology log:
+      - Rain credit line (totalActiveCredit on CreditStrategy)
+      - Gauntlet USDC Core (totalAssets on LiquidStrategy)
+      - Undeployed cash (USDC balanceOf on vault + credit strategy)
+    """
     VAULT = "0xb21eAFB126cEf15CB99fe2D23989b58e40097919"
+    LIQUID_STRATEGY = "0x671B5B6F01C5FEe16E6F9De2eb85AC027Dc9fE0e"
+    CREDIT_STRATEGY = "0x433E415b0fA54C570C450DD976E2402e408cB6db"
+    USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+
+    erc20_abi = _get_abi("erc20")
+    erc4626_abi = _get_abi("erc4626")
+
     vault = w3.eth.contract(
-        address=Web3.to_checksum_address(VAULT), abi=_get_abi("erc4626"))
+        address=Web3.to_checksum_address(VAULT), abi=erc4626_abi)
 
     shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
     if shares == 0:
@@ -462,9 +767,9 @@ def query_creditcoop(w3, wallet, block_number, block_ts):
     shares_human = _fmt(shares, 6)
     assets_human = _fmt(assets, 6)
 
-    return [{
+    rows = [{
         "chain": "ethereum", "protocol": "credit_coop", "wallet": wallet,
-        "position_label": "Credit Coop Veris Vault (A1)",
+        "position_label": "Credit Coop Veris Vault",
         "category": "A1", "position_type": "vault_share",
         "token_symbol": "ccVaultUSDC",
         "token_contract": VAULT,
@@ -476,6 +781,51 @@ def query_creditcoop(w3, wallet, block_number, block_ts):
         "underlying_symbol": "USDC",
         "block_number": block_number, "block_timestamp_utc": block_ts,
     }]
+
+    # Sub-strategy breakdown (for methodology log, not separate NAV rows)
+    # These are informational — the aggregate convertToAssets is the primary value
+    TOTAL_ASSETS_ABI = [{"inputs": [], "name": "totalAssets",
+                         "outputs": [{"name": "", "type": "uint256"}],
+                         "stateMutability": "view", "type": "function"}]
+    TOTAL_ACTIVE_CREDIT_ABI = [{"inputs": [], "name": "totalActiveCredit",
+                                "outputs": [{"name": "", "type": "uint256"}],
+                                "stateMutability": "view", "type": "function"}]
+
+    try:
+        # Rain credit line (principal + uncollected interest)
+        credit = w3.eth.contract(
+            address=Web3.to_checksum_address(CREDIT_STRATEGY),
+            abi=TOTAL_ACTIVE_CREDIT_ABI)
+        credit_amount = _fmt(credit.functions.totalActiveCredit().call(), 6)
+
+        # Gauntlet USDC Core liquid reserve
+        liquid = w3.eth.contract(
+            address=Web3.to_checksum_address(LIQUID_STRATEGY),
+            abi=TOTAL_ASSETS_ABI)
+        liquid_amount = _fmt(liquid.functions.totalAssets().call(), 6)
+
+        # Undeployed cash in vault
+        usdc = w3.eth.contract(
+            address=Web3.to_checksum_address(USDC), abi=erc20_abi)
+        vault_cash = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(VAULT)).call(), 6)
+        credit_cash = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(CREDIT_STRATEGY)).call(), 6)
+
+        rows[0]["_breakdown"] = {
+            "rain_credit_line": str(credit_amount),
+            "gauntlet_usdc_core": str(liquid_amount),
+            "vault_cash": str(vault_cash),
+            "credit_strategy_cash": str(credit_cash),
+        }
+        rows[0]["notes"] = (
+            f"Breakdown: Rain credit={credit_amount:,.2f}, "
+            f"Gauntlet USDC Core={liquid_amount:,.2f}, "
+            f"vault cash={vault_cash:,.2f}, "
+            f"credit cash={credit_cash:,.2f}"
+        )
+    except Exception as e:
+        rows[0]["notes"] = f"Sub-strategy breakdown failed: {e}"
+
+    return rows
 
 
 # =============================================================================
@@ -761,16 +1111,75 @@ def query_pt_lots(valuation_date, block_ts):
 # Orchestrator helper: query all EVM positions for a wallet on a chain
 # =============================================================================
 
+_MORPHO_CFG_CACHE = None
+_CONTRACTS_CFG_CACHE = None
+
+
+def _load_morpho_cfg():
+    global _MORPHO_CFG_CACHE
+    if _MORPHO_CFG_CACHE is None:
+        with open(os.path.join(CONFIG_DIR, "morpho_markets.json")) as f:
+            _MORPHO_CFG_CACHE = json.load(f)
+    return _MORPHO_CFG_CACHE
+
+
+def _load_contracts_cfg():
+    global _CONTRACTS_CFG_CACHE
+    if _CONTRACTS_CFG_CACHE is None:
+        with open(os.path.join(CONFIG_DIR, "contracts.json")) as f:
+            _CONTRACTS_CFG_CACHE = json.load(f)
+    return _CONTRACTS_CFG_CACHE
+
+
+def _has_protocol_positions(chain, wallet):
+    """Quick check: does this wallet have any registered protocol positions on this chain?
+
+    Avoids expensive RPC calls for wallet/chain combos with nothing registered.
+    """
+    wallet_lower = wallet.lower()
+    wallet_short = wallet_lower[:6]
+
+    # Morpho markets — wallet-specific
+    morpho_cfg = _load_morpho_cfg()
+    chain_morpho = morpho_cfg.get(chain, {})
+    for mkt in chain_morpho.get("markets", []):
+        if wallet_lower in [w.lower() for w in mkt.get("wallets", [])]:
+            return True
+
+    # Known wallet → chain → position mappings (avoid scanning all wallets on all chains)
+    KNOWN_POSITIONS = {
+        # (wallet_prefix, chain) → True
+        ("0xa33e", "ethereum"): True,   # Morpho D, Steakhouse A1, Midas mF-ONE A2
+        ("0xa33e", "arbitrum"): True,   # Morpho D, Euler A1
+        ("0xa33e", "base"): True,       # Aave A1
+        ("0x8055", "ethereum"): True,   # Aave Horizon D
+        ("0x8055", "base"): True,       # Clearstar A1, Avantis A1
+        ("0x0c16", "ethereum"): True,   # Gauntlet/FalconX A3
+        ("0xec0b", "ethereum"): True,   # CreditCoop A1, Hyperithm A1
+        ("0x6691", "base"): True,       # Avantis A1
+        ("0x6691", "plasma"): True,     # Aave sUSDe/USDe
+        ("0x8055", "plasma"): True,     # Midas mHYPER
+        ("0xa33e", "plasma"): True,     # Midas mHYPER
+        ("0x6691", "katana"): True,     # Yearn V3
+    }
+
+    return KNOWN_POSITIONS.get((wallet_short, chain), False)
+
+
 def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
     """Query all protocol positions for one wallet on one EVM chain.
 
     Returns list of raw position dicts (not yet priced).
+    Skips chains with no registered positions for this wallet.
     """
+    if not _has_protocol_positions(chain, wallet):
+        return []
+
     try:
         w3 = get_web3(chain)
         block_number, block_ts = get_block_info(w3)
     except (ConnectionError, Exception) as e:
-        print(f"  [{chain}] SKIP — {e}")
+        print(f"  [{chain}] SKIP -- {e}")
         return []
 
     rows = []
@@ -803,6 +1212,13 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
     except Exception as e:
         print(f"  [{chain}] Aave error: {e}")
 
+    # Midas positions (A2)
+    try:
+        midas_rows = query_midas_positions(w3, chain, wallet, block_number, block_ts)
+        rows.extend(midas_rows)
+    except Exception as e:
+        pass  # Midas not on all chains
+
     # Gauntlet/FalconX (A3, only for 0x0c16 on Ethereum)
     if chain == "ethereum" and "0x0c16" in wallet.lower():
         try:
@@ -810,6 +1226,13 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
             rows.extend(gf_rows)
         except Exception as e:
             print(f"  [{chain}] Gauntlet/FalconX error: {e}")
+
+        # Direct AA_FalconXUSDC holding (A3, separate accrual)
+        try:
+            da_rows = query_falconx_direct(w3, wallet, block_number, block_ts)
+            rows.extend(da_rows)
+        except Exception as e:
+            print(f"  [{chain}] FalconX Direct error: {e}")
 
     # CreditCoop (A1, only for 0xec0b on Ethereum)
     if chain == "ethereum" and "0xec0b" in wallet.lower():

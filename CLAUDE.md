@@ -359,9 +359,11 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **syrupUSDC (Maple)**: Large positions across Morpho loops (Ethereum, Arbitrum). CG price ~$1.12.
 - **ONyc (OnRe reinsurance)**: On Solana (Exponent LPs + standalone). Weekly NAV updates.
 - **mHYPER (Midas Hyperithm)**: Small positions.
+- **RLP (Resolv)**: 204,746 tokens. Pyth oracle as primary, CoinGecko as fallback.
 
 ### A1 Positions — Credit Coop / Rain
-- **Credit Coop / Rain**: ~$3.87M in Veris Credit Vault (0xb21e), wallet 0xec0b. **Reclassified A3 → A1** (rationale below). ERC-4626/7540 vault with deterministic `convertToAssets`. Sub-strategies: Rain credit line ($3.75M principal, 14% rate, 10% perf fee) + Gauntlet USDC Core liquid reserve (~$113K). Interest collected periodically from Rain and reinvested into liquid strategy.
+- **Credit Coop / Rain**: ~$3.87M in Veris Credit Vault (0xb21e), wallet 0xec0b. **Reclassified A3 → A1** (rationale below). ERC-4626/7540 vault with deterministic `convertToAssets`. Sub-strategies: Rain credit line ($3.75M principal, 14% rate, 10% perf fee) + Gauntlet USDC Core liquid reserve (~$113K). Interest collected periodically from Rain and reinvested into liquid strategy. Sub-strategy breakdown queried for methodology log: `totalActiveCredit()` on CreditStrategy, `totalAssets()` on LiquidStrategy, USDC cash on vault.
+- **Hyperithm USDC Apex**: ~1,152 USDC in MetaMorpho vault (`0x7777...`), wallet 0xec0b. Standard ERC-4626 `convertToAssets`.
 - **Reclassification rationale (per Valuation Policy Section 6.1)**: The vault's on-chain exchange rate (`convertToAssets`) is authoritative and deterministic — it reflects both collected and uncollected interest from the Rain credit line, plus yield from the Gauntlet USDC Core liquid reserve, net of performance fees. This is analogous to sUSDe (classified A1 even though underlying yield is off-chain). The credit strategy's `getPositionActiveCredit()` provides granular principal/interest breakdown for the methodology log, but `convertToAssets` is the primary valuation source.
 
 ### A3 Positions (Private credit)
@@ -396,7 +398,6 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 ### F Positions (Other)
 - **MORPHO, PENDLE, ARB, KMNO**: Governance token rewards across wallets
 - **GIZA**: 223,251 tokens on Base
-- **RLP (Resolv)**: 204,746 tokens
 - **YT-ONyc-13MAY26**: ~725,568 tokens
 - **YT-eUSX-01JUN26**: ~141,771 tokens
 - **Kamino farming rewards** (Solana): Unclaimed USDG (~6,035) and USX from farming. Included if claimable at Valuation Block. KMNO season rewards excluded.
@@ -513,9 +514,10 @@ veris-nav/
 │   ├── collect_balances.py    # Production wallet balance scanner (Cat E + F + A1/A2 tokens)
 │   ├── cache_xlsx.py          # Cache xlsx sheets as CSVs for fast access
 │   ├── temp/                  # Temporary query scripts (deleted after final build)
-│   ├── collect.py             # [Planned] Main orchestrator for full NAV collection
-│   ├── valuation.py           # [Planned] Category-specific valuation logic (A1/A3/B/C/D)
-│   └── output.py              # [Planned] Final NAV snapshot writer
+│   ├── collect.py             # Production orchestrator — queries all positions, values, outputs NAV snapshot
+│   ├── protocol_queries.py    # Config-driven position queries (Morpho, Aave, Euler, Kamino, Exponent, CreditCoop)
+│   ├── valuation.py           # Category-specific valuation logic (A1-F)
+│   └── output.py              # NAV snapshot writer (positions.csv/json, leverage_detail, pt_lots, lp_decomposition, nav_summary)
 ├── config/
 │   ├── chains.json            # Chain configs — RPC URLs, chain IDs, explorers
 │   ├── wallets.json           # Wallet addresses per chain
