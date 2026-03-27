@@ -1,0 +1,59 @@
+{
+  "_doc": "Pricing hierarchy per Valuation Policy v1.0 Section 6. The 'hierarchy' array defines fallback order — the system tries each source type in sequence, falling through on failure or staleness.",
+
+  "A1": {
+    "method": "exchange_rate",
+    "description": "Smart contract convertToAssets or equivalent (Section 6.1). No oracle hierarchy — value is deterministic on-chain."
+  },
+  "A2": {
+    "method": "oracle_hierarchy",
+    "hierarchy": ["chainlink", "pyth", "redstone", "issuer_nav", "coingecko", "dex_twap"],
+    "staleness_multiplier": 2.0,
+    "description": "Off-chain yield-bearing tokens. Oracle hierarchy per Section 6.2. Stale if >2x expected update frequency."
+  },
+  "A3": {
+    "method": "manual_accrual",
+    "description": "Private credit vault tokens. Manual accrual from contractual terms (Section 6.3). On-chain TP is cross-reference only."
+  },
+  "B": {
+    "method": "pt_linear_amortisation",
+    "description": "PT tokens. Linear amortisation per individual lot (Section 6.4). AMM price is cross-reference only."
+  },
+  "C": {
+    "method": "lp_decomposition",
+    "description": "LP positions. Decompose into constituents, price each per its category (Section 6.5). PT in LP uses AMM implied rate, not lot amortisation."
+  },
+  "D": {
+    "method": "net_position",
+    "description": "Leveraged positions. Net = Collateral value - Debt value. Each side priced per its token's category (Section 6.6)."
+  },
+  "E_par": {
+    "method": "par",
+    "depeg_hierarchy": ["chainlink", "pyth", "redstone"],
+    "depeg_threshold_minor_pct": 0.5,
+    "depeg_threshold_material_pct": 2.0,
+    "description": "USDC-pegged stablecoins (USDC, DAI, PYUSD, USDS, AUSD, RLUSD). Valued at par ($1.00). Depeg check per Section 9.4."
+  },
+  "E_oracle": {
+    "method": "oracle_hierarchy",
+    "hierarchy": ["chainlink", "pyth", "redstone", "coingecko"],
+    "description": "Non-USDC-pegged stablecoins (USDT, USDe, USDD, USX). Oracle-priced per Section 6.7."
+  },
+  "F": {
+    "method": "market_hierarchy",
+    "hierarchy": ["kraken", "redstone", "coingecko", "dex_twap"],
+    "description": "Governance tokens, rewards, other (Section 6.8). Kraken is tier 1 per Final Terms."
+  },
+
+  "divergence_tolerances": {
+    "_doc": "Maximum divergence between Primary and Verification Sources per Appendix B",
+    "A1": 2.0,
+    "A2": 3.0,
+    "A3": 5.0,
+    "B": 6.0,
+    "C": 5.0,
+    "D": 5.0,
+    "E": 0.5,
+    "F": 10.0
+  }
+}

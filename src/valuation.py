@@ -35,7 +35,7 @@ def _get_pricing_indices(tokens_registry, contracts_cfg=None):
     """Build or return cached pricing lookup indices from config files.
 
     Builds:
-    - par_symbols: set of lowercase symbols with pricing.method == "par"
+    - par_symbols: set of lowercase symbols with pricing.policy == "E_par"
     - atoken_map: dict of entry_key.lower() -> underlying_symbol.lower()
     - symbol_index: dict of symbol.lower() -> token_entry for price lookups
     """
@@ -55,8 +55,8 @@ def _get_pricing_indices(tokens_registry, contracts_cfg=None):
                 if not isinstance(entry, dict):
                     continue
                 sym = entry.get("symbol", "").lower()
-                method = entry.get("pricing", {}).get("method", "")
-                if method == "par":
+                policy = entry.get("pricing", {}).get("policy", "")
+                if policy == "E_par":
                     par_symbols.add(sym)
                 if sym and sym not in symbol_index:
                     symbol_index[sym] = entry

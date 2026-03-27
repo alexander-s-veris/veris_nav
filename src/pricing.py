@@ -1,13 +1,16 @@
 """
 Price fetching adapters for the Veris NAV data collection system.
 
-Implements the Valuation Policy pricing hierarchy:
-  - Category E par: $1.00 with Chainlink de-peg check (Section 6.7 / 9.4)
-  - Category E oracle: Chainlink → Pyth fallback (Section 6.2 tier 1)
-  - Category F: Kraken → CoinGecko fallback (Section 6.8)
+Implements the Valuation Policy pricing hierarchy driven by config files:
+  - config/price_feeds.json    — feed definitions (Chainlink, Pyth, Redstone, Kraken, CoinGecko)
+  - config/pricing_policy.json — hierarchy rules per category (A1, A2, E_par, E_oracle, F, etc.)
+  - config/tokens.json         — tokens reference feeds by key via pricing.feeds
+
+Adapters (chainlink_price, pyth_price, etc.) are unchanged.
 """
 
 import os
+import json
 from decimal import Decimal
 from datetime import datetime, timezone
 
@@ -18,32 +21,102 @@ from evm import AGGREGATOR_V3_ABI, TS_FMT
 from solana_client import get_eusx_exchange_rate
 from block_utils import concurrent_query
 
-# --- Price cache: keyed by (symbol, method, feed_id), stores result dict ---
+# --- Price cache: keyed by (symbol, policy, feed_key), stores result dict ---
 _price_cache: dict[str, dict] = {}
 
 COINGECKO_BASE = "https://pro-api.coingecko.com/api/v3"
 
+# --- Config loaders (cached) ---
+
+_FEEDS_CACHE = None
+_POLICY_CACHE = None
+
+
+def _load_feeds_registry() -> dict:
+    """Load and flatten config/price_feeds.json.
+
+    The file groups feeds under type keys (chainlink, pyth, etc.).
+    This returns a flat dict: feed_key -> feed_cfg, so callers can look up
+    any feed by its key regardless of type group.
+    """
+    global _FEEDS_CACHE
+    if _FEEDS_CACHE is None:
+        path = os.path.join(os.path.dirname(__file__), "..", "config", "price_feeds.json")
+        with open(path) as f:
+            raw = json.load(f)
+        flat = {}
+        for section_key, section_val in raw.items():
+            if section_key.startswith("_"):
+                continue  # skip _description
+            if isinstance(section_val, dict):
+                for feed_key, feed_cfg in section_val.items():
+                    if isinstance(feed_cfg, dict):
+                        flat[feed_key] = feed_cfg
+        _FEEDS_CACHE = flat
+    return _FEEDS_CACHE
+
+
+def _load_pricing_policy() -> dict:
+    """Load config/pricing_policy.json (cached)."""
+    global _POLICY_CACHE
+    if _POLICY_CACHE is None:
+        path = os.path.join(os.path.dirname(__file__), "..", "config", "pricing_policy.json")
+        with open(path) as f:
+            _POLICY_CACHE = json.load(f)
+    return _POLICY_CACHE
+
+
+# --- Cache key ---
 
 def _cache_key(token_entry: dict) -> str:
     """Generate a unique cache key for a token's pricing config.
 
-    Includes the pricing method and primary feed ID to distinguish
-    same-symbol tokens with different feeds (e.g. on different chains).
+    Uses policy and first feed key to distinguish same-symbol tokens
+    with different feeds (e.g. on different chains).
     """
     symbol = token_entry.get("symbol", "UNKNOWN")
     pricing = token_entry.get("pricing", {}) if isinstance(token_entry.get("pricing"), dict) else {}
-    method = pricing.get("method", "")
-    # Include the primary feed ID to distinguish same-symbol tokens with different feeds
-    feed = (pricing.get("chainlink_feed") or pricing.get("pyth_feed_id") or
-            pricing.get("kraken_pair") or pricing.get("coingecko_id") or "")
-    return f"{symbol}_{method}_{feed}"
+    policy = pricing.get("policy", "")
+    feeds = pricing.get("feeds", {})
+    # Use first feed key for cache differentiation
+    first_feed = next(iter(feeds.values()), "") if feeds else ""
+    return f"{symbol}_{policy}_{first_feed}"
 
+
+# --- Generic feed query dispatcher ---
+
+def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None, expected_freq_hours: float = None) -> dict:
+    """Query a single price feed based on its type. Returns result dict."""
+    feed_type = feed_cfg["type"]
+    if feed_type == "chainlink":
+        chain = feed_cfg.get("chain", "ethereum")
+        if chain != "ethereum":
+            from evm import get_web3
+            w3 = get_web3(chain)
+        else:
+            w3 = w3_eth
+        if not w3:
+            raise ConnectionError(f"No Web3 for chain {chain}")
+        return chainlink_price(feed_cfg["address"], w3, expected_freq_hours)
+    elif feed_type == "pyth":
+        return pyth_price(feed_cfg["feed_id"], expected_freq_hours)
+    elif feed_type == "redstone":
+        return redstone_price(feed_cfg["symbol"])
+    elif feed_type == "kraken":
+        return kraken_price(feed_cfg["pair"])
+    elif feed_type == "coingecko":
+        return coingecko_price(feed_cfg["coin_id"])
+    else:
+        raise ValueError(f"Unknown feed type: {feed_type}")
+
+
+# --- Main dispatcher ---
 
 def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     """Main dispatcher. Returns a price result dict.
 
-    Checks cache first (keyed by symbol+method+feed). Routes to the correct
-    adapter based on token_entry["pricing"]["method"].
+    Reads pricing.policy from the token entry, looks up the method from
+    pricing_policy.json, then routes to the correct adapter or hierarchy walker.
     """
     key = _cache_key(token_entry)
     if key in _price_cache:
@@ -53,49 +126,86 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     pricing = token_entry.get("pricing", {})
     if not isinstance(pricing, dict):
         pricing = {}
-    method = pricing.get("method", "")
+    policy_key = pricing.get("policy", "")
+    token_feeds = pricing.get("feeds", {})
+    if not isinstance(token_feeds, dict):
+        token_feeds = {}
+    expected_freq = pricing.get("expected_update_freq_hours")
+
+    feeds_registry = _load_feeds_registry()
+    policy = _load_pricing_policy()
+    policy_cfg = policy.get(policy_key, {})
+    method = policy_cfg.get("method", policy_key)
 
     if method == "par":
         result = par_price(token_entry, w3_eth)
-    elif method == "chainlink":
-        result = _price_chainlink_with_fallback(token_entry, w3_eth)
-    elif method == "kraken":
-        result = _price_kraken_with_fallback(token_entry)
-    elif method == "pyth":
-        feed_id = pricing.get("pyth_feed_id")
-        expected_freq = pricing.get("expected_update_freq_hours")
-        if feed_id:
-            try:
-                result = pyth_price(feed_id, expected_freq)
-            except Exception:
-                result = _unavailable(symbol)
-        else:
-            result = _unavailable(symbol)
-    elif method == "coingecko":
-        cg_id = pricing.get("coingecko_id")
-        if cg_id:
-            try:
-                result = coingecko_price(cg_id)
-            except Exception:
-                result = _unavailable(symbol)
-        else:
-            result = _unavailable(symbol)
-    elif method == "a1_exchange_rate":
+    elif method in ("oracle_hierarchy", "market_hierarchy"):
+        result = _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_eth, expected_freq)
+    elif method == "exchange_rate":
+        # A1: special exchange rate logic
         result = _a1_exchange_rate_price(token_entry)
     elif method == "curve_lp":
         result = _curve_lp_price(token_entry, w3_eth)
     else:
+        # manual_accrual (A3), pt_linear_amortisation (B), lp_decomposition (C),
+        # net_position (D) — these are handled by valuation.py, not pricing.py.
+        # If we reach here, it means no price feed is configured.
         result = _unavailable(symbol)
 
     _price_cache[key] = result
     return result
 
 
+# --- Generic hierarchy walker ---
+
+def _price_with_hierarchy(
+    symbol: str,
+    token_feeds: dict,
+    policy_cfg: dict,
+    feeds_registry: dict,
+    w3_eth: Web3 | None,
+    expected_freq: float | None,
+) -> dict:
+    """Walk the pricing hierarchy, trying each source in order.
+
+    Falls through on error or staleness. Returns the first fresh result,
+    or the best stale result if all sources are stale/failed.
+    """
+    hierarchy = policy_cfg.get("hierarchy", [])
+    stale_result = None
+
+    for source_type in hierarchy:
+        feed_key = token_feeds.get(source_type)
+        if not feed_key:
+            continue
+        feed_cfg = feeds_registry.get(feed_key)
+        if not feed_cfg:
+            continue
+        try:
+            result = _query_feed(feed_cfg, w3_eth, expected_freq)
+            if not result.get("stale_flag"):
+                return result
+            # Stale — save as fallback, note it, try next
+            if stale_result is None:
+                stale_result = result
+        except Exception:
+            continue
+
+    # All sources failed or stale
+    if stale_result:
+        stale_result["notes"] = f"WARNING: {stale_result.get('stale_flag', 'stale')}. No fresher source in hierarchy."
+        return stale_result
+
+    return _unavailable(symbol)
+
+
+# --- Par pricing with depeg check ---
+
 def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     """Category E par pricing.
 
-    Price = $1.00, then run Chainlink de-peg check if feed is configured.
-    Per Section 9.4: >0.5% deviation = minor, >2% = material.
+    Price = $1.00, then run depeg check using the depeg_hierarchy from
+    pricing_policy.json. Per Section 9.4: >0.5% deviation = minor, >2% = material.
     """
     result = {
         "price_usd": Decimal("1.00"),
@@ -111,46 +221,51 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     pricing = token_entry.get("pricing", {})
     if not isinstance(pricing, dict):
         pricing = {}
-    depeg_feed = pricing.get("depeg_check_feed")
-    pyth_feed = pricing.get("pyth_feed_id")
-    rs_symbol = pricing.get("redstone_symbol")
+    token_feeds = pricing.get("feeds", {})
+    if not isinstance(token_feeds, dict):
+        token_feeds = {}
 
-    if not depeg_feed and not pyth_feed and not rs_symbol:
+    feeds_registry = _load_feeds_registry()
+    policy = _load_pricing_policy()
+    policy_key = pricing.get("policy", "E_par")
+    policy_cfg = policy.get(policy_key, {})
+    depeg_hierarchy = policy_cfg.get("depeg_hierarchy", [])
+
+    if not depeg_hierarchy or not token_feeds:
         return result
 
-    # Try Chainlink → Pyth → Redstone for de-peg check
+    # Walk depeg hierarchy to find the oracle price
     oracle_price = None
-    try:
-        if depeg_feed and w3_eth:
-            cl_result = chainlink_price(depeg_feed, w3_eth)
-            oracle_price = cl_result["price_usd"]
-            result["oracle_updated_at"] = cl_result.get("oracle_updated_at")
-            result["staleness_hours"] = cl_result.get("staleness_hours")
-        elif pyth_feed:
-            pyth_result = pyth_price(pyth_feed)
-            oracle_price = pyth_result["price_usd"]
-            result["oracle_updated_at"] = pyth_result.get("oracle_updated_at")
-            result["staleness_hours"] = pyth_result.get("staleness_hours")
-        elif rs_symbol:
-            rs_result = redstone_price(rs_symbol)
-            oracle_price = rs_result["price_usd"]
-            result["oracle_updated_at"] = rs_result.get("oracle_updated_at")
-            result["staleness_hours"] = rs_result.get("staleness_hours")
-    except Exception as e:
-        result["notes"] = f"De-peg check failed: {e}"
-        return result
+    for source_type in depeg_hierarchy:
+        feed_key = token_feeds.get(source_type)
+        if not feed_key:
+            continue
+        feed_cfg = feeds_registry.get(feed_key)
+        if not feed_cfg:
+            continue
+        try:
+            check_result = _query_feed(feed_cfg, w3_eth)
+            oracle_price = check_result["price_usd"]
+            result["oracle_updated_at"] = check_result.get("oracle_updated_at")
+            result["staleness_hours"] = check_result.get("staleness_hours")
+            break
+        except Exception:
+            continue
 
     if oracle_price is None:
         return result
 
+    # Depeg thresholds from policy
+    minor_threshold = Decimal(str(policy_cfg.get("depeg_threshold_minor_pct", 0.5)))
+    material_threshold = Decimal(str(policy_cfg.get("depeg_threshold_material_pct", 2.0)))
     deviation = abs(oracle_price - Decimal("1")) * Decimal("100")
 
-    if deviation > Decimal("2"):
+    if deviation > material_threshold:
         result["price_usd"] = oracle_price
         result["price_source"] = "oracle (de-peg override)"
         result["depeg_flag"] = f"material_{deviation:.2f}%"
         result["notes"] = f"Material de-peg detected: {deviation:.2f}% deviation. Priced at oracle value per Section 9.4."
-    elif deviation > Decimal("0.5"):
+    elif deviation > minor_threshold:
         result["price_usd"] = oracle_price
         result["price_source"] = "oracle (de-peg override)"
         result["depeg_flag"] = f"minor_{deviation:.2f}%"
@@ -159,6 +274,8 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
 
     return result
 
+
+# --- Individual price adapters (unchanged) ---
 
 def chainlink_price(feed_address: str, w3: Web3, expected_freq_hours: float = None) -> dict:
     """Query a Chainlink AggregatorV3 feed.
@@ -353,7 +470,7 @@ def coingecko_price(coin_id: str) -> dict:
 def _curve_lp_price(token_entry: dict, w3_eth: Web3 | None) -> dict:
     """Category C: Curve LP token priced via get_virtual_price().
 
-    For stablecoin pools, virtual_price × $1 gives a good approximation.
+    For stablecoin pools, virtual_price * $1 gives a good approximation.
     """
     pricing = token_entry["pricing"]
     symbol = token_entry["symbol"]
@@ -392,7 +509,7 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
     Supports:
     - eUSX (Solana): eUSX/USX rate from vault, then USX price from Pyth
     - sUSDe (Ethereum): convertToAssets on ERC-4626, underlying USDe at par
-    - Other ERC-4626 vaults with coingecko_id fallback
+    - Other ERC-4626 vaults with coingecko fallback via feeds
     """
     pricing = token_entry["pricing"]
     symbol = token_entry["symbol"]
@@ -445,140 +562,24 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
         except Exception as e:
             pass  # fall through to CoinGecko
 
-    # Fallback: CoinGecko
-    cg_id = pricing.get("coingecko_id")
-    if cg_id:
-        try:
-            return coingecko_price(cg_id)
-        except Exception:
-            pass
+    # Fallback: CoinGecko via feeds registry
+    feeds = pricing.get("feeds", {})
+    if isinstance(feeds, dict):
+        cg_key = feeds.get("coingecko")
+        if cg_key:
+            feed_cfg = _load_feeds_registry().get(cg_key)
+            if feed_cfg:
+                try:
+                    return coingecko_price(feed_cfg["coin_id"])
+                except Exception:
+                    pass
 
     result = _unavailable(symbol)
     result["notes"] = f"A1 exchange rate: no handler for {symbol}"
     return result
 
 
-# --- Internal fallback helpers ---
-
-def _price_chainlink_with_fallback(token_entry: dict, w3_eth: Web3 | None) -> dict:
-    """Category E/A2 oracle-priced: Chainlink → Pyth → Redstone → CoinGecko.
-
-    If Chainlink returns a stale price (>2x expected update frequency),
-    falls through to Pyth/Redstone/CoinGecko before accepting the stale result.
-    """
-    pricing = token_entry["pricing"]
-    expected_freq = pricing.get("expected_update_freq_hours")
-
-    # Try Chainlink
-    if pricing.get("chainlink_feed"):
-        feed_chain = pricing.get("chainlink_feed_chain")
-        try:
-            if feed_chain and feed_chain != "ethereum":
-                from evm import get_web3
-                w3_chain = get_web3(feed_chain)
-                result = chainlink_price(pricing["chainlink_feed"], w3_chain, expected_freq)
-            elif w3_eth:
-                result = chainlink_price(pricing["chainlink_feed"], w3_eth, expected_freq)
-            else:
-                result = None
-
-            # If not stale, return it
-            if result and not result.get("stale_flag"):
-                return result
-
-            # If stale, note it and try fallbacks
-            if result and result.get("stale_flag"):
-                stale_note = result["stale_flag"]
-
-                # Try Pyth fallback
-                if pricing.get("pyth_feed_id"):
-                    try:
-                        pyth_result = pyth_price(pricing["pyth_feed_id"], expected_freq)
-                        if not pyth_result.get("stale_flag"):
-                            pyth_result["notes"] = f"Chainlink was stale ({stale_note}), using Pyth instead"
-                            pyth_result["price_source"] = "pyth (chainlink_stale_fallback)"
-                            return pyth_result
-                    except Exception:
-                        pass
-
-                # Try Redstone fallback
-                if pricing.get("redstone_symbol"):
-                    try:
-                        rs_result = redstone_price(pricing["redstone_symbol"])
-                        rs_result["notes"] = f"Chainlink was stale ({stale_note}), using Redstone instead"
-                        rs_result["price_source"] = "redstone (chainlink_stale_fallback)"
-                        return rs_result
-                    except Exception:
-                        pass
-
-                # Try CoinGecko fallback
-                if pricing.get("coingecko_id"):
-                    try:
-                        cg_result = coingecko_price(pricing["coingecko_id"])
-                        cg_result["notes"] = f"Chainlink was stale ({stale_note}), using CoinGecko instead"
-                        cg_result["price_source"] = "coingecko (chainlink_stale_fallback)"
-                        return cg_result
-                    except Exception:
-                        pass
-
-                # All fallbacks failed or stale — return the stale Chainlink price with flag
-                result["notes"] = f"WARNING: {stale_note}. No fresher fallback available."
-                return result
-
-        except Exception:
-            pass  # Chainlink unreachable — fall through to Pyth
-
-    # Try Pyth (primary, not triggered by staleness fallback above)
-    if pricing.get("pyth_feed_id"):
-        try:
-            return pyth_price(pricing["pyth_feed_id"], expected_freq)
-        except Exception:
-            pass
-
-    # Try Redstone
-    if pricing.get("redstone_symbol"):
-        try:
-            return redstone_price(pricing["redstone_symbol"])
-        except Exception:
-            pass
-
-    # Try CoinGecko
-    if pricing.get("coingecko_id"):
-        try:
-            return coingecko_price(pricing["coingecko_id"])
-        except Exception:
-            pass
-
-    return _unavailable(token_entry.get("symbol", "UNKNOWN"))
-
-
-def _price_kraken_with_fallback(token_entry: dict) -> dict:
-    """Category F: Kraken → Redstone → CoinGecko fallback."""
-    pricing = token_entry["pricing"]
-
-    # Try Kraken
-    if pricing.get("kraken_pair"):
-        try:
-            return kraken_price(pricing["kraken_pair"])
-        except Exception:
-            pass
-
-    # Try Redstone
-    if pricing.get("redstone_symbol"):
-        try:
-            return redstone_price(pricing["redstone_symbol"])
-        except Exception:
-            pass
-
-    # Try CoinGecko
-    if pricing.get("coingecko_id"):
-        try:
-            return coingecko_price(pricing["coingecko_id"])
-        except Exception:
-            pass
-
-    return _unavailable(token_entry.get("symbol", "UNKNOWN"))
-
+# --- Internal helpers ---
 
 def _unavailable(symbol: str) -> dict:
     """Return a result indicating price is unavailable."""
@@ -608,12 +609,18 @@ def _batch_coingecko(tokens: dict[str, dict]) -> dict[str, dict]:
     Returns:
         {symbol: price_result} for successfully priced tokens.
     """
-    # Collect CoinGecko IDs
-    cg_map = {}  # coingecko_id -> symbol
+    feeds_registry = _load_feeds_registry()
+    cg_map = {}  # coingecko coin_id -> symbol
     for symbol, entry in tokens.items():
-        cg_id = entry.get("pricing", {}).get("coingecko_id")
-        if cg_id:
-            cg_map[cg_id] = symbol
+        feeds = entry.get("pricing", {}).get("feeds", {})
+        if not isinstance(feeds, dict):
+            continue
+        cg_key = feeds.get("coingecko")
+        if cg_key:
+            feed_cfg = feeds_registry.get(cg_key, {})
+            cg_id = feed_cfg.get("coin_id")
+            if cg_id:
+                cg_map[cg_id] = symbol
 
     if not cg_map:
         return {}
@@ -660,7 +667,7 @@ def get_prices_concurrent(
     """Price all tokens concurrently with CoinGecko batching.
 
     Strategy:
-    1. Batch all CoinGecko-eligible tokens into one API call
+    1. Batch all CoinGecko-only tokens into one API call
     2. Pre-populate cache with batched results
     3. Price remaining tokens (Chainlink, Kraken, Pyth, par, A1) concurrently
 
@@ -674,13 +681,16 @@ def get_prices_concurrent(
     """
     results = {}
 
-    # Step 1: Identify CoinGecko-only tokens (method=coingecko or fallback)
+    # Step 1: Identify CoinGecko-only tokens (tokens whose only feed is coingecko)
     # and batch them in one call
     cg_tokens = {}
     non_cg_tokens = {}
     for symbol, entry in unique_tokens.items():
-        method = entry.get("pricing", {}).get("method", "")
-        if method == "coingecko":
+        feeds = entry.get("pricing", {}).get("feeds", {})
+        if not isinstance(feeds, dict):
+            feeds = {}
+        # Tokens whose primary source is coingecko (no higher-priority feeds)
+        if "coingecko" in feeds and "kraken" not in feeds and "chainlink" not in feeds and "pyth" not in feeds:
             cg_tokens[symbol] = entry
         else:
             non_cg_tokens[symbol] = entry

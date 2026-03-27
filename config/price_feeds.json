@@ -1,0 +1,317 @@
+{
+  "_description": "Registry of all unique price feeds used across tokens.json. One entry per unique feed, grouped by type. Referenced by tokens via their pricing config.",
+
+  "chainlink": {
+    "chainlink_usdt_usd": {
+      "type": "chainlink",
+      "address": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
+      "chain": "ethereum",
+      "description": "USDT/USD price feed (AggregatorV3). Used for USDT and USDT0 across all chains."
+    },
+    "chainlink_usdc_depeg": {
+      "type": "chainlink",
+      "address": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+      "chain": "ethereum",
+      "description": "USDC/USD price feed (AggregatorV3). Used as depeg_check_feed for par-priced USDC on all chains."
+    },
+    "chainlink_dai_depeg": {
+      "type": "chainlink",
+      "address": "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
+      "chain": "ethereum",
+      "description": "DAI/USD price feed (AggregatorV3). Used as depeg_check_feed for par-priced DAI on Ethereum."
+    },
+    "chainlink_usde_usd": {
+      "type": "chainlink",
+      "address": "0xa569d910839Ae8C109eDAA97c4eBB6a00b60C10c",
+      "chain": "ethereum",
+      "description": "USDe/USD price feed (AggregatorV3). Primary for USDe on Ethereum and Plasma. Also used for Aave Plasma USDe aToken."
+    },
+    "midas_mfone_oracle": {
+      "type": "chainlink",
+      "address": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
+      "chain": "ethereum",
+      "description": "mF-ONE/USD Midas Chainlink-style oracle. NAV updated daily. Primary for mF-ONE (A2).",
+      "issuer_nav_url": "https://midas.app/mfone",
+      "issuer_nav_reports": "https://drive.google.com/drive/folders/122vggonAVEp0Q5Y66-R41c6UIZW4mFIY"
+    },
+    "midas_msyrupusdp_oracle": {
+      "type": "chainlink",
+      "address": "0x337d914ff6622510FC2C63ac59c1D07983895241",
+      "chain": "ethereum",
+      "description": "msyrupUSDp/USD Midas Chainlink-style oracle. NAV updated 1-2x/week (~168h)."
+    },
+    "midas_mhyper_oracle": {
+      "type": "chainlink",
+      "address": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
+      "chain": "plasma",
+      "description": "mHYPER/USD Midas Chainlink-style oracle on Plasma. NAV updated 1-2x/week (~168h)."
+    }
+  },
+
+  "pyth": {
+    "pyth_usdt_usd": {
+      "type": "pyth",
+      "feed_id": "0x2b89b9dc8fdf9f34592c9f48b082e8e61d65f4d69e2c87a74d6c5c4c4b207a3e",
+      "description": "USDT/USD Pyth price feed. Fallback for Chainlink USDT/USD across all chains."
+    },
+    "pyth_uscc_usd": {
+      "type": "pyth",
+      "feed_id": "0x5d73a5953dc86c4773adc778c30e8a6dfc94c5c3a74d7ebb56dd5e70350f044a",
+      "description": "USCC/USD Pyth price feed. Primary for USCC (A2) on Ethereum and Solana. Also used for Aave Horizon USCC aToken."
+    },
+    "pyth_syrupusdc_usd": {
+      "type": "pyth",
+      "feed_id": "0xe616297dab48626eaacf6d030717b25823b13ae6520b83f4735bf8deec8e2c9a",
+      "description": "syrupUSDC/USD Pyth price feed. Primary for syrupUSDC (A2) on Ethereum, Arbitrum, Base, and Solana. Also used for Aave Base syrupUSDC aToken."
+    },
+    "pyth_onyc_usd": {
+      "type": "pyth",
+      "feed_id": "0xbabbfcc7f46b6e7df73adcccece8b6782408ed27c4e77f35ba39a449440170ab",
+      "description": "ONyc/USD Pyth price feed. Primary for ONyc (A2) on Solana. Weekly NAV updates (~168h)."
+    },
+    "pyth_usx_usd": {
+      "type": "pyth",
+      "feed_id": "0x85d11b381ccc3e3021b7f84fa757cc01b9b5b5b1b899192b28bae7429e92926b",
+      "description": "USX/USD Pyth price feed. Primary for USX (E) on Solana. Also used as underlying price for eUSX (A1)."
+    },
+    "pyth_rlp_usd": {
+      "type": "pyth",
+      "feed_id": "0x7265d5cf8ee0e7b5266f75ff19c42c5b7697a9756c9304aa78b6be4fbb8d823d",
+      "description": "RLP/USD Pyth price feed. Primary for RLP (A2) on Ethereum."
+    },
+    "pyth_usdd_usd": {
+      "type": "pyth",
+      "feed_id": "0x6d20210495d6518787b72e4ad06bc4df21e68d89a802cf6bced2fca6c29652a6",
+      "description": "USDD/USD Pyth price feed. Primary for USDD (E) on Ethereum."
+    },
+    "pyth_pyusd_usd": {
+      "type": "pyth",
+      "feed_id": "0x150ac9b959aee0051e4091f0ef5216d941f590e1c5e7f91cf7635b5c11628c0e",
+      "description": "PYUSD/USD Pyth price feed. Depeg monitoring fallback for par-priced PYUSD on Ethereum. No free Chainlink PYUSD/USD feed."
+    },
+    "pyth_ausd_usd": {
+      "type": "pyth",
+      "feed_id": "0xd9912df360b5b7f21a122f15bdd5e27f62ce5e72bd316c291f7c86620e07fb2a",
+      "description": "AUSD/USD Pyth price feed. Depeg monitoring for par-priced AUSD on Ethereum."
+    },
+    "pyth_rlusd_usd": {
+      "type": "pyth",
+      "feed_id": "0x65652029e7acde632e80192dcaa6ea88e61d84a4c78a982a63e98f4bbcb288d5",
+      "description": "RLUSD/USD Pyth price feed. Depeg monitoring for par-priced RLUSD on Ethereum and Solana. Also used for Aave Horizon RLUSD debt token."
+    }
+  },
+
+  "redstone": {
+    "redstone_usdt": {
+      "type": "redstone",
+      "symbol": "USDT",
+      "description": "USDT Redstone price feed. Gas-cost fallback for USDT across all chains."
+    },
+    "redstone_usdc": {
+      "type": "redstone",
+      "symbol": "USDC",
+      "description": "USDC Redstone price feed. Gas-cost fallback for par-priced USDC across all chains."
+    },
+    "redstone_dai": {
+      "type": "redstone",
+      "symbol": "DAI",
+      "description": "DAI Redstone price feed. Gas-cost fallback for par-priced DAI on Ethereum."
+    },
+    "redstone_pyusd": {
+      "type": "redstone",
+      "symbol": "PYUSD",
+      "description": "PYUSD Redstone price feed. Used for par-priced PYUSD on Ethereum and Solana."
+    },
+    "redstone_usde": {
+      "type": "redstone",
+      "symbol": "USDe",
+      "description": "USDe Redstone price feed. Fallback for USDe on Ethereum and Plasma."
+    },
+    "redstone_susde": {
+      "type": "redstone",
+      "symbol": "sUSDe",
+      "description": "sUSDe Redstone price feed. Fallback for sUSDe on Ethereum and Plasma."
+    },
+    "redstone_eth": {
+      "type": "redstone",
+      "symbol": "ETH",
+      "description": "ETH Redstone price feed. Fallback for native ETH on Ethereum, Arbitrum, and Base."
+    },
+    "redstone_arb": {
+      "type": "redstone",
+      "symbol": "ARB",
+      "description": "ARB Redstone price feed. Fallback for ARB governance token on Arbitrum."
+    },
+    "redstone_pendle": {
+      "type": "redstone",
+      "symbol": "PENDLE",
+      "description": "PENDLE Redstone price feed. Fallback for PENDLE governance token on Ethereum."
+    },
+    "redstone_sol": {
+      "type": "redstone",
+      "symbol": "SOL",
+      "description": "SOL Redstone price feed. Fallback for native SOL on Solana."
+    },
+    "redstone_avax": {
+      "type": "redstone",
+      "symbol": "AVAX",
+      "description": "AVAX Redstone price feed. Fallback for native AVAX on Avalanche."
+    },
+    "redstone_hype": {
+      "type": "redstone",
+      "symbol": "HYPE",
+      "description": "HYPE Redstone price feed. Fallback for native HYPE on HyperEVM."
+    },
+    "redstone_xpl": {
+      "type": "redstone",
+      "symbol": "XPL",
+      "description": "XPL Redstone price feed. Fallback for native XPL and WXPL on Plasma."
+    }
+  },
+
+  "kraken": {
+    "kraken_eth_usd": {
+      "type": "kraken",
+      "pair": "ETHUSD",
+      "description": "ETH/USD Kraken ticker. Primary for native ETH on Ethereum, Arbitrum, and Base."
+    },
+    "kraken_arb_usd": {
+      "type": "kraken",
+      "pair": "ARBUSD",
+      "description": "ARB/USD Kraken ticker. Primary for ARB governance token on Arbitrum."
+    },
+    "kraken_morpho_usd": {
+      "type": "kraken",
+      "pair": "MORPHOUSD",
+      "description": "MORPHO/USD Kraken ticker. Primary for MORPHO governance token on Ethereum, Arbitrum, and Base."
+    },
+    "kraken_pendle_usd": {
+      "type": "kraken",
+      "pair": "PENDLEUSD",
+      "description": "PENDLE/USD Kraken ticker. Primary for PENDLE governance token on Ethereum."
+    },
+    "kraken_sol_usd": {
+      "type": "kraken",
+      "pair": "SOLUSD",
+      "description": "SOL/USD Kraken ticker. Primary for native SOL on Solana."
+    },
+    "kraken_avax_usd": {
+      "type": "kraken",
+      "pair": "AVAXUSD",
+      "description": "AVAX/USD Kraken ticker. Primary for native AVAX on Avalanche."
+    },
+    "kraken_hype_usd": {
+      "type": "kraken",
+      "pair": "HYPEUSD",
+      "description": "HYPE/USD Kraken ticker. Primary for native HYPE on HyperEVM."
+    },
+    "kraken_xpl_usd": {
+      "type": "kraken",
+      "pair": "XPLUSD",
+      "description": "XPL/USD Kraken ticker. Primary for native XPL and WXPL on Plasma."
+    }
+  },
+
+  "coingecko": {
+    "coingecko_ethereum": {
+      "type": "coingecko",
+      "coin_id": "ethereum",
+      "description": "Ethereum (ETH). Fallback for native ETH on Ethereum, Arbitrum, and Base."
+    },
+    "coingecko_tether": {
+      "type": "coingecko",
+      "coin_id": "tether",
+      "description": "Tether USD (USDT). Last-resort fallback for USDT/USDT0 across all chains."
+    },
+    "coingecko_arbitrum": {
+      "type": "coingecko",
+      "coin_id": "arbitrum",
+      "description": "Arbitrum (ARB). Fallback for ARB governance token."
+    },
+    "coingecko_morpho": {
+      "type": "coingecko",
+      "coin_id": "morpho",
+      "description": "Morpho (MORPHO). Fallback for MORPHO governance token on Ethereum, Arbitrum, and Base."
+    },
+    "coingecko_pendle": {
+      "type": "coingecko",
+      "coin_id": "pendle",
+      "description": "Pendle (PENDLE). Fallback for PENDLE governance token on Ethereum."
+    },
+    "coingecko_solana": {
+      "type": "coingecko",
+      "coin_id": "solana",
+      "description": "Solana (SOL). Fallback for native SOL on Solana."
+    },
+    "coingecko_avalanche": {
+      "type": "coingecko",
+      "coin_id": "avalanche-2",
+      "description": "Avalanche (AVAX). Fallback for native AVAX on Avalanche."
+    },
+    "coingecko_hyperliquid": {
+      "type": "coingecko",
+      "coin_id": "hyperliquid",
+      "description": "Hyperliquid (HYPE). Fallback for native HYPE on HyperEVM."
+    },
+    "coingecko_plasma": {
+      "type": "coingecko",
+      "coin_id": "plasma",
+      "description": "Plasma (XPL). Fallback for native XPL and WXPL on Plasma."
+    },
+    "coingecko_resolv_rlp": {
+      "type": "coingecko",
+      "coin_id": "resolv-rlp",
+      "description": "Resolv Liquidity Provider Token (RLP). Fallback for RLP (A2) on Ethereum."
+    },
+    "coingecko_superstate_uscc": {
+      "type": "coingecko",
+      "coin_id": "superstate-uscc",
+      "description": "Superstate Crypto Carry Fund (USCC). Fallback for USCC (A2) on Ethereum and Solana."
+    },
+    "coingecko_syrupusdc": {
+      "type": "coingecko",
+      "coin_id": "syrupusdc",
+      "description": "Syrup USDC (syrupUSDC). Fallback for syrupUSDC (A2) on Ethereum, Arbitrum, Base, and Solana."
+    },
+    "coingecko_ethena_usde": {
+      "type": "coingecko",
+      "coin_id": "ethena-usde",
+      "description": "Ethena USDe. Fallback for USDe (E) on Ethereum and Plasma. Also for Aave Plasma USDe aToken."
+    },
+    "coingecko_ethena_staked_usde": {
+      "type": "coingecko",
+      "coin_id": "ethena-staked-usde",
+      "description": "Ethena Staked USDe (sUSDe). Fallback for sUSDe (A1) on Ethereum and Plasma."
+    },
+    "coingecko_usdd": {
+      "type": "coingecko",
+      "coin_id": "usdd",
+      "description": "USDD. Fallback for USDD (E) on Ethereum."
+    },
+    "coingecko_reservoir": {
+      "type": "coingecko",
+      "coin_id": "reservoir",
+      "description": "Reservoir (DAM). Primary for DAM (F) on Ethereum."
+    },
+    "coingecko_giza": {
+      "type": "coingecko",
+      "coin_id": "giza",
+      "description": "Giza (GIZA). Primary for GIZA (F) on Base."
+    },
+    "coingecko_ripple_usd": {
+      "type": "coingecko",
+      "coin_id": "ripple-usd",
+      "description": "Ripple USD (RLUSD). Fallback for RLUSD (E) on Ethereum and Solana."
+    },
+    "coingecko_agora_dollar": {
+      "type": "coingecko",
+      "coin_id": "agora-dollar",
+      "description": "Agora Dollar (AUSD). Fallback for AUSD (E) on Ethereum."
+    },
+    "coingecko_usdg": {
+      "type": "coingecko",
+      "coin_id": "usdg",
+      "description": "USDG. Primary for USDG (E) on Solana (received as Kamino farming rewards)."
+    }
+  }
+}

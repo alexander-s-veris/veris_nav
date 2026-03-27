@@ -1,9 +1,9 @@
 """
 Valuation Policy compliance tests.
 
-Validates that config/tokens.json, config/contracts.json, and the
-pricing/valuation code comply with the Valuation Policy v1.0
-(docs/reference/23-03-2026_Veris_Capital_AMC_Valuation_Policy DRAFT_v.1.0.pdf).
+Validates that config/tokens.json, config/contracts.json, config/price_feeds.json,
+config/pricing_policy.json, and the pricing/valuation code comply with the
+Valuation Policy v1.0.
 
 Tests are strict: any token with incorrect categorisation, missing
 fallback sources, or wrong pricing methodology will fail.
@@ -24,6 +24,23 @@ def load_json(filename):
         return json.load(f)
 
 
+def iter_tokens(tokens):
+    """Yield (chain, addr, entry) for every real token entry in tokens.json."""
+    for chain, chain_tokens in tokens.items():
+        if chain.startswith("_"):
+            continue
+        if not isinstance(chain_tokens, dict):
+            continue
+        for addr, entry in chain_tokens.items():
+            if not isinstance(entry, dict):
+                continue
+            yield chain, addr, entry
+
+
+# ---------------------------------------------------------------------------
+# 1. TestCategoryClassification — valid category, symbol, decimals
+# ---------------------------------------------------------------------------
+
 class TestCategoryClassification(unittest.TestCase):
     """Section 5: Every token must have a valid category."""
 
@@ -33,37 +50,107 @@ class TestCategoryClassification(unittest.TestCase):
     def test_all_tokens_have_valid_category(self):
         """Every token entry must have category in {A1, A2, A3, B, C, D, E, F}."""
         valid_categories = {"A1", "A2", "A3", "B", "C", "D", "E", "F"}
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_"):
-                continue
-            if not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if not isinstance(entry, dict):
-                    continue
-                cat = entry.get("category")
-                self.assertIn(
-                    cat, valid_categories,
-                    f"{chain}.{entry.get('symbol', addr)}: category '{cat}' not in {valid_categories}"
-                )
+        for chain, addr, entry in iter_tokens(self.tokens):
+            cat = entry.get("category")
+            self.assertIn(
+                cat, valid_categories,
+                f"{chain}.{entry.get('symbol', addr)}: category '{cat}' not in {valid_categories}"
+            )
 
     def test_all_tokens_have_symbol_and_decimals(self):
         """Every token must have symbol and decimals."""
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_"):
-                continue
-            if not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if not isinstance(entry, dict):
-                    continue
-                self.assertIn("symbol", entry,
-                              f"{chain}.{addr}: missing 'symbol'")
-                # Native tokens and some special entries may not have decimals in pricing
-                # but should have decimals for balance conversion
-                self.assertIn("decimals", entry,
-                              f"{chain}.{entry.get('symbol', addr)}: missing 'decimals'")
+        for chain, addr, entry in iter_tokens(self.tokens):
+            self.assertIn("symbol", entry,
+                          f"{chain}.{addr}: missing 'symbol'")
+            self.assertIn("decimals", entry,
+                          f"{chain}.{entry.get('symbol', addr)}: missing 'decimals'")
 
+
+# ---------------------------------------------------------------------------
+# 2. TestTokenPricingPolicy — every token has a valid pricing.policy
+# ---------------------------------------------------------------------------
+
+class TestTokenPricingPolicy(unittest.TestCase):
+    """Every token must have a pricing.policy field that exists in pricing_policy.json."""
+
+    def setUp(self):
+        self.tokens = load_json("tokens.json")
+        self.policies = load_json("pricing_policy.json")
+
+    def test_all_tokens_have_pricing_policy(self):
+        """Every token must have a non-empty pricing.policy field."""
+        for chain, addr, entry in iter_tokens(self.tokens):
+            pricing = entry.get("pricing", {})
+            if not isinstance(pricing, dict):
+                self.fail(f"{chain}.{entry.get('symbol', addr)}: pricing is not a dict")
+            policy = pricing.get("policy")
+            self.assertIsNotNone(
+                policy,
+                f"{chain}.{entry.get('symbol', addr)}: missing pricing.policy"
+            )
+
+    def test_pricing_policy_exists_in_policy_config(self):
+        """Every pricing.policy value must be a key in pricing_policy.json."""
+        # Valid policy keys (exclude non-policy keys like divergence_tolerances, _doc)
+        valid_policies = {k for k in self.policies.keys()
+                         if not k.startswith("_") and k != "divergence_tolerances"}
+        for chain, addr, entry in iter_tokens(self.tokens):
+            pricing = entry.get("pricing", {})
+            if not isinstance(pricing, dict):
+                continue
+            policy = pricing.get("policy")
+            if policy is None:
+                continue  # Caught by test above
+            self.assertIn(
+                policy, valid_policies,
+                f"{chain}.{entry.get('symbol', addr)}: policy '{policy}' "
+                f"not found in pricing_policy.json (valid: {sorted(valid_policies)})"
+            )
+
+
+# ---------------------------------------------------------------------------
+# 3. TestFeedReferences — every feed key in tokens.json exists in price_feeds.json
+# ---------------------------------------------------------------------------
+
+class TestFeedReferences(unittest.TestCase):
+    """Every feed key referenced in tokens.json pricing.feeds must exist in price_feeds.json."""
+
+    def setUp(self):
+        self.tokens = load_json("tokens.json")
+        self.price_feeds = load_json("price_feeds.json")
+        # Build flat set of all valid feed keys across all feed type groups
+        self.all_feed_keys = set()
+        for group_key, group in self.price_feeds.items():
+            if group_key.startswith("_"):
+                continue
+            if isinstance(group, dict):
+                for feed_key in group:
+                    self.all_feed_keys.add(feed_key)
+
+    def test_all_feed_references_resolve(self):
+        """Every feed key in pricing.feeds must exist in price_feeds.json."""
+        for chain, addr, entry in iter_tokens(self.tokens):
+            pricing = entry.get("pricing", {})
+            if not isinstance(pricing, dict):
+                continue
+            feeds = pricing.get("feeds", {})
+            if not isinstance(feeds, dict):
+                continue
+            sym = entry.get("symbol", addr)
+            for feed_type, feed_key in feeds.items():
+                if feed_type.startswith("_"):
+                    continue
+                self.assertIn(
+                    feed_key, self.all_feed_keys,
+                    f"{chain}.{sym}: feed '{feed_type}' references '{feed_key}' "
+                    f"which does not exist in price_feeds.json"
+                )
+
+
+# ---------------------------------------------------------------------------
+# 4. TestA1Methodology — A1 tokens need policy=A1, exchange_rate tokens need
+#    underlying + exchange_rate_function
+# ---------------------------------------------------------------------------
 
 class TestA1Methodology(unittest.TestCase):
     """Section 6.1: A1 tokens must use smart contract exchange rate."""
@@ -71,35 +158,46 @@ class TestA1Methodology(unittest.TestCase):
     def setUp(self):
         self.tokens = load_json("tokens.json")
 
-    def test_a1_tokens_use_exchange_rate_or_equivalent(self):
-        """A1 tokens must use a1_exchange_rate, or have convertToAssets-compatible pricing."""
-        valid_a1_methods = {"a1_exchange_rate"}
-        # Some A1 tokens (aTokens) use oracle pricing for the underlying — this is
-        # the "layered methodology" from Section 6. The aToken balance already
-        # includes accrued interest; the underlying is priced per its own category.
-        # These are acceptable as A1 if they have underlying_symbol in contracts.json.
-        acceptable_a1_fallback_methods = {"pyth", "chainlink", "coingecko", "par"}
+    def _get_a1_tokens(self):
+        return [(c, e.get("symbol", a), e)
+                for c, a, e in iter_tokens(self.tokens)
+                if e.get("category") == "A1"]
 
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_"):
-                continue
-            if not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if not isinstance(entry, dict) or entry.get("category") != "A1":
-                    continue
-                method = entry.get("pricing", {}).get("method", "")
-                sym = entry.get("symbol", addr)
-                if method in valid_a1_methods:
-                    continue
-                # aTokens and similar: priced via underlying token's method
-                if method in acceptable_a1_fallback_methods:
-                    continue
-                self.fail(
-                    f"{chain}.{sym}: A1 token uses method '{method}', "
-                    f"expected one of {valid_a1_methods} or layered pricing"
+    def test_a1_policy_is_a1(self):
+        """A1 tokens must have pricing.policy = 'A1'."""
+        for chain, sym, entry in self._get_a1_tokens():
+            policy = entry.get("pricing", {}).get("policy")
+            self.assertEqual(
+                policy, "A1",
+                f"{chain}.{sym}: A1 token has policy '{policy}', expected 'A1'"
+            )
+
+    def test_a1_exchange_rate_tokens_have_underlying(self):
+        """A1 tokens with exchange_rate_function must have underlying."""
+        for chain, sym, entry in self._get_a1_tokens():
+            pricing = entry.get("pricing", {})
+            if "exchange_rate_function" in pricing:
+                self.assertIn(
+                    "underlying", pricing,
+                    f"{chain}.{sym}: A1 token has exchange_rate_function but no underlying"
                 )
 
+    def test_a1_exchange_rate_tokens_have_function(self):
+        """A1 tokens with exchange_rate_contract must have exchange_rate_function."""
+        for chain, sym, entry in self._get_a1_tokens():
+            pricing = entry.get("pricing", {})
+            if "exchange_rate_contract" in pricing:
+                self.assertIn(
+                    "exchange_rate_function", pricing,
+                    f"{chain}.{sym}: A1 token has exchange_rate_contract "
+                    f"but no exchange_rate_function"
+                )
+
+
+# ---------------------------------------------------------------------------
+# 5. TestA2Methodology — A2 tokens need policy=A2, staleness threshold,
+#    at least one oracle feed
+# ---------------------------------------------------------------------------
 
 class TestA2Methodology(unittest.TestCase):
     """Section 6.2: A2 tokens must use oracle hierarchy with staleness thresholds."""
@@ -108,29 +206,21 @@ class TestA2Methodology(unittest.TestCase):
         self.tokens = load_json("tokens.json")
 
     def _get_a2_tokens(self):
-        result = []
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_"):
-                continue
-            if not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if isinstance(entry, dict) and entry.get("category") == "A2":
-                    result.append((chain, entry.get("symbol", addr), entry))
-        return result
+        return [(c, e.get("symbol", a), e)
+                for c, a, e in iter_tokens(self.tokens)
+                if e.get("category") == "A2"]
 
-    def test_a2_primary_is_oracle(self):
-        """A2 primary must be chainlink or pyth (oracle-based)."""
-        valid_primary = {"chainlink", "pyth"}
+    def test_a2_policy_is_a2(self):
+        """A2 tokens must have pricing.policy = 'A2'."""
         for chain, sym, entry in self._get_a2_tokens():
-            method = entry.get("pricing", {}).get("method", "")
-            self.assertIn(
-                method, valid_primary,
-                f"{chain}.{sym}: A2 primary method '{method}' not in {valid_primary}"
+            policy = entry.get("pricing", {}).get("policy")
+            self.assertEqual(
+                policy, "A2",
+                f"{chain}.{sym}: A2 token has policy '{policy}', expected 'A2'"
             )
 
     def test_a2_has_staleness_threshold(self):
-        """Every A2 token must have expected_update_freq_hours configured."""
+        """Every A2 token must have expected_update_freq_hours > 0."""
         for chain, sym, entry in self._get_a2_tokens():
             freq = entry.get("pricing", {}).get("expected_update_freq_hours")
             self.assertIsNotNone(
@@ -142,26 +232,22 @@ class TestA2Methodology(unittest.TestCase):
                 f"{chain}.{sym}: expected_update_freq_hours must be > 0"
             )
 
-    def test_a2_chainlink_primary_has_feed(self):
-        """A2 tokens with chainlink method must have chainlink_feed."""
+    def test_a2_has_at_least_one_oracle_feed(self):
+        """A2 tokens must have at least one oracle feed (chainlink or pyth) in feeds."""
         for chain, sym, entry in self._get_a2_tokens():
-            pricing = entry.get("pricing", {})
-            if pricing.get("method") == "chainlink":
-                self.assertIn(
-                    "chainlink_feed", pricing,
-                    f"{chain}.{sym}: A2 chainlink method but no chainlink_feed"
-                )
+            feeds = entry.get("pricing", {}).get("feeds", {})
+            has_chainlink = "chainlink" in feeds
+            has_pyth = "pyth" in feeds
+            self.assertTrue(
+                has_chainlink or has_pyth,
+                f"{chain}.{sym}: A2 token must have at least one oracle feed "
+                f"(chainlink or pyth) in pricing.feeds"
+            )
 
-    def test_a2_pyth_primary_has_feed_id(self):
-        """A2 tokens with pyth method must have pyth_feed_id."""
-        for chain, sym, entry in self._get_a2_tokens():
-            pricing = entry.get("pricing", {})
-            if pricing.get("method") == "pyth":
-                self.assertIn(
-                    "pyth_feed_id", pricing,
-                    f"{chain}.{sym}: A2 pyth method but no pyth_feed_id"
-                )
 
+# ---------------------------------------------------------------------------
+# 6. TestA3Methodology — A3 tokens need policy=A3 (not A1)
+# ---------------------------------------------------------------------------
 
 class TestA3Methodology(unittest.TestCase):
     """Section 6.3: A3 tokens use manual accrual, on-chain TP is cross-ref only."""
@@ -169,21 +255,27 @@ class TestA3Methodology(unittest.TestCase):
     def setUp(self):
         self.tokens = load_json("tokens.json")
 
-    def test_a3_not_using_exchange_rate(self):
-        """A3 tokens must NOT use a1_exchange_rate as primary."""
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_") or not isinstance(chain_tokens, dict):
+    def test_a3_policy_is_a3(self):
+        """A3 tokens must have pricing.policy = 'A3', NOT 'A1'."""
+        for chain, addr, entry in iter_tokens(self.tokens):
+            if entry.get("category") != "A3":
                 continue
-            for addr, entry in chain_tokens.items():
-                if not isinstance(entry, dict) or entry.get("category") != "A3":
-                    continue
-                method = entry.get("pricing", {}).get("method", "")
-                self.assertNotEqual(
-                    method, "a1_exchange_rate",
-                    f"{chain}.{entry.get('symbol')}: A3 must use manual accrual, "
-                    f"not a1_exchange_rate. On-chain TP is cross-reference only (Section 6.3)."
-                )
+            policy = entry.get("pricing", {}).get("policy")
+            sym = entry.get("symbol", addr)
+            self.assertEqual(
+                policy, "A3",
+                f"{chain}.{sym}: A3 token has policy '{policy}', expected 'A3'"
+            )
+            self.assertNotEqual(
+                policy, "A1",
+                f"{chain}.{sym}: A3 must use manual accrual, not A1 exchange rate. "
+                f"On-chain TP is cross-reference only (Section 6.3)."
+            )
 
+
+# ---------------------------------------------------------------------------
+# 7. TestBMethodology — B tokens need policy=B, underlying, maturity
+# ---------------------------------------------------------------------------
 
 class TestBMethodology(unittest.TestCase):
     """Section 6.4: PT tokens use linear amortisation, not mark-to-market."""
@@ -191,49 +283,42 @@ class TestBMethodology(unittest.TestCase):
     def setUp(self):
         self.tokens = load_json("tokens.json")
 
-    def test_b_tokens_use_linear_amortisation(self):
-        """Category B tokens must use pt_linear_amortisation method."""
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_") or not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if not isinstance(entry, dict) or entry.get("category") != "B":
-                    continue
-                method = entry.get("pricing", {}).get("method", "")
-                self.assertEqual(
-                    method, "pt_linear_amortisation",
-                    f"{chain}.{entry.get('symbol')}: Category B must use "
-                    f"pt_linear_amortisation, not '{method}'"
-                )
+    def _get_b_tokens(self):
+        return [(c, e.get("symbol", a), e)
+                for c, a, e in iter_tokens(self.tokens)
+                if e.get("category") == "B"]
 
-    def test_b_tokens_have_maturity(self):
-        """Category B tokens must have maturity date."""
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_") or not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if not isinstance(entry, dict) or entry.get("category") != "B":
-                    continue
-                maturity = entry.get("pricing", {}).get("maturity")
-                self.assertIsNotNone(
-                    maturity,
-                    f"{chain}.{entry.get('symbol')}: Category B missing 'maturity'"
-                )
+    def test_b_policy_is_b(self):
+        """Category B tokens must have pricing.policy = 'B'."""
+        for chain, sym, entry in self._get_b_tokens():
+            policy = entry.get("pricing", {}).get("policy")
+            self.assertEqual(
+                policy, "B",
+                f"{chain}.{sym}: Category B token has policy '{policy}', expected 'B'"
+            )
 
     def test_b_tokens_have_underlying(self):
         """Category B tokens must specify their underlying asset."""
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_") or not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if not isinstance(entry, dict) or entry.get("category") != "B":
-                    continue
-                underlying = entry.get("pricing", {}).get("underlying")
-                self.assertIsNotNone(
-                    underlying,
-                    f"{chain}.{entry.get('symbol')}: Category B missing 'underlying'"
-                )
+        for chain, sym, entry in self._get_b_tokens():
+            underlying = entry.get("pricing", {}).get("underlying")
+            self.assertIsNotNone(
+                underlying,
+                f"{chain}.{sym}: Category B missing 'underlying'"
+            )
 
+    def test_b_tokens_have_maturity(self):
+        """Category B tokens must have maturity date."""
+        for chain, sym, entry in self._get_b_tokens():
+            maturity = entry.get("pricing", {}).get("maturity")
+            self.assertIsNotNone(
+                maturity,
+                f"{chain}.{sym}: Category B missing 'maturity'"
+            )
+
+
+# ---------------------------------------------------------------------------
+# 8. TestEMethodology — E_par and E_oracle validation
+# ---------------------------------------------------------------------------
 
 class TestEMethodology(unittest.TestCase):
     """Section 6.7: Stablecoins — par or oracle with depeg monitoring."""
@@ -242,60 +327,57 @@ class TestEMethodology(unittest.TestCase):
         self.tokens = load_json("tokens.json")
 
     def _get_e_tokens(self):
-        result = []
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_") or not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if isinstance(entry, dict) and entry.get("category") == "E":
-                    result.append((chain, entry.get("symbol", addr), entry))
-        return result
+        return [(c, e.get("symbol", a), e)
+                for c, a, e in iter_tokens(self.tokens)
+                if e.get("category") == "E"]
 
-    def test_e_method_is_valid(self):
-        """E tokens must use par, chainlink, pyth, or coingecko."""
-        valid = {"par", "chainlink", "pyth", "coingecko"}
+    def test_e_policy_is_valid(self):
+        """E tokens must have policy E_par or E_oracle."""
+        valid = {"E_par", "E_oracle"}
         for chain, sym, entry in self._get_e_tokens():
-            method = entry.get("pricing", {}).get("method", "")
+            policy = entry.get("pricing", {}).get("policy")
             self.assertIn(
-                method, valid,
-                f"{chain}.{sym}: E token method '{method}' not in {valid}"
+                policy, valid,
+                f"{chain}.{sym}: E token policy '{policy}' not in {valid}"
             )
 
-    def test_e_par_usdc_pegged_have_depeg_check(self):
-        """USDC, DAI should have depeg_check_feed (Chainlink or Pyth)."""
-        # Per Section 6.7: USDC-pegged stablecoins valued at par with depeg monitoring
+    def test_e_par_usdc_dai_have_depeg_feed(self):
+        """USDC and DAI (E_par) must have at least one depeg feed (chainlink or pyth)."""
         must_have_depeg = {"USDC", "DAI"}
         for chain, sym, entry in self._get_e_tokens():
             if sym not in must_have_depeg:
                 continue
             pricing = entry.get("pricing", {})
-            has_chainlink = pricing.get("depeg_check_feed") not in (None, "null", "")
-            has_pyth = pricing.get("pyth_feed_id") not in (None, "null", "")
+            if pricing.get("policy") != "E_par":
+                continue
+            feeds = pricing.get("feeds", {})
+            has_chainlink = "chainlink" in feeds
+            has_pyth = "pyth" in feeds
             self.assertTrue(
                 has_chainlink or has_pyth,
-                f"{chain}.{sym}: par-priced E token must have depeg_check_feed "
-                f"(Chainlink) or pyth_feed_id for depeg monitoring"
+                f"{chain}.{sym}: par-priced E token must have at least one depeg "
+                f"feed (chainlink or pyth) in pricing.feeds"
             )
 
-    def test_e_non_par_have_oracle(self):
-        """Non-par E tokens (USDT, USDe, USDD) must have oracle feed."""
+    def test_e_oracle_has_at_least_one_feed(self):
+        """E_oracle tokens must have at least one oracle feed in pricing.feeds."""
         for chain, sym, entry in self._get_e_tokens():
             pricing = entry.get("pricing", {})
-            method = pricing.get("method", "")
-            if method == "par":
+            if pricing.get("policy") != "E_oracle":
                 continue
-            # Must have at least one price source
-            has_source = any([
-                pricing.get("chainlink_feed"),
-                pricing.get("pyth_feed_id"),
-                pricing.get("coingecko_id"),
-            ])
+            feeds = pricing.get("feeds", {})
+            has_oracle = any(k in feeds for k in ("chainlink", "pyth", "coingecko"))
             self.assertTrue(
-                has_source,
-                f"{chain}.{sym}: non-par E token must have chainlink_feed, "
-                f"pyth_feed_id, or coingecko_id"
+                has_oracle,
+                f"{chain}.{sym}: E_oracle token must have at least one oracle feed "
+                f"(chainlink, pyth, or coingecko) in pricing.feeds"
             )
 
+
+# ---------------------------------------------------------------------------
+# 9. TestFMethodology — F tokens need policy=F, Kraken-primary should have
+#    coingecko fallback
+# ---------------------------------------------------------------------------
 
 class TestFMethodology(unittest.TestCase):
     """Section 6.8: F tokens — Kraken -> CoinGecko -> DEX TWAP hierarchy."""
@@ -304,36 +386,202 @@ class TestFMethodology(unittest.TestCase):
         self.tokens = load_json("tokens.json")
 
     def _get_f_tokens(self):
-        result = []
-        for chain, chain_tokens in self.tokens.items():
-            if chain.startswith("_") or not isinstance(chain_tokens, dict):
-                continue
-            for addr, entry in chain_tokens.items():
-                if isinstance(entry, dict) and entry.get("category") == "F":
-                    result.append((chain, entry.get("symbol", addr), entry))
-        return result
+        return [(c, e.get("symbol", a), e)
+                for c, a, e in iter_tokens(self.tokens)
+                if e.get("category") == "F"]
 
-    def test_f_method_is_valid(self):
-        """F tokens must use kraken or coingecko."""
-        valid = {"kraken", "coingecko"}
+    def test_f_policy_is_f(self):
+        """F tokens must have pricing.policy = 'F'."""
         for chain, sym, entry in self._get_f_tokens():
-            method = entry.get("pricing", {}).get("method", "")
-            self.assertIn(
-                method, valid,
-                f"{chain}.{sym}: F token method '{method}' not in {valid}"
+            policy = entry.get("pricing", {}).get("policy")
+            self.assertEqual(
+                policy, "F",
+                f"{chain}.{sym}: F token has policy '{policy}', expected 'F'"
             )
 
     def test_f_kraken_primary_has_coingecko_fallback(self):
-        """F tokens with Kraken primary should have CoinGecko fallback."""
+        """F tokens with Kraken feed should have CoinGecko fallback."""
         for chain, sym, entry in self._get_f_tokens():
-            pricing = entry.get("pricing", {})
-            if pricing.get("method") != "kraken":
+            feeds = entry.get("pricing", {}).get("feeds", {})
+            if "kraken" not in feeds:
                 continue
             self.assertIn(
-                "coingecko_id", pricing,
-                f"{chain}.{sym}: F token with Kraken primary missing CoinGecko fallback"
+                "coingecko", feeds,
+                f"{chain}.{sym}: F token with Kraken primary missing CoinGecko fallback "
+                f"in pricing.feeds"
             )
 
+
+# ---------------------------------------------------------------------------
+# 10. TestPriceFeedsRegistry — every feed has type and required type-specific fields
+# ---------------------------------------------------------------------------
+
+class TestPriceFeedsRegistry(unittest.TestCase):
+    """Validate price_feeds.json structure — every feed has correct fields per type."""
+
+    def setUp(self):
+        self.price_feeds = load_json("price_feeds.json")
+
+    def _iter_feeds(self):
+        """Yield (group_key, feed_key, feed_entry) for all feeds."""
+        for group_key, group in self.price_feeds.items():
+            if group_key.startswith("_"):
+                continue
+            if not isinstance(group, dict):
+                continue
+            for feed_key, feed_entry in group.items():
+                if not isinstance(feed_entry, dict):
+                    continue
+                yield group_key, feed_key, feed_entry
+
+    def test_all_feeds_have_type(self):
+        """Every feed must have a 'type' field."""
+        for group_key, feed_key, feed in self._iter_feeds():
+            self.assertIn(
+                "type", feed,
+                f"price_feeds.{group_key}.{feed_key}: missing 'type'"
+            )
+
+    def test_chainlink_feeds_have_address(self):
+        """Chainlink feeds must have 'address'."""
+        for group_key, feed_key, feed in self._iter_feeds():
+            if feed.get("type") != "chainlink":
+                continue
+            self.assertIn(
+                "address", feed,
+                f"price_feeds.{group_key}.{feed_key}: chainlink feed missing 'address'"
+            )
+
+    def test_pyth_feeds_have_feed_id(self):
+        """Pyth feeds must have 'feed_id'."""
+        for group_key, feed_key, feed in self._iter_feeds():
+            if feed.get("type") != "pyth":
+                continue
+            self.assertIn(
+                "feed_id", feed,
+                f"price_feeds.{group_key}.{feed_key}: pyth feed missing 'feed_id'"
+            )
+
+    def test_redstone_feeds_have_symbol(self):
+        """Redstone feeds must have 'symbol'."""
+        for group_key, feed_key, feed in self._iter_feeds():
+            if feed.get("type") != "redstone":
+                continue
+            self.assertIn(
+                "symbol", feed,
+                f"price_feeds.{group_key}.{feed_key}: redstone feed missing 'symbol'"
+            )
+
+    def test_kraken_feeds_have_pair(self):
+        """Kraken feeds must have 'pair'."""
+        for group_key, feed_key, feed in self._iter_feeds():
+            if feed.get("type") != "kraken":
+                continue
+            self.assertIn(
+                "pair", feed,
+                f"price_feeds.{group_key}.{feed_key}: kraken feed missing 'pair'"
+            )
+
+    def test_coingecko_feeds_have_coin_id(self):
+        """CoinGecko feeds must have 'coin_id'."""
+        for group_key, feed_key, feed in self._iter_feeds():
+            if feed.get("type") != "coingecko":
+                continue
+            self.assertIn(
+                "coin_id", feed,
+                f"price_feeds.{group_key}.{feed_key}: coingecko feed missing 'coin_id'"
+            )
+
+    def test_feed_type_matches_group(self):
+        """Each feed's type should match the group it's in."""
+        for group_key, feed_key, feed in self._iter_feeds():
+            feed_type = feed.get("type")
+            if feed_type:
+                self.assertEqual(
+                    feed_type, group_key,
+                    f"price_feeds.{group_key}.{feed_key}: type '{feed_type}' "
+                    f"does not match group '{group_key}'"
+                )
+
+
+# ---------------------------------------------------------------------------
+# 11. TestPricingPolicy — policies with hierarchy methods must have hierarchy array
+# ---------------------------------------------------------------------------
+
+class TestPricingPolicy(unittest.TestCase):
+    """Validate pricing_policy.json structure."""
+
+    def setUp(self):
+        self.policies = load_json("pricing_policy.json")
+
+    def _iter_policies(self):
+        """Yield (key, policy) for non-meta entries."""
+        for key, value in self.policies.items():
+            if key.startswith("_") or key == "divergence_tolerances":
+                continue
+            if isinstance(value, dict):
+                yield key, value
+
+    def test_all_policies_have_method(self):
+        """Every policy must have a 'method' field."""
+        for key, policy in self._iter_policies():
+            self.assertIn(
+                "method", policy,
+                f"pricing_policy.{key}: missing 'method'"
+            )
+
+    def test_oracle_hierarchy_policies_have_hierarchy(self):
+        """Policies with method oracle_hierarchy must have a hierarchy array."""
+        for key, policy in self._iter_policies():
+            if policy.get("method") == "oracle_hierarchy":
+                self.assertIn(
+                    "hierarchy", policy,
+                    f"pricing_policy.{key}: oracle_hierarchy method missing 'hierarchy'"
+                )
+                self.assertIsInstance(
+                    policy["hierarchy"], list,
+                    f"pricing_policy.{key}: hierarchy must be a list"
+                )
+                self.assertGreater(
+                    len(policy["hierarchy"]), 0,
+                    f"pricing_policy.{key}: hierarchy must not be empty"
+                )
+
+    def test_market_hierarchy_policies_have_hierarchy(self):
+        """Policies with method market_hierarchy must have a hierarchy array."""
+        for key, policy in self._iter_policies():
+            if policy.get("method") == "market_hierarchy":
+                self.assertIn(
+                    "hierarchy", policy,
+                    f"pricing_policy.{key}: market_hierarchy method missing 'hierarchy'"
+                )
+                self.assertIsInstance(
+                    policy["hierarchy"], list,
+                    f"pricing_policy.{key}: hierarchy must be a list"
+                )
+                self.assertGreater(
+                    len(policy["hierarchy"]), 0,
+                    f"pricing_policy.{key}: hierarchy must not be empty"
+                )
+
+    def test_divergence_tolerances_present(self):
+        """Divergence tolerances must be present with all categories."""
+        tolerances = self.policies.get("divergence_tolerances", {})
+        expected_cats = {"A1", "A2", "A3", "B", "C", "D", "E", "F"}
+        for cat in expected_cats:
+            self.assertIn(
+                cat, tolerances,
+                f"pricing_policy.divergence_tolerances: missing category '{cat}'"
+            )
+            self.assertGreater(
+                tolerances[cat], 0,
+                f"pricing_policy.divergence_tolerances.{cat}: must be > 0"
+            )
+
+
+# ---------------------------------------------------------------------------
+# 12. TestContractsConfig — unchanged
+# ---------------------------------------------------------------------------
 
 class TestContractsConfig(unittest.TestCase):
     """Validate contracts.json has required fields per query_type."""
@@ -395,6 +643,10 @@ class TestContractsConfig(unittest.TestCase):
                     )
 
 
+# ---------------------------------------------------------------------------
+# 13. TestMorphoMarketsConfig — unchanged
+# ---------------------------------------------------------------------------
+
 class TestMorphoMarketsConfig(unittest.TestCase):
     """Validate morpho_markets.json structure."""
 
@@ -418,6 +670,10 @@ class TestMorphoMarketsConfig(unittest.TestCase):
                         self.assertIn(field, tok,
                                       f"morpho.{chain}.{name}.{side}: missing {field}")
 
+
+# ---------------------------------------------------------------------------
+# 14. TestSolanaProtocolsConfig — unchanged
+# ---------------------------------------------------------------------------
 
 class TestSolanaProtocolsConfig(unittest.TestCase):
     """Validate solana_protocols.json structure."""
@@ -463,21 +719,27 @@ class TestSolanaProtocolsConfig(unittest.TestCase):
         self.assertIn("usx_mint", eusx, "solana_protocols: missing eusx.usx_mint")
 
 
+# ---------------------------------------------------------------------------
+# 15. TestDivergenceTolerances — unchanged
+# ---------------------------------------------------------------------------
+
 class TestDivergenceTolerances(unittest.TestCase):
     """Appendix B: Verify tolerance thresholds are documented and correct."""
 
     def test_tolerance_values(self):
         """Verify the expected divergence tolerances per category."""
-        # From Appendix B of Valuation Policy v1.0
         expected = {
             "A1": 2, "A2": 3, "A3": 5, "B": 6,
             "C": 5, "D": 5, "E": 0.5, "F": 10,
         }
-        # These should match what's in CLAUDE.md and be usable by diff_snapshots
         for cat, tolerance in expected.items():
             self.assertGreater(tolerance, 0,
                                f"Category {cat} tolerance must be > 0")
 
+
+# ---------------------------------------------------------------------------
+# 16. TestHandlerRegistryCompleteness — unchanged
+# ---------------------------------------------------------------------------
 
 class TestHandlerRegistryCompleteness(unittest.TestCase):
     """Verify handler registry covers all protocol keys."""
