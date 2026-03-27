@@ -25,6 +25,11 @@ class PricingDefensiveTests(unittest.TestCase):
         self.assertEqual(str(result["price_usd"]), "0")
         self.assertIn("BAD", result["notes"])
 
+    def test_par_price_handles_non_dict_pricing_field(self):
+        result = pricing.par_price({"symbol": "USDC", "pricing": "not-a-dict"})
+        self.assertEqual(result["price_source"], "par")
+        self.assertEqual(str(result["price_usd"]), "1.00")
+
 
 class StrictConfigValidationTests(unittest.TestCase):
     def _bad_contracts(self):

@@ -105,7 +105,10 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         "notes": "",
     }
 
-    depeg_feed = token_entry["pricing"].get("depeg_check_feed")
+    pricing = token_entry.get("pricing", {})
+    if not isinstance(pricing, dict):
+        pricing = {}
+    depeg_feed = pricing.get("depeg_check_feed")
     if not depeg_feed or not w3_eth:
         return result
 
