@@ -1,0 +1,7 @@
+parent_position_id,lp_name,chain,protocol,constituent_type,token_symbol,token_category,balance_human,price_usd,price_source,value_usd,pt_price_ratio,lp_share
+ethereum_uniswap_v4_0xa33e1f_UNI-V4-142965_C_lp_position,Uniswap V4 USDC/DUSD #142965,ethereum,uniswap_v4,,UNI-V4-142965,,356116610425413,0,price_not_found_UNI-V4-142965,0,,
+solana_exponent_ASQ4kYjS_ONyc_C_lp_constituent,Exponent ONyc-13MAY26 LP,solana,exponent,SY,ONyc,A2,1059251.712109626,1.08832162,pyth,1152806.53931092178591412,,0.21640369638024348
+solana_exponent_ASQ4kYjS_PT-ONyc-13MAY26_C_lp_constituent,Exponent ONyc-13MAY26 LP,solana,exponent,PT,PT-ONyc-13MAY26,C,714590.353072522,1.071418131539875893768032,exponent_amm_rate (pt_ratio=0.984468),765625.0609053817342394233666,0.9844682967337136,0.21640369638024348
+solana_exponent_ASQ4kYjS_eUSX_C_lp_constituent,Exponent eUSX-01JUN26 LP,solana,exponent,SY,eUSX,A1,194436.814518,1.033104566884524308942597786,a1_exchange_rate (rate=1.027266) x pyth,200873.5610490249781825340144,,0.05123037983750529
+solana_exponent_ASQ4kYjS_PT-eUSX-01JUN26_C_lp_constituent,Exponent eUSX-01JUN26 LP,solana,exponent,PT,PT-eUSX-01JUN26,C,42984.054589,1.023757390591308351452709849,exponent_amm_rate (pt_ratio=0.990952),44005.24356306899316777487760,0.990952342489973,0.05123037983750529
+ethereum_wallet_0x669100_DUSDUSDC_C_token_balance,DUSDUSDC,ethereum,wallet,,DUSDUSDC,,14.418683434579815463,0.628547887246611792,curve_virtual_price,9.062833009682863102201019739,,

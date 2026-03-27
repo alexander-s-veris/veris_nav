@@ -1,0 +1,93 @@
+{
+  "contract": "0x433d5b175148da32ffe1e1a37a939e1b7e79be4d",
+  "tranche": "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C",
+  "function": "tranchePrice(address) \u2192 uint256 (6 decimals)",
+  "price_update_method": "0xb4ecd47f",
+  "query_method": "Etherscan txlist \u2192 query tranchePrice at each block",
+  "queried_at_utc": "26/03/2026 13:02:45",
+  "update_pattern": "Monthly (end-of-month), ~28-32 day intervals",
+  "staleness_threshold_days": 45,
+  "price_updates": [
+    {
+      "date": "2025-06-18 14:48:11",
+      "block": 22732061,
+      "price": "1",
+      "change": "0",
+      "days_since_inception": 0,
+      "total_return_pct": "0",
+      "annualised_rate_pct": "0.00"
+    },
+    {
+      "date": "2025-07-31 13:25:35",
+      "block": 23039369,
+      "price": "1.005784",
+      "change": "0.005784",
+      "days_since_inception": 42,
+      "total_return_pct": "0.5784",
+      "annualised_rate_pct": "5.03"
+    },
+    {
+      "date": "2025-09-03 15:36:47",
+      "block": 23283522,
+      "price": "1.014729",
+      "change": "0.008945",
+      "days_since_inception": 77,
+      "total_return_pct": "1.4729",
+      "annualised_rate_pct": "6.98"
+    },
+    {
+      "date": "2025-09-30 15:17:11",
+      "block": 23476643,
+      "price": "1.023747",
+      "change": "0.009018",
+      "days_since_inception": 104,
+      "total_return_pct": "2.3747",
+      "annualised_rate_pct": "8.33"
+    },
+    {
+      "date": "2025-10-31 09:02:59",
+      "block": 23696317,
+      "price": "1.033092",
+      "change": "0.009345",
+      "days_since_inception": 134,
+      "total_return_pct": "3.3092",
+      "annualised_rate_pct": "9.01"
+    },
+    {
+      "date": "2025-12-01 12:54:11",
+      "block": 23918757,
+      "price": "1.042583",
+      "change": "0.009491",
+      "days_since_inception": 165,
+      "total_return_pct": "4.2583",
+      "annualised_rate_pct": "9.42"
+    },
+    {
+      "date": "2026-01-02 15:39:59",
+      "block": 24147904,
+      "price": "1.052037",
+      "change": "0.009454",
+      "days_since_inception": 198,
+      "total_return_pct": "5.2037",
+      "annualised_rate_pct": "9.59"
+    },
+    {
+      "date": "2026-01-30 09:07:11",
+      "block": 24346680,
+      "price": "1.059607",
+      "change": "0.007570",
+      "days_since_inception": 225,
+      "total_return_pct": "5.9607",
+      "annualised_rate_pct": "9.67"
+    },
+    {
+      "date": "2026-03-03 15:11:23",
+      "block": 24577738,
+      "price": "1.067961",
+      "change": "0.008354",
+      "days_since_inception": 258,
+      "total_return_pct": "6.7961",
+      "annualised_rate_pct": "9.61"
+    }
+  ]
+}
