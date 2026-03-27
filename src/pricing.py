@@ -17,18 +17,14 @@ from datetime import datetime, timezone
 import requests
 from web3 import Web3
 
-from solana_client import get_eusx_exchange_rate
 from block_utils import concurrent_query
 
 # Import all adapters
 from adapters import (
     chainlink_price, pyth_price, redstone_price,
     kraken_price, coingecko_price, batch_coingecko_prices,
-    dex_twap_price,
+    dex_twap_price, a1_exchange_rate_price, curve_lp_price,
 )
-# Re-export for backward compat (tests import pricing.chainlink_price etc.)
-from adapters.coingecko import COINGECKO_BASE
-from evm import TS_FMT
 
 # --- Price cache ---
 _price_cache: dict[str, dict] = {}
@@ -145,9 +141,9 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     elif method in ("oracle_hierarchy", "market_hierarchy"):
         result = _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_eth, expected_freq)
     elif method == "exchange_rate":
-        result = _a1_exchange_rate_price(token_entry)
+        result = a1_exchange_rate_price(token_entry, w3_eth)
     elif method == "curve_lp":
-        result = _curve_lp_price(token_entry, w3_eth)
+        result = curve_lp_price(token_entry, w3_eth)
     else:
         result = _unavailable(symbol)
 
@@ -250,109 +246,6 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         result["depeg_flag"] = f"minor_{deviation:.2f}%"
         result["notes"] = f"Minor de-peg detected: {deviation:.2f}% deviation. Section 9.4."
 
-    return result
-
-
-# --- Special pricing methods ---
-
-def _curve_lp_price(token_entry: dict, w3_eth: Web3 | None) -> dict:
-    """Category C: Curve LP token priced via get_virtual_price()."""
-    pricing = token_entry["pricing"]
-    symbol = token_entry["symbol"]
-    pool_addr = pricing.get("pool_address")
-
-    if not pool_addr or not w3_eth:
-        return _unavailable(symbol)
-
-    try:
-        abi = [{"inputs": [], "name": "get_virtual_price",
-                "outputs": [{"name": "", "type": "uint256"}],
-                "stateMutability": "view", "type": "function"}]
-        pool = w3_eth.eth.contract(
-            address=Web3.to_checksum_address(pool_addr), abi=abi)
-        vp = pool.functions.get_virtual_price().call()
-        price = Decimal(str(vp)) / Decimal(10**18)
-        return {
-            "price_usd": price,
-            "price_source": "curve_virtual_price",
-            "depeg_flag": "none",
-            "depeg_deviation_pct": None,
-            "oracle_updated_at": None,
-            "staleness_hours": None,
-            "stale_flag": "",
-            "notes": f"Curve virtual price: {price:.6f}",
-        }
-    except Exception as e:
-        result = _unavailable(symbol)
-        result["notes"] = f"Curve virtual price failed: {e}"
-        return result
-
-
-def _a1_exchange_rate_price(token_entry: dict) -> dict:
-    """Category A1: on-chain exchange rate, then price underlying."""
-    pricing = token_entry["pricing"]
-    symbol = token_entry["symbol"]
-    underlying_feed = pricing.get("underlying_pyth_feed_id")
-
-    # eUSX — Solana-specific exchange rate
-    if symbol.lower() == "eusx":
-        try:
-            exchange_rate = get_eusx_exchange_rate()
-            underlying_price = pyth_price(underlying_feed)
-            usx_usd = underlying_price["price_usd"]
-            price = exchange_rate * usx_usd
-            return {
-                "price_usd": price,
-                "price_source": f"a1_exchange_rate (rate={exchange_rate:.6f}) x pyth",
-                "depeg_flag": "none",
-                "depeg_deviation_pct": None,
-                "oracle_updated_at": underlying_price.get("oracle_updated_at"),
-                "staleness_hours": underlying_price.get("staleness_hours"),
-                "stale_flag": underlying_price.get("stale_flag", ""),
-                "notes": f"eUSX/USX rate: {exchange_rate:.6f}, USX/USD: {usx_usd}",
-            }
-        except Exception:
-            pass
-
-    # sUSDe — ERC-4626 on Ethereum, convertToAssets
-    if symbol.lower() == "susde":
-        try:
-            from evm import get_web3
-            w3 = get_web3("ethereum")
-            contract_addr = pricing.get("exchange_rate_contract", "0x9d39a5de30e57443bff2a8307a4256c8797a3497")
-            abi = [{"inputs": [{"name": "shares", "type": "uint256"}], "name": "convertToAssets",
-                    "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"}]
-            vault = w3.eth.contract(address=Web3.to_checksum_address(contract_addr), abi=abi)
-            assets = vault.functions.convertToAssets(10**18).call()
-            exchange_rate = Decimal(str(assets)) / Decimal(10**18)
-            price = exchange_rate
-            return {
-                "price_usd": price,
-                "price_source": f"a1_convertToAssets (rate={exchange_rate:.6f})",
-                "depeg_flag": "none",
-                "depeg_deviation_pct": None,
-                "oracle_updated_at": None,
-                "staleness_hours": None,
-                "stale_flag": "",
-                "notes": f"sUSDe/USDe rate: {exchange_rate:.6f}, USDe at par",
-            }
-        except Exception:
-            pass
-
-    # Fallback: CoinGecko via feeds registry
-    feeds = pricing.get("feeds", {})
-    if isinstance(feeds, dict):
-        cg_key = feeds.get("coingecko")
-        if cg_key:
-            feed_cfg = _load_feeds_registry().get(cg_key)
-            if feed_cfg:
-                try:
-                    return coingecko_price(feed_cfg["coin_id"])
-                except Exception:
-                    pass
-
-    result = _unavailable(symbol)
-    result["notes"] = f"A1 exchange rate: no handler for {symbol}"
     return result
 
 
