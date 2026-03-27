@@ -1264,11 +1264,18 @@ HANDLER_REGISTRY = {
 # Orchestrator: query all EVM positions for a wallet on a chain
 # =============================================================================
 
-def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
+def query_evm_wallet_positions(chain, wallet, wallet_desc="", block_override=None):
     """Query all protocol positions for one wallet on one EVM chain.
 
     Config-driven: reads wallet protocol registrations from wallets.json,
     dispatches to the appropriate handler via HANDLER_REGISTRY.
+
+    Args:
+        chain: EVM chain name.
+        wallet: Wallet address.
+        wallet_desc: Optional description for logging.
+        block_override: Optional (block_number, block_ts_str) tuple for
+                        Valuation Block pinning. If None, uses latest block.
     """
     protocols = _get_wallet_protocols(chain, wallet)
     if not protocols:
@@ -1276,7 +1283,10 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
 
     try:
         w3 = get_web3(chain)
-        block_number, block_ts = get_block_info(w3)
+        if block_override:
+            block_number, block_ts = block_override
+        else:
+            block_number, block_ts = get_block_info(w3)
     except (ConnectionError, Exception) as e:
         print(f"  [{chain}] SKIP -- {e}")
         return []
@@ -1302,13 +1312,22 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
 # Orchestrator helper: query all Solana positions
 # =============================================================================
 
-def query_solana_positions(wallet, valuation_date=None):
+def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
     """Query all Solana protocol positions for a wallet.
 
     Includes Kamino obligations, Exponent LPs, Exponent YTs, and PT lots.
+
+    Args:
+        wallet: Solana wallet address.
+        valuation_date: Optional date for PT lot valuation.
+        block_ts_override: Optional (slot, block_ts_str) tuple for
+                           Valuation Block pinning. If None, uses current time.
     """
     from datetime import datetime, timezone
-    block_ts = datetime.now(timezone.utc).strftime(TS_FMT)
+    if block_ts_override:
+        _slot, block_ts = block_ts_override
+    else:
+        block_ts = datetime.now(timezone.utc).strftime(TS_FMT)
 
     rows = []
 

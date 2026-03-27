@@ -62,7 +62,8 @@ def estimate_blocks(
     ]
 
 
-def refine_block(w3, estimated_block: int, target_ts: int, tolerance: int = 15) -> int:
+def refine_block(w3, estimated_block: int, target_ts: int, tolerance: int = 15,
+                 chain: str = "ethereum") -> int:
     """Refine a single block estimate to be within tolerance of target timestamp.
 
     Only needed when exact block alignment matters (e.g. Valuation Block).
@@ -73,19 +74,21 @@ def refine_block(w3, estimated_block: int, target_ts: int, tolerance: int = 15) 
         estimated_block: Initial estimate.
         target_ts: Target unix timestamp.
         tolerance: Acceptable seconds of deviation.
+        chain: Chain name (for block time in adjustment calculation).
 
     Returns:
         Refined block number.
     """
+    block_time = AVG_BLOCK_TIME.get(chain, 12.0)
     latest = w3.eth.block_number
     est = max(1, min(estimated_block, latest))
 
-    for _ in range(5):
+    for _ in range(10):
         bd = w3.eth.get_block(est)
         diff = target_ts - bd["timestamp"]
         if abs(diff) <= tolerance:
             return est
-        adj = round(diff / 12)
+        adj = round(diff / block_time)
         if adj == 0:
             adj = 1 if diff > 0 else -1
         est = max(1, min(est + adj, latest))

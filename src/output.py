@@ -240,8 +240,15 @@ def write_lp_decomposition(positions, output_dir):
     return csv_path
 
 
-def write_nav_summary(positions, output_dir, run_ts_cet):
-    """Write nav_summary.json with aggregations by category and wallet."""
+def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None):
+    """Write nav_summary.json with aggregations by category and wallet.
+
+    Args:
+        positions: List of position dicts.
+        output_dir: Output directory path.
+        run_ts_cet: Run timestamp in CET.
+        valuation_blocks: Optional dict of chain -> block info for methodology log.
+    """
     by_category = {}
     by_wallet = {}
     total_positive = Decimal(0)
@@ -294,6 +301,24 @@ def write_nav_summary(positions, output_dir, run_ts_cet):
             for k, v in sorted(by_wallet.items())
         },
     }
+
+    # Methodology: Valuation Block pinning (Step 1 of NAV Methodology Log)
+    if valuation_blocks:
+        summary["valuation_blocks"] = valuation_blocks
+        summary["valuation_block_note"] = (
+            "All on-chain balance and position queries were made at the Valuation Block "
+            "shown above for each chain (closest to but not exceeding 15:00 UTC on the "
+            "Valuation Date, per Valuation Policy Section 12.1). "
+            "Pricing data (oracles, CoinGecko, Kraken) was sourced at run time. "
+            "For same-day NAV runs this is immaterial; for retrospective runs, "
+            "pricing may not match the Valuation Block exactly."
+        )
+    else:
+        summary["valuation_block_note"] = (
+            "No --date flag was specified. All queries were made at the latest block "
+            "at run time. For official NAV calculation, re-run with --date YYYY-MM-DD "
+            "to pin all queries to the Valuation Block (15:00 UTC)."
+        )
 
     json_path = os.path.join(output_dir, "nav_summary.json")
     with open(json_path, "w", encoding="utf-8") as f:

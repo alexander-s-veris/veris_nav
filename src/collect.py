@@ -26,6 +26,7 @@ load_dotenv()
 from evm import (
     CONFIG_DIR, OUTPUT_DIR, TS_FMT,
     load_chains, get_evm_chains, get_web3, get_block_info,
+    find_valuation_block,
 )
 from block_utils import concurrent_query
 from collect_balances import (
@@ -79,6 +80,49 @@ def main():
         w3_eth = None
         print("WARNING: Cannot connect to Ethereum — Chainlink pricing unavailable")
 
+    # --- Valuation Block pinning ---
+    # When --date is specified, find the block on each chain closest to but not
+    # exceeding 15:00 UTC on the valuation date. All on-chain queries use this block.
+    valuation_blocks = {}  # chain -> (block_number, block_ts_str)
+    solana_valuation_slot = None  # (slot, slot_ts_str)
+    valuation_ts = None
+
+    if args.date:
+        valuation_dt = datetime(valuation_date.year, valuation_date.month,
+                                valuation_date.day, 15, 0, 0, tzinfo=timezone.utc)
+        valuation_ts = int(valuation_dt.timestamp())
+
+        print(f"Valuation time: {valuation_dt.strftime(TS_FMT)} UTC")
+        print("Finding valuation blocks...", flush=True)
+
+        def find_block_for_chain(chain_name):
+            try:
+                w3 = get_web3(chain_name)
+                bn, bts = find_valuation_block(w3, chain_name, valuation_ts)
+                return chain_name, bn, bts
+            except Exception as e:
+                print(f"  [{chain_name}] Cannot find valuation block: {e}")
+                return chain_name, None, None
+
+        block_results = concurrent_query(find_block_for_chain, evm_chains,
+                                         max_workers=len(evm_chains))
+
+        for chain_name, bn, bts in block_results:
+            if bn is not None:
+                valuation_blocks[chain_name] = (bn, bts)
+                print(f"  [{chain_name}] Block {bn} ({bts})")
+
+        # Solana valuation slot
+        try:
+            from solana_client import find_valuation_slot
+            sol_slot, sol_ts = find_valuation_slot(valuation_ts)
+            solana_valuation_slot = (sol_slot, sol_ts)
+            print(f"  [solana] Slot {sol_slot} ({sol_ts})")
+        except Exception as e:
+            print(f"  [solana] Cannot find valuation slot: {e}")
+
+        print()
+
     # --- Output directory ---
     output_dir = os.path.join(OUTPUT_DIR, f"nav_{valuation_date.strftime('%Y%m%d')}")
     os.makedirs(output_dir, exist_ok=True)
@@ -115,7 +159,10 @@ def main():
             else:
                 try:
                     w3 = get_web3(chain_name)
-                    bn, bts = get_block_info(w3)
+                    if chain_name in valuation_blocks:
+                        bn, bts = valuation_blocks[chain_name]
+                    else:
+                        bn, bts = get_block_info(w3)
                     for w in evm_wallets:
                         chain_rows.extend(query_balances_alchemy(
                             w3, chain_name, w["address"], bn, bts, registry))
@@ -145,7 +192,8 @@ def main():
 
         # Solana
         for w in solana_wallets:
-            sol_rows = query_balances_solana(w["address"], registry)
+            sol_rows = query_balances_solana(w["address"], registry,
+                                            slot_override=solana_valuation_slot)
             log.append(f"  [solana] {len(sol_rows)} token balances")
             for r in sol_rows:
                 rows.append({
@@ -165,7 +213,10 @@ def main():
             parent_wallet = proxy.get("parent_wallet", p_addr)
             try:
                 w3 = get_web3(p_chain)
-                bn, bts = get_block_info(w3)
+                if p_chain in valuation_blocks:
+                    bn, bts = valuation_blocks[p_chain]
+                else:
+                    bn, bts = get_block_info(w3)
                 proxy_rows = query_balances_alchemy(w3, p_chain, p_addr, bn, bts, registry)
                 if proxy_rows:
                     log.append(f"  [{p_chain}] ARMA {p_addr[:8]}... (parent {parent_wallet[:8]}...): {len(proxy_rows)} balances")
@@ -194,9 +245,11 @@ def main():
 
         for chain_name in evm_chains:
             t_chain = _time.time()
+            block_override = valuation_blocks.get(chain_name)
             for w in evm_wallets:
                 wallet = w["address"]
-                chain_rows = query_evm_wallet_positions(chain_name, wallet)
+                chain_rows = query_evm_wallet_positions(
+                    chain_name, wallet, block_override=block_override)
                 active = [r for r in chain_rows if r.get("status") != "CLOSED"]
                 if active:
                     log.append(f"  [{chain_name}] {wallet[:8]}...: {len(active)} active positions")
@@ -210,7 +263,9 @@ def main():
             p_chain, p_addr = proxy["chain"], proxy["address"]
             parent_wallet = proxy.get("parent_wallet", p_addr)
             try:
-                proxy_rows = query_evm_wallet_positions(p_chain, p_addr)
+                proxy_block_override = valuation_blocks.get(p_chain)
+                proxy_rows = query_evm_wallet_positions(
+                    p_chain, p_addr, block_override=proxy_block_override)
                 active = [r for r in proxy_rows if r.get("status") != "CLOSED"]
                 if active:
                     log.append(f"  [{p_chain}] ARMA {p_addr[:8]}...: {len(active)} protocol positions")
@@ -223,7 +278,9 @@ def main():
 
         # Solana
         for w in solana_wallets:
-            sol_rows = query_solana_positions(w["address"], valuation_date)
+            sol_rows = query_solana_positions(
+                w["address"], valuation_date,
+                block_ts_override=solana_valuation_slot)
             rows.extend(sol_rows)
 
         return rows, log
@@ -343,7 +400,17 @@ def main():
     if lp_path:
         print(f"  {lp_path}")
 
-    summary_path = write_nav_summary(all_positions, output_dir, run_ts_cet)
+    # Build valuation block metadata for the summary
+    vb_metadata = {}
+    if valuation_blocks:
+        for cn, (bn, bts) in valuation_blocks.items():
+            vb_metadata[cn] = {"block_number": bn, "block_timestamp_utc": bts}
+    if solana_valuation_slot:
+        sol_slot, sol_ts = solana_valuation_slot
+        vb_metadata["solana"] = {"slot": sol_slot, "slot_timestamp_utc": sol_ts}
+
+    summary_path = write_nav_summary(all_positions, output_dir, run_ts_cet,
+                                     valuation_blocks=vb_metadata)
     print(f"  {summary_path}")
 
     # =========================================================================

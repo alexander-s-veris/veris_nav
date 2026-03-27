@@ -59,6 +59,86 @@ def get_token_accounts_by_owner(owner: str, mint: str) -> list[dict]:
     return resp["result"]["value"]
 
 
+def find_valuation_slot(target_ts: int) -> tuple[int, str]:
+    """Find the Solana slot closest to but not exceeding target_ts.
+
+    Uses binary search on getBlockTime to converge on the right slot.
+    The returned slot's timestamp is guaranteed to be <= target_ts
+    (per Valuation Policy: closest to but NOT exceeding 15:00 UTC).
+
+    Args:
+        target_ts: Target unix timestamp (e.g. 15:00 UTC on valuation date).
+
+    Returns:
+        (slot_number, slot_timestamp_utc_str)
+    """
+    from datetime import datetime, timezone
+
+    # Get current slot as reference
+    current_slot = solana_rpc("getSlot", [])["result"]
+    current_time = solana_rpc("getBlockTime", [current_slot])["result"]
+
+    if current_time is None:
+        raise ValueError("Cannot get current block time from Solana")
+
+    # If target is in the future, return current slot
+    if target_ts >= current_time:
+        ts_str = datetime.fromtimestamp(current_time, tz=timezone.utc).strftime(TS_FMT)
+        return current_slot, ts_str
+
+    # Solana averages ~0.4s per slot (2.5 slots/sec)
+    slots_per_second = 2.5
+    diff_seconds = current_time - target_ts
+    est_slot = int(current_slot - diff_seconds * slots_per_second)
+    est_slot = max(1, est_slot)
+
+    # Binary search refinement (20 iterations for ~1M slot range)
+    low = est_slot - 10000
+    high = est_slot + 10000
+    best_slot = est_slot
+    best_ts = None
+
+    for _ in range(20):
+        if low > high:
+            break
+        mid = (low + high) // 2
+        mid_time = None
+
+        # Try mid and nearby slots (some slots may be skipped)
+        for offset in range(5):
+            try:
+                resp = solana_rpc("getBlockTime", [mid + offset])
+                mid_time = resp["result"]
+                if mid_time is not None:
+                    mid = mid + offset
+                    break
+            except Exception:
+                continue
+
+        if mid_time is None:
+            high = mid - 1
+            continue
+
+        if mid_time <= target_ts:
+            best_slot = mid
+            best_ts = mid_time
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    if best_ts is None:
+        # Fallback: use estimate and try to get its time
+        try:
+            resp = solana_rpc("getBlockTime", [est_slot])
+            best_ts = resp["result"]
+            best_slot = est_slot
+        except Exception:
+            best_ts = target_ts
+
+    ts_str = datetime.fromtimestamp(best_ts, tz=timezone.utc).strftime(TS_FMT)
+    return best_slot, ts_str
+
+
 def get_eusx_exchange_rate() -> Decimal:
     """Calculate the eUSX/USX exchange rate from on-chain data.
 

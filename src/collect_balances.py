@@ -317,8 +317,16 @@ def query_balances_etherscan(chain: str, chain_id: int, wallet: str,
 
 # --- Solana Balance Query ---
 
-def query_balances_solana(wallet: str, registry: dict) -> list[dict]:
-    """Query native SOL + SPL token balances via Alchemy Solana RPC."""
+def query_balances_solana(wallet: str, registry: dict,
+                          slot_override: tuple = None) -> list[dict]:
+    """Query native SOL + SPL token balances via Alchemy Solana RPC.
+
+    Args:
+        wallet: Solana wallet address.
+        registry: Token registry dict.
+        slot_override: Optional (slot, block_ts_str) tuple for Valuation Block
+                       pinning. If None, uses latest slot.
+    """
     rows = []
     solana_registry = registry.get("solana", {})
     api_key = os.getenv("ALCHEMY_API_KEY")
@@ -332,16 +340,19 @@ def query_balances_solana(wallet: str, registry: dict) -> list[dict]:
         return resp.json()
 
     # Get slot (Solana's equivalent of block number)
-    try:
-        slot_resp = rpc_call("getSlot", [])
-        slot = slot_resp.get("result", "N/A")
-        # Get block time for the slot
-        time_resp = rpc_call("getBlockTime", [slot])
-        block_time = time_resp.get("result")
-        block_ts = datetime.fromtimestamp(block_time, tz=timezone.utc).strftime(TS_FMT) if block_time else "N/A"
-    except Exception:
-        slot = "N/A"
-        block_ts = "N/A"
+    if slot_override:
+        slot, block_ts = slot_override
+    else:
+        try:
+            slot_resp = rpc_call("getSlot", [])
+            slot = slot_resp.get("result", "N/A")
+            # Get block time for the slot
+            time_resp = rpc_call("getBlockTime", [slot])
+            block_time = time_resp.get("result")
+            block_ts = datetime.fromtimestamp(block_time, tz=timezone.utc).strftime(TS_FMT) if block_time else "N/A"
+        except Exception:
+            slot = "N/A"
+            block_ts = "N/A"
 
     # Native SOL balance
     native_entry = solana_registry.get("native")

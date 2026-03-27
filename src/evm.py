@@ -128,3 +128,44 @@ def get_block_info(w3: Web3, block_identifier="latest") -> tuple[int, str]:
     block_data = w3.eth.get_block(block_number)
     block_ts = datetime.fromtimestamp(block_data["timestamp"], tz=timezone.utc)
     return block_number, block_ts.strftime(TS_FMT)
+
+
+def find_valuation_block(w3: Web3, chain: str, target_ts: int) -> tuple[int, str]:
+    """Find the block closest to but not exceeding target_ts on a chain.
+
+    Uses block_utils.estimate_blocks for initial estimate, then refine_block
+    for precise alignment. The returned block timestamp is guaranteed to be
+    <= target_ts (per Valuation Policy: closest to but NOT exceeding 15:00 UTC).
+
+    Args:
+        w3: Web3 instance for the chain.
+        chain: Chain name (for block time estimation).
+        target_ts: Target unix timestamp (e.g. 15:00 UTC on valuation date).
+
+    Returns:
+        (block_number, block_timestamp_utc_str)
+    """
+    from block_utils import estimate_blocks, refine_block
+
+    # Get current block as reference
+    latest = w3.eth.block_number
+    latest_data = w3.eth.get_block(latest)
+    ref_ts = latest_data["timestamp"]
+
+    # If target is in the future, return latest block
+    if target_ts >= ref_ts:
+        block_ts_str = datetime.fromtimestamp(ref_ts, tz=timezone.utc).strftime(TS_FMT)
+        return latest, block_ts_str
+
+    # Estimate then refine (pass chain for correct block time in adjustment)
+    [est_block] = estimate_blocks(latest, ref_ts, [target_ts], chain)
+    refined = refine_block(w3, est_block, target_ts, tolerance=15, chain=chain)
+
+    # Ensure block timestamp does NOT exceed target (must be <= target_ts)
+    block_data = w3.eth.get_block(refined)
+    while block_data["timestamp"] > target_ts and refined > 1:
+        refined -= 1
+        block_data = w3.eth.get_block(refined)
+
+    block_ts_str = datetime.fromtimestamp(block_data["timestamp"], tz=timezone.utc).strftime(TS_FMT)
+    return refined, block_ts_str
