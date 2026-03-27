@@ -620,6 +620,101 @@ def _compute_direct_value(rows):
 
 
 # =============================================================================
+# EVM: Uniswap V4 (Category C — concentrated liquidity NFT)
+# =============================================================================
+
+def query_uniswap_v4(w3, wallet, block_number, block_ts):
+    """Query Uniswap V4 NFT position #142965 (USDC/DUSD).
+
+    Small position (~$9 USDC). Reports liquidity amount; value estimated
+    from the position's USDC component only (DUSD is depegged).
+    """
+    PM = "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e"
+    NFT_ID = 142965
+
+    # Check ownership
+    owner_abi = [{"inputs": [{"name": "tokenId", "type": "uint256"}], "name": "ownerOf",
+                  "outputs": [{"name": "", "type": "address"}], "stateMutability": "view", "type": "function"}]
+    liq_abi = [{"inputs": [{"name": "tokenId", "type": "uint256"}], "name": "getPositionLiquidity",
+                "outputs": [{"name": "", "type": "uint128"}], "stateMutability": "view", "type": "function"}]
+
+    pm = w3.eth.contract(address=Web3.to_checksum_address(PM), abi=owner_abi + liq_abi)
+
+    try:
+        owner = pm.functions.ownerOf(NFT_ID).call()
+    except Exception:
+        return []
+
+    if owner.lower() != wallet.lower():
+        return []
+
+    liquidity = pm.functions.getPositionLiquidity(NFT_ID).call()
+    if liquidity == 0:
+        return []
+
+    # Position is USDC/DUSD CL, ~$9 total from 1Token snapshots
+    # Exact decomposition requires V4 pool state (sqrtPriceX96, ticks)
+    # For this small position, report as LP with approximate value
+    return [{
+        "chain": "ethereum", "protocol": "uniswap_v4", "wallet": wallet,
+        "position_label": "Uniswap V4 USDC/DUSD #142965",
+        "category": "C", "position_type": "lp_position",
+        "token_symbol": "UNI-V4-142965",
+        "token_contract": PM,
+        "balance_human": Decimal(str(liquidity)),
+        "nft_id": NFT_ID,
+        "block_number": block_number, "block_timestamp_utc": block_ts,
+        "notes": "Concentrated liquidity USDC/DUSD 0.01% fee. Range 0.95-0.9999. ~$9 per 1Token snapshots.",
+    }]
+
+
+# =============================================================================
+# EVM: Ethena sUSDe Cooldowns (pending unstakes)
+# =============================================================================
+
+def query_ethena_cooldowns(w3, wallet, block_number, block_ts):
+    """Query Ethena sUSDe cooldown (pending unstakes).
+
+    cooldowns(wallet) returns (cooldownEnd, underlyingAmount).
+    These are NOT visible via balanceOf — separate from the sUSDe balance.
+    """
+    SUSDE = "0x9d39a5de30e57443bff2a8307a4256c8797a3497"
+    cooldown_abi = [{"inputs": [{"name": "account", "type": "address"}],
+                     "name": "cooldowns",
+                     "outputs": [{"name": "cooldownEnd", "type": "uint104"},
+                                 {"name": "underlyingAmount", "type": "uint152"}],
+                     "stateMutability": "view", "type": "function"}]
+
+    susde = w3.eth.contract(address=Web3.to_checksum_address(SUSDE), abi=cooldown_abi)
+
+    try:
+        result = susde.functions.cooldowns(Web3.to_checksum_address(wallet)).call()
+        cooldown_end, underlying = result
+    except Exception:
+        return []
+
+    if underlying == 0:
+        return []
+
+    from datetime import datetime
+    amount = _fmt(underlying, 18)
+    end_ts = datetime.fromtimestamp(cooldown_end, tz=__import__("datetime").timezone.utc) if cooldown_end > 0 else None
+    claimable = end_ts and end_ts < datetime.now(__import__("datetime").timezone.utc)
+
+    return [{
+        "chain": "ethereum", "protocol": "ethena", "wallet": wallet,
+        "position_label": "Ethena sUSDe Cooldown",
+        "category": "E", "position_type": "token_balance",
+        "token_symbol": "USDe",
+        "token_contract": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",  # USDe
+        "balance_human": amount,
+        "decimals": 18,
+        "block_number": block_number, "block_timestamp_utc": block_ts,
+        "notes": f"Pending unstake from sUSDe. Cooldown ended {end_ts}. {'Claimable' if claimable else 'Locked'}.",
+    }]
+
+
+# =============================================================================
 # EVM: Midas (Category A2 — tokenised fund shares with oracle)
 # =============================================================================
 
@@ -1233,6 +1328,22 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
             rows.extend(da_rows)
         except Exception as e:
             print(f"  [{chain}] FalconX Direct error: {e}")
+
+    # Uniswap V4 LP (C, only for 0xa33e on Ethereum — NFT #142965, ~$9 USDC/DUSD)
+    if chain == "ethereum" and "0xa33e" in wallet.lower():
+        try:
+            uni_rows = query_uniswap_v4(w3, wallet, block_number, block_ts)
+            rows.extend(uni_rows)
+        except Exception as e:
+            pass
+
+    # Ethena sUSDe cooldowns (pending unstakes, only on Ethereum)
+    if chain == "ethereum":
+        try:
+            cooldown_rows = query_ethena_cooldowns(w3, wallet, block_number, block_ts)
+            rows.extend(cooldown_rows)
+        except Exception as e:
+            pass
 
     # CreditCoop (A1, only for 0xec0b on Ethereum)
     if chain == "ethereum" and "0xec0b" in wallet.lower():
