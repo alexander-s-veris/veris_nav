@@ -534,14 +534,20 @@ When run with `--date YYYY-MM-DD`, collect.py pins all queries to 15:00 UTC on t
 - All balance queries and protocol queries receive the pinned block/slot
 - Without `--date`, queries run at latest block (for development/testing)
 
-### Pricing Indices
+### Pricing Architecture (Three-File Separation)
+
+Pricing configuration is split into three files, each owning one concern:
+
+1. **`config/price_feeds.json`** — Registry of all available feeds (Chainlink, Pyth, Redstone, Kraken, CoinGecko). Each feed defined once with type and connection details. ~58 entries.
+2. **`config/pricing_policy.json`** — Per-category hierarchy rules encoding Valuation Policy Section 6. Fallback order, staleness multiplier, depeg thresholds, divergence tolerances. Adding a new oracle tier = config-only change.
+3. **`config/tokens.json`** — Tokens reference feeds by key (`pricing.feeds`) and declare their policy (`pricing.policy`). No embedded feed IDs.
+
+`pricing.py` uses a generic hierarchy walker (`_price_with_hierarchy`) that reads the fallback order from `pricing_policy.json` and resolves feeds from `price_feeds.json`. Individual adapters (`chainlink_price`, `pyth_price`, `redstone_price`, `kraken_price`, `coingecko_price`) are unchanged.
 
 `valuation.py` builds pricing lookup indices from config at init:
-- **`par_symbols`** — set of symbols with `pricing.method == "par"` from tokens.json
-- **`atoken_map`** — aToken → underlying symbol from contracts.json `underlying_symbol` fields
+- **`par_symbols`** — set of symbols with `pricing.policy == "E_par"`
+- **`atoken_map`** — aToken → underlying symbol from contracts.json
 - **`symbol_index`** — symbol → token_entry for routing through `pricing.get_price()`
-
-No hardcoded Pyth feed IDs or fallback prices — all pricing is config-driven via tokens.json.
 
 ### Snapshot Diff Tool
 
