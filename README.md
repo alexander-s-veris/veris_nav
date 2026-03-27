@@ -37,13 +37,13 @@ When `--date` is provided, all on-chain queries are pinned to the block/slot clo
 
 ```bash
 # Compare the two most recent snapshots
-python src/diff_snapshots.py --latest
+python src/tools/diff_snapshots.py --latest
 
 # Compare specific snapshots
-python src/diff_snapshots.py outputs/nav_20260228 outputs/nav_20260331
+python src/tools/diff_snapshots.py outputs/nav_20260228 outputs/nav_20260331
 
 # Output as JSON
-python src/diff_snapshots.py --latest --json
+python src/tools/diff_snapshots.py --latest --json
 ```
 
 Flags: new/disappeared positions, zero-value positions, value changes >10%, price source changes, balance changes >50%. Returns exit code 1 if critical issues found.
@@ -55,7 +55,7 @@ Flags: new/disappeared positions, zero-value positions, value changes >10%, pric
 python src/collect_balances.py
 
 # FalconX/Pareto A3 hourly accrual updater (writes to data/falconx.db, run before collect.py)
-python src/temp/update_falconx_optimized.py
+python src/falconx/update_falconx_optimized.py
 ```
 
 ## Current Status
@@ -89,7 +89,7 @@ Additional features:
 - **Oracle staleness checking**: A2 tokens flag stale prices (>2x expected update frequency) and fall through to next source in hierarchy
 - **Valuation Policy compliance tests**: 31 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
 - **Chain health tracking**: Reports per-chain success/failure in `nav_summary.json`
-- **Snapshot diff tool**: `python src/diff_snapshots.py --latest` catches disappeared/changed positions before submission
+- **Snapshot diff tool**: `python src/tools/diff_snapshots.py --latest` catches disappeared/changed positions before submission
 
 See `protocol_sourcing.md` for the "Adding a New Position" quick reference table.
 
@@ -106,11 +106,15 @@ src/
   solana_client.py         # Solana RPC helpers (balances, eUSX rate, find_valuation_slot)
   pt_valuation.py          # PT token lot-based valuation (Category B linear amortisation)
   collect_balances.py      # Standalone wallet balance scanner (~45s)
-  diff_snapshots.py        # Snapshot diff tool — compares NAV snapshots for changes/errors
   output.py                # NAV snapshot writer (positions, leverage detail, PT lots, LP decomposition, summary)
-  cache_xlsx.py            # Cache xlsx sheets as CSVs for fast access
-  temp/                    # Supporting scripts (production, not temporary)
-    update_falconx_optimized.py  # FalconX/Pareto A3 hourly data updater
+  tools/                   # Standalone utilities (run separately)
+    diff_snapshots.py        # Snapshot diff tool — compares NAV snapshots
+    cache_xlsx.py            # Cache xlsx sheets as CSVs
+    extract_powerquery.py    # Extract Power Query M code from Excel
+    generate_methodology_pdf.py  # Generate methodology PDF
+  falconx/                 # FalconX/Pareto A3 position scripts
+    update_falconx_optimized.py  # Hourly accrual updater (writes to SQLite)
+    import_falconx_xlsx_to_sqlite.py  # One-time xlsx→SQLite migration
     query_pareto_tranche_history.py  # Pareto tranche price history
 config/
   chains.json              # Chain configs (RPC URLs, chain IDs, explorers)

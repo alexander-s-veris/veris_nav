@@ -118,7 +118,7 @@ def main():
         sys.exit(1)
 
     xlsx_path = sys.argv[1]
-    cache_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache")
+    cache_root = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache")
 
     for i, arg in enumerate(sys.argv):
         if arg == "--output-dir" and i + 1 < len(sys.argv):

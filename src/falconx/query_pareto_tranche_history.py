@@ -13,7 +13,7 @@ Contracts:
 - Price update method: 0xb4ecd47f
 
 Usage:
-    python src/temp/query_pareto_tranche_history.py
+    python src/falconx/query_pareto_tranche_history.py
 """
 import sys
 import os

@@ -5,8 +5,8 @@ Compares two NAV snapshot directories and flags changes that may
 indicate errors, missed positions, or unexpected movements.
 
 Usage:
-    python src/diff_snapshots.py outputs/nav_20260330 outputs/nav_20260430
-    python src/diff_snapshots.py --latest     # compares two most recent snapshots
+    python src/tools/diff_snapshots.py outputs/nav_20260330 outputs/nav_20260430
+    python src/tools/diff_snapshots.py --latest     # compares two most recent snapshots
 """
 
 import argparse
@@ -17,9 +17,9 @@ import sys
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "outputs")
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "outputs")
 
 
 def _parse_decimal(value):

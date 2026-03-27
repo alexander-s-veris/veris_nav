@@ -7,9 +7,9 @@ data/falconx.db with two tables: gauntlet_levered and direct_accrual.
 Idempotent — uses INSERT OR REPLACE, safe to re-run.
 
 Usage:
-    python src/temp/import_falconx_xlsx_to_sqlite.py
-    python src/temp/import_falconx_xlsx_to_sqlite.py --export gauntlet_levered
-    python src/temp/import_falconx_xlsx_to_sqlite.py --export direct_accrual
+    python src/falconx/import_falconx_xlsx_to_sqlite.py
+    python src/falconx/import_falconx_xlsx_to_sqlite.py --export gauntlet_levered
+    python src/falconx/import_falconx_xlsx_to_sqlite.py --export direct_accrual
 """
 import argparse
 import csv

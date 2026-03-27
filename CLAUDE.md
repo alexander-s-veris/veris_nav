@@ -545,7 +545,7 @@ No hardcoded Pyth feed IDs or fallback prices — all pricing is config-driven v
 
 ### Snapshot Diff Tool
 
-`src/diff_snapshots.py` compares two NAV snapshots and flags:
+`src/tools/diff_snapshots.py` compares two NAV snapshots and flags:
 - New/disappeared positions, zero-value positions, value changes >10%, price source changes, balance changes >50%
 - Usage: `python src/diff_snapshots.py --latest`
 
@@ -577,11 +577,15 @@ veris-nav/
 │   ├── solana_client.py       # Solana RPC helpers (balances, eUSX rate, find_valuation_slot)
 │   ├── pricing.py             # Price adapters (Chainlink, Pyth, Kraken, CoinGecko Pro, par+depeg)
 │   ├── collect_balances.py    # Production wallet balance scanner (Cat E + F + A1/A2 tokens)
-│   ├── cache_xlsx.py          # Cache xlsx sheets as CSVs for fast access
-│   ├── diff_snapshots.py      # Snapshot diff tool — compares two NAV snapshots for changes/errors
-│   ├── temp/                  # Supporting scripts (run separately from collect.py)
-│   │   ├── update_falconx_optimized.py  # FalconX A3 hourly accrual updater
-│   │   └── query_pareto_tranche_history.py  # Pareto TP history for A3 cross-reference
+│   ├── tools/                 # Standalone utilities (run separately)
+│   │   ├── diff_snapshots.py      # Snapshot diff tool — compares two NAV snapshots
+│   │   ├── cache_xlsx.py          # Cache xlsx sheets as CSVs for fast access
+│   │   ├── extract_powerquery.py  # Extract Power Query M code from Excel
+│   │   └── generate_methodology_pdf.py  # Generate methodology PDF from markdown
+│   ├── falconx/               # FalconX/Pareto A3 position scripts (run before collect.py)
+│   │   ├── update_falconx_optimized.py  # Hourly accrual data updater (writes to SQLite)
+│   │   ├── import_falconx_xlsx_to_sqlite.py  # One-time xlsx→SQLite migration
+│   │   └── query_pareto_tranche_history.py  # Pareto TP history for cross-reference
 │   ├── collect.py             # Production orchestrator — parallel balance+protocol scanning, valuation, output (~95s)
 │   ├── protocol_queries.py    # Config-driven handler registry: dispatches to protocol-specific query functions
 │   ├── valuation.py           # Category-specific valuation with config-driven pricing indices

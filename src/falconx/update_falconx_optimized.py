@@ -7,7 +7,7 @@ from src/block_utils.py. Typically 5-8x faster than the serial approach.
 Writes to data/falconx.db (SQLite). All values computed in Python — no formulas.
 
 Usage:
-    python src/temp/update_falconx_optimized.py [--start YYYY-MM-DD-HH] [--end YYYY-MM-DD-HH]
+    python src/falconx/update_falconx_optimized.py [--start YYYY-MM-DD-HH] [--end YYYY-MM-DD-HH]
 
 Defaults: start = last timestamp in SQLite + 1 hour, end = now (rounded down to hour).
 """
