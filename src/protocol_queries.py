@@ -73,6 +73,68 @@ def _load_wallets_cfg():
     return _WALLETS_CFG_CACHE
 
 
+_CONFIG_VALIDATED = False
+
+
+def _validate_config():
+    """Validate config files have required fields. Called once on first query."""
+    global _CONFIG_VALIDATED
+    if _CONFIG_VALIDATED:
+        return
+    _CONFIG_VALIDATED = True
+
+    errors = []
+    contracts = _load_contracts_cfg()
+
+    for chain, chain_data in contracts.items():
+        if not isinstance(chain_data, dict) or chain.startswith("_"):
+            continue
+        for section_key, section in chain_data.items():
+            if not isinstance(section, dict) or not section_key.startswith("_"):
+                continue
+            query_type = section.get("_query_type")
+            for entry_key, entry in section.items():
+                if entry_key.startswith("_") or not isinstance(entry, dict):
+                    continue
+                # All entries with abi field should have an address
+                if "abi" in entry and "address" not in entry:
+                    errors.append(f"{chain}.{section_key}.{entry_key}: has 'abi' but no 'address'")
+                # Midas entries need oracle
+                if query_type == "midas_oracle" and "oracle" in entry and "address" not in entry:
+                    errors.append(f"{chain}.{section_key}.{entry_key}: midas entry has 'oracle' but no 'address'")
+
+    # Validate morpho markets
+    morpho = _load_morpho_cfg()
+    for chain, chain_data in morpho.items():
+        if not isinstance(chain_data, dict):
+            continue
+        for mkt in chain_data.get("markets", []):
+            if "market_id" not in mkt:
+                errors.append(f"morpho_markets.{chain}: market missing 'market_id'")
+            for side in ("loan_token", "collateral_token"):
+                tok = mkt.get(side, {})
+                for field in ("symbol", "address", "decimals"):
+                    if field not in tok:
+                        errors.append(f"morpho_markets.{chain}.{mkt.get('name', '?')}.{side}: missing '{field}'")
+
+    # Validate solana protocols
+    solana = _load_solana_cfg()
+    for ob in solana.get("kamino", {}).get("obligations", []):
+        if "obligation_pubkey" not in ob:
+            errors.append(f"solana_protocols.kamino: obligation missing 'obligation_pubkey'")
+    for mkt in solana.get("exponent", {}).get("markets", []):
+        if "market_pubkey" not in mkt:
+            errors.append(f"solana_protocols.exponent: market missing 'market_pubkey'")
+        for sub in ("sy", "pt"):
+            if sub not in mkt:
+                errors.append(f"solana_protocols.exponent.{mkt.get('name', '?')}: missing '{sub}'")
+
+    if errors:
+        print(f"WARNING: Config validation found {len(errors)} issues:")
+        for e in errors:
+            print(f"  - {e}")
+
+
 def _get_display_name(entry, vault_addr, fallback=""):
     """Get display name from config entry, falling back to entry_key."""
     return entry.get("display_name", fallback)
@@ -205,20 +267,17 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
     chain_contracts = contracts.get(chain, {})
     rows = []
 
-    # Collect all ERC-4626 vault entries
+    # Collect all ERC-4626 vault entries from sections with _query_type == "erc4626"
     vault_entries = []
     for section_key, section in chain_contracts.items():
         if not isinstance(section, dict):
             continue
+        # Only scan sections with _query_type == "erc4626"
+        if section.get("_query_type") != "erc4626":
+            continue
         for entry_key, entry in section.items():
             if isinstance(entry, dict) and entry.get("abi") == "erc4626":
                 vault_entries.append((section_key, entry_key, entry))
-
-    # Also check Credit Coop vault (uses credit_coop_vault ABI but is ERC-4626)
-    if "_credit_coop" in chain_contracts:
-        cc = chain_contracts["_credit_coop"]
-        if "vault" in cc and cc["vault"].get("abi") == "credit_coop_vault":
-            vault_entries.append(("_credit_coop", "vault", cc["vault"]))
 
     for section_key, entry_key, entry in vault_entries:
         vault_addr = entry["address"]
@@ -1277,6 +1336,8 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc="", block_override=Non
         block_override: Optional (block_number, block_ts_str) tuple for
                         Valuation Block pinning. If None, uses latest block.
     """
+    _validate_config()
+
     protocols = _get_wallet_protocols(chain, wallet)
     if not protocols:
         return []
@@ -1299,11 +1360,17 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc="", block_override=Non
         handler = HANDLER_REGISTRY.get(handler_key)
         if not handler:
             continue
-        try:
-            handler_rows = handler(w3, chain, wallet, block_number, block_ts)
-            rows.extend(handler_rows)
-        except Exception as e:
-            print(f"  [{chain}] {protocol_key} error: {e}")
+        # Single retry with backoff for resilience
+        for attempt in range(2):
+            try:
+                handler_rows = handler(w3, chain, wallet, block_number, block_ts)
+                rows.extend(handler_rows)
+                break
+            except Exception as e:
+                if attempt == 0:
+                    time.sleep(2)  # brief backoff before retry
+                else:
+                    print(f"  [{chain}] {protocol_key} error (after retry): {e}")
 
     return rows
 
@@ -1323,6 +1390,8 @@ def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
         block_ts_override: Optional (slot, block_ts_str) tuple for
                            Valuation Block pinning. If None, uses current time.
     """
+    _validate_config()
+
     from datetime import datetime, timezone
     if block_ts_override:
         _slot, block_ts = block_ts_override
@@ -1331,37 +1400,36 @@ def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
 
     rows = []
 
+    # Helper: run a Solana handler with single retry
+    def _run_with_retry(name, fn):
+        for attempt in range(2):
+            try:
+                result = fn()
+                print(f"  [solana] {name}: {len(result)} positions")
+                return result
+            except Exception as e:
+                if attempt == 0:
+                    time.sleep(2)
+                else:
+                    print(f"  [solana] {name} error (after retry): {e}")
+        return []
+
     # Kamino obligations (D)
-    try:
-        kamino_rows = query_kamino_obligations(wallet, block_ts)
-        rows.extend(kamino_rows)
-        print(f"  [solana] Kamino: {len(kamino_rows)} positions")
-    except Exception as e:
-        print(f"  [solana] Kamino error: {e}")
+    rows.extend(_run_with_retry(
+        "Kamino", lambda: query_kamino_obligations(wallet, block_ts)))
 
     # Exponent LPs (C)
-    try:
-        lp_rows = query_exponent_lps(wallet, block_ts)
-        rows.extend(lp_rows)
-        print(f"  [solana] Exponent LP: {len(lp_rows)} constituents")
-    except Exception as e:
-        print(f"  [solana] Exponent LP error: {e}")
+    lp_rows = _run_with_retry(
+        "Exponent LP", lambda: query_exponent_lps(wallet, block_ts))
+    rows.extend(lp_rows)
 
     # Exponent YTs (F)
-    try:
-        yt_rows = query_exponent_yts(wallet, block_ts)
-        rows.extend(yt_rows)
-        print(f"  [solana] Exponent YT: {len(yt_rows)} positions")
-    except Exception as e:
-        print(f"  [solana] Exponent YT error: {e}")
+    rows.extend(_run_with_retry(
+        "Exponent YT", lambda: query_exponent_yts(wallet, block_ts)))
 
     # PT lots (B)
     if valuation_date:
-        try:
-            pt_rows = query_pt_lots(valuation_date, block_ts)
-            rows.extend(pt_rows)
-            print(f"  [solana] PT lots: {len(pt_rows)} aggregates")
-        except Exception as e:
-            print(f"  [solana] PT lots error: {e}")
+        rows.extend(_run_with_retry(
+            "PT lots", lambda: query_pt_lots(valuation_date, block_ts)))
 
     return rows

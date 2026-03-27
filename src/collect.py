@@ -146,29 +146,44 @@ def main():
         rows = []
         log = []
 
+        # Balance scanner functions, keyed by chain config "token_balance_method".
+        # Default (missing key) = "alchemy".
+        def _scan_alchemy(chain_name, chain_cfg):
+            chain_rows = []
+            try:
+                w3 = get_web3(chain_name)
+                if chain_name in valuation_blocks:
+                    bn, bts = valuation_blocks[chain_name]
+                else:
+                    bn, bts = get_block_info(w3)
+                for w in evm_wallets:
+                    chain_rows.extend(query_balances_alchemy(
+                        w3, chain_name, w["address"], bn, bts, registry))
+            except ConnectionError:
+                pass
+            return chain_rows
+
+        def _scan_etherscan(chain_name, chain_cfg):
+            chain_rows = []
+            for w in evm_wallets:
+                chain_rows.extend(query_balances_etherscan(
+                    chain_name, chain_cfg["chain_id"], w["address"], registry))
+            return chain_rows
+
+        def _scan_noop(chain_name, chain_cfg):
+            return []  # Handled by protocol queries (e.g. Katana)
+
+        balance_scanners = {
+            "alchemy": _scan_alchemy,
+            "etherscan_v2": _scan_etherscan,
+            "balance_of": _scan_noop,
+        }
+
         def scan_evm_balances(chain_name):
             chain_cfg = chains[chain_name]
-            balance_method = chain_cfg.get("token_balance_method")
-            chain_rows = []
-            if balance_method == "etherscan_v2":
-                for w in evm_wallets:
-                    chain_rows.extend(query_balances_etherscan(
-                        chain_name, chain_cfg["chain_id"], w["address"], registry))
-            elif balance_method == "balance_of":
-                pass  # Katana handled by protocol queries
-            else:
-                try:
-                    w3 = get_web3(chain_name)
-                    if chain_name in valuation_blocks:
-                        bn, bts = valuation_blocks[chain_name]
-                    else:
-                        bn, bts = get_block_info(w3)
-                    for w in evm_wallets:
-                        chain_rows.extend(query_balances_alchemy(
-                            w3, chain_name, w["address"], bn, bts, registry))
-                except ConnectionError:
-                    pass
-            return chain_name, chain_rows
+            method = chain_cfg.get("token_balance_method", "alchemy")
+            scanner = balance_scanners.get(method, _scan_alchemy)
+            return chain_name, scanner(chain_name, chain_cfg)
 
         evm_tasks = [lambda cn=cn: scan_evm_balances(cn) for cn in evm_chains]
         evm_results = concurrent_query(lambda fn: fn(), evm_tasks, max_workers=len(evm_tasks))

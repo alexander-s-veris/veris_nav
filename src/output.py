@@ -12,6 +12,9 @@ from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
 
+# Increment when the output format changes so downstream consumers can detect.
+SCHEMA_VERSION = "1.1"
+
 # CET is UTC+1 year-round (no daylight saving per Valuation Policy)
 CET = timezone(timedelta(hours=1))
 
@@ -124,6 +127,7 @@ def write_positions(positions, output_dir, run_ts_cet):
     json_path = os.path.join(output_dir, "positions.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({
+            "_schema_version": SCHEMA_VERSION,
             "_methodology": {
                 "description": "Veris Capital AMC position snapshot",
                 "scope": "All protocol positions + wallet token balances",
@@ -287,6 +291,7 @@ def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None):
             total_negative += value
 
     summary = {
+        "_schema_version": SCHEMA_VERSION,
         "run_timestamp_cet": run_ts_cet,
         "total_positions": len([p for p in positions if p.get("status") != "CLOSED"]),
         "total_assets_usd": str(total_positive),

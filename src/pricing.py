@@ -18,21 +18,36 @@ from evm import AGGREGATOR_V3_ABI, TS_FMT
 from solana_client import get_eusx_exchange_rate
 from block_utils import concurrent_query
 
-# --- Price cache: keyed by symbol, stores result dict ---
+# --- Price cache: keyed by (symbol, method, feed_id), stores result dict ---
 _price_cache: dict[str, dict] = {}
 
 COINGECKO_BASE = "https://pro-api.coingecko.com/api/v3"
 
 
+def _cache_key(token_entry: dict) -> str:
+    """Generate a unique cache key for a token's pricing config.
+
+    Includes the pricing method and primary feed ID to distinguish
+    same-symbol tokens with different feeds (e.g. on different chains).
+    """
+    symbol = token_entry["symbol"]
+    pricing = token_entry.get("pricing", {})
+    method = pricing.get("method", "")
+    # Include the primary feed ID to distinguish same-symbol tokens with different feeds
+    feed = (pricing.get("chainlink_feed") or pricing.get("pyth_feed_id") or
+            pricing.get("kraken_pair") or pricing.get("coingecko_id") or "")
+    return f"{symbol}_{method}_{feed}"
+
+
 def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     """Main dispatcher. Returns a price result dict.
 
-    Checks cache first (keyed by symbol). Routes to the correct adapter
-    based on token_entry["pricing"]["method"].
+    Checks cache first (keyed by symbol+method+feed). Routes to the correct
+    adapter based on token_entry["pricing"]["method"].
     """
-    symbol = token_entry["symbol"]
-    if symbol in _price_cache:
-        return _price_cache[symbol]
+    key = _cache_key(token_entry)
+    if key in _price_cache:
+        return _price_cache[key]
 
     method = token_entry["pricing"]["method"]
 
@@ -67,7 +82,7 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     else:
         result = _unavailable(symbol)
 
-    _price_cache[symbol] = result
+    _price_cache[key] = result
     return result
 
 
@@ -494,7 +509,7 @@ def get_prices_concurrent(
         results.update(cg_results)
         # Pre-populate cache so get_price() won't re-fetch
         for symbol, result in cg_results.items():
-            _price_cache[symbol] = result
+            _price_cache[_cache_key(cg_tokens[symbol])] = result
 
     # Step 2: Price non-CoinGecko tokens concurrently
     remaining = [(s, e) for s, e in non_cg_tokens.items() if s not in results]

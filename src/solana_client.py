@@ -6,6 +6,7 @@ on-chain exchange rates (e.g. eUSX/USX), and Kamino Lend obligations.
 """
 
 import base64
+import json
 import os
 import struct
 from decimal import Decimal
@@ -17,10 +18,16 @@ load_dotenv()
 
 from evm import TS_FMT
 
-# --- eUSX constants ---
-EUSX_MINT = "3ThdFZQKM6kRyVGLG48kaPg5TRMhYMKY1iCRa9xop1WC"
-EUSX_MINT_AUTHORITY = "2aHdm37djj4c21ztMRBmmo4my6RtzN5Nn58Y39rpWbRM"
-USX_MINT = "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG"
+# --- Config loader for solana_protocols.json ---
+_SOLANA_CFG = None
+
+
+def _load_solana_cfg():
+    global _SOLANA_CFG
+    if _SOLANA_CFG is None:
+        with open(os.path.join(os.path.dirname(__file__), "..", "config", "solana_protocols.json")) as f:
+            _SOLANA_CFG = json.load(f)
+    return _SOLANA_CFG
 
 
 def get_solana_rpc_url() -> str:
@@ -144,15 +151,19 @@ def get_eusx_exchange_rate() -> Decimal:
 
     Method: total USX held in the eUSX vault / total eUSX supply.
     The vault is the USX token account owned by the eUSX mint authority.
+    Mint addresses read from config/solana_protocols.json.
     """
+    cfg = _load_solana_cfg()
+    eusx_cfg = cfg["eusx"]
+
     # Total eUSX supply
-    eusx_supply = get_token_supply(EUSX_MINT)
+    eusx_supply = get_token_supply(eusx_cfg["eusx_mint"])
 
     if eusx_supply == 0:
         raise ValueError("eUSX supply is zero")
 
     # Total USX held in the vault (token accounts owned by mint authority)
-    vault_accounts = get_token_accounts_by_owner(EUSX_MINT_AUTHORITY, USX_MINT)
+    vault_accounts = get_token_accounts_by_owner(eusx_cfg["eusx_mint_authority"], eusx_cfg["usx_mint"])
     total_usx = Decimal(0)
     for acc in vault_accounts:
         info = acc["account"]["data"]["parsed"]["info"]
@@ -165,7 +176,6 @@ def get_eusx_exchange_rate() -> Decimal:
 # Program: KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD
 # Obligations store collateral (deposits) and debt (borrows) for leveraged positions.
 
-KAMINO_PROGRAM_ID = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"
 KAMINO_API_BASE = "https://api.kamino.finance"
 
 # Account layout sizes (bytes)
@@ -289,10 +299,12 @@ def get_kamino_obligation(obligation_pubkey: str, slot: int | None = None) -> di
     if value is None:
         raise ValueError(f"Obligation account not found: {obligation_pubkey}")
 
-    if value["owner"] != KAMINO_PROGRAM_ID:
+    cfg = _load_solana_cfg()
+    kamino_program_id = cfg["kamino"]["program_id"]
+    if value["owner"] != kamino_program_id:
         raise ValueError(
             f"Account {obligation_pubkey} owned by {value['owner']}, "
-            f"expected {KAMINO_PROGRAM_ID}"
+            f"expected {kamino_program_id}"
         )
 
     raw = base64.b64decode(value["data"][0])
