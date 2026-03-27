@@ -49,7 +49,8 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     if key in _price_cache:
         return _price_cache[key]
 
-    method = token_entry["pricing"]["method"]
+    symbol = token_entry.get("symbol", "UNKNOWN")
+    method = token_entry.get("pricing", {}).get("method", "")
 
     if method == "par":
         result = par_price(token_entry, w3_eth)

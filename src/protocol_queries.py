@@ -74,6 +74,20 @@ def _load_wallets_cfg():
 
 
 _CONFIG_VALIDATED = False
+_CONFIG_STRICT = False
+
+
+def set_config_validation(strict=False):
+    """Configure validation behavior for this process.
+
+    Args:
+        strict: If True, config validation errors raise ValueError.
+                If False, errors are logged as warnings.
+    """
+    global _CONFIG_STRICT, _CONFIG_VALIDATED
+    _CONFIG_STRICT = bool(strict)
+    # Re-run once if strictness changed before first query invocation
+    _CONFIG_VALIDATED = False
 
 
 def _validate_config():
@@ -130,6 +144,11 @@ def _validate_config():
                 errors.append(f"solana_protocols.exponent.{mkt.get('name', '?')}: missing '{sub}'")
 
     if errors:
+        if _CONFIG_STRICT:
+            raise ValueError(
+                "Config validation failed with "
+                f"{len(errors)} issue(s): " + "; ".join(errors)
+            )
         print(f"WARNING: Config validation found {len(errors)} issues:")
         for e in errors:
             print(f"  - {e}")
