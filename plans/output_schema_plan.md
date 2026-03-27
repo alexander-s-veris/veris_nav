@@ -192,16 +192,21 @@ Each chain has a `token_balance_method` that determines how `collect_balances.py
 
 ### Module changes
 
-1. **collect_balances.py** — DONE: two-level concurrent scanning — chains in parallel (8 concurrent) + wallets within each chain in parallel (6 concurrent). Per-chain timing logged. Reduced from ~120s to ~45s (bottleneck: Plasma Etherscan V2 at 31s; all Alchemy chains finish in 12-16s). Still needed: refactor `main()` to expose `scan_wallet_balances()` as a callable function. Add the new common columns (`position_id`, `position_type`, `methodology_ref`, `staleness_flag`). Keep `main()` working for standalone use.
+1. **collect_balances.py** — DONE: Production wallet balance scanner. Two-level concurrency (chains + wallets). ~45s standalone, ~80s when called from collect.py.
 
-2. **pricing.py** — DONE: `get_prices_concurrent()` batches CoinGecko tokens into one API call and prices remaining tokens (Chainlink, Kraken, Pyth) concurrently. Exponent PT pricing formula implemented in `solana_client.decompose_exponent_lp()`. PT lot-based linear amortisation in `pt_valuation.py`. Still needed: staleness checking for A2 tokens (compare `oracle_updated_at` against `expected_update_freq_hours`), cross-reference comparison logic.
+2. **pricing.py** — DONE: Chainlink (multi-chain), Pyth, Kraken, CoinGecko, par+depeg, Curve virtual_price, sUSDe convertToAssets. Still needed: staleness checking for A2 tokens.
 
-3. **evm.py** + **block_utils.py** — DONE: `block_utils.refine_block()` provides Valuation Block finder (iterative refinement to ±15s). Still needed: contract call helpers and ABIs loaded from `config/abis.json` (see `plans/abi_migration.md`).
+3. **evm.py** + **block_utils.py** — DONE: Block estimation, refinement, concurrent queries. ABIs loaded from config/abis.json in protocol_queries.py.
 
-4. **New files**:
-   - `src/valuation.py` — category-specific valuation functions (value_a1, value_a2, value_a3, value_b, value_c, value_d)
-   - `src/collect.py` — orchestrator that calls balance scanner + valuation modules, deduplicates, writes all outputs. Should use `concurrent_query_batched` for protocol position queries across chains/wallets.
-   - `src/output.py` — output writers (JSON, CSV, optional XLSX with per-category sheets)
+4. **New files** — ALL IMPLEMENTED:
+   - `src/collect.py` — Production orchestrator. Parallel Steps 1+2, deduplication, valuation, 6 output files. ~95s.
+   - `src/protocol_queries.py` — Config-driven queries for all protocols (Morpho, ERC-4626, Euler, Aave, Midas, FalconX, CreditCoop, Kamino, Exponent, Uniswap V4, Ethena cooldowns).
+   - `src/valuation.py` — Category-specific: value_position() dispatches to _value_a1 through _value_ef. A3 reads from falconx_position.xlsx.
+   - `src/output.py` — Writes positions.csv/json, leverage_detail.csv, pt_lots.csv, lp_decomposition.csv, nav_summary.json.
+   - `src/pt_valuation.py` — PT lot discovery + linear amortisation (Category B).
+   - `src/solana_client.py` — Kamino obligation parsing, Exponent market/LP/YT, eUSX exchange rate.
+
+5. **Deduplication rule**: IMPLEMENTED in collect.py. Protocol positions override wallet token balances by (chain, wallet, token_contract) key.
 
 5. **Deduplication rule**: tokens appearing in both wallet balances AND protocol positions get the protocol-level row (richer metadata). E.g., USCC held as Kamino collateral appears as a D-collateral row, not an E token_balance row.
 

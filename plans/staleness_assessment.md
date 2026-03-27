@@ -1,4 +1,7 @@
-# Staleness Assessment Plan
+# Staleness Assessment Plan — NOT YET IMPLEMENTED
+
+**Status**: Plan documented but staleness checking not yet coded. Required before first NAV (30 Apr 2026).
+Needs: `expected_update_freq_hours` in tokens.json, staleness flag logic in valuation.py.
 
 ## Policy Requirement
 

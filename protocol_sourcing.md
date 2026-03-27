@@ -409,11 +409,11 @@ MetaMorpho vault. Standard ERC-4626.
 
 ---
 
-## Fluid (Ethereum)
+## Fluid (Ethereum) — POSITION CLOSED
 
-Uses NFT positions, not fungible shares. Each position is an NFT with its own collateral/debt state.
+Uses NFT positions, not fungible shares. Each position is an NFT with its own collateral/debt state. **Veris position closed — no active holdings.**
 
-**How to read**: Query by NFT ID via Fluid vault resolver contract.
+**How to read** (for reference): Query by NFT ID via Fluid vault resolver contract.
 
 **Classification**: Category D (if leveraged) or A1 (if supply-only).
 

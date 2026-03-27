@@ -513,10 +513,12 @@ veris-nav/
 │   ├── pricing.py             # Price adapters (Chainlink, Pyth, Kraken, CoinGecko Pro, par+depeg)
 │   ├── collect_balances.py    # Production wallet balance scanner (Cat E + F + A1/A2 tokens)
 │   ├── cache_xlsx.py          # Cache xlsx sheets as CSVs for fast access
-│   ├── temp/                  # Temporary query scripts (deleted after final build)
-│   ├── collect.py             # Production orchestrator — queries all positions, values, outputs NAV snapshot
-│   ├── protocol_queries.py    # Config-driven position queries (Morpho, Aave, Euler, Kamino, Exponent, CreditCoop)
-│   ├── valuation.py           # Category-specific valuation logic (A1-F)
+│   ├── temp/                  # Supporting scripts (run separately from collect.py)
+│   │   ├── update_falconx_optimized.py  # FalconX A3 hourly accrual updater
+│   │   └── query_pareto_tranche_history.py  # Pareto TP history for A3 cross-reference
+│   ├── collect.py             # Production orchestrator — parallel balance+protocol scanning, valuation, output (~95s)
+│   ├── protocol_queries.py    # Config-driven queries: Morpho D, ERC-4626 A1, Euler A1, Aave D, Midas A2, FalconX A3, CreditCoop A1, Kamino D, Exponent C/F, Uniswap V4, Ethena cooldowns
+│   ├── valuation.py           # Category-specific valuation: value_position() dispatches to _value_a1/_value_a2/_value_a3/_value_b/_value_c/_value_d_side/_value_ef
 │   └── output.py              # NAV snapshot writer (positions.csv/json, leverage_detail, pt_lots, lp_decomposition, nav_summary)
 ├── config/
 │   ├── chains.json            # Chain configs — RPC URLs, chain IDs, explorers

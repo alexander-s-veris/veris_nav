@@ -21,11 +21,13 @@ SOLSCAN_API_KEY=your_key
 
 ## Current Status
 
-**Wallet balance scanner** (`src/collect_balances.py`) is production-ready, covering 7 wallets across 7 EVM chains + Solana. Scans wallet-level token balances (Categories E and F), prices via Chainlink, Pyth, Kraken, and CoinGecko, and outputs to JSON + CSV. Uses two-level concurrency (chains + wallets in parallel) — runs in ~45s.
+**Production NAV collection** (`src/collect.py`) is operational. Queries all protocol positions + wallet balances across 7 EVM chains + Solana, values per category methodology, and outputs to `outputs/nav_YYYYMMDD/`. Runs in ~95 seconds. 107 positions, ~$26M net.
 
-**FalconX/Pareto A3 position** (`src/temp/update_falconx_optimized.py`) tracks both Gauntlet vault (indirect) and Direct Accrual positions with hourly on-chain data and manual accrual. Updated through March 2026. Total position: ~$4.73M.
+**Wallet balance scanner** (`src/collect_balances.py`) — standalone mode for quick balance checks (~45s).
 
-**Protocol position collection** is in progress. The output schema is defined (see `plans/output_schema_plan.md`) and position configs are being registered wallet by wallet:
+**FalconX/Pareto A3 position** (`src/temp/update_falconx_optimized.py`) — run separately to extend hourly accrual workbook, then open in Excel and save before running collect.py. Total position: ~$4.73M.
+
+**All protocol positions are registered:**
 
 | Wallet | Description | Positions Registered |
 |--------|-------------|---------------------|
@@ -48,10 +50,9 @@ src/
   pricing.py               # Price adapters (Chainlink, Pyth, Kraken, CoinGecko, par+depeg)
   collect_balances.py      # Production wallet balance scanner (Cat E + F + A1/A2)
   cache_xlsx.py            # Cache xlsx sheets as CSVs for fast access
-  temp/                    # Temporary query scripts (deleted after final build)
-    update_falconx_optimized.py  # FalconX/Pareto A3 hourly data updater
-    query_pareto_tranche_history.py  # Pareto tranche price history
-    query_positions.py     # Reusable position query script for wallet walkthrough
+  temp/                    # Supporting scripts (production, not temporary)
+    update_falconx_optimized.py  # FalconX/Pareto A3 hourly data updater (run before collect.py)
+    query_pareto_tranche_history.py  # Pareto tranche price history for A3 cross-reference
   collect.py               # Production orchestrator — queries all positions, values, outputs NAV snapshot
   protocol_queries.py      # Config-driven position queries (Morpho, Aave, Euler, Kamino, Exponent, CreditCoop)
   valuation.py             # Category-specific valuation logic (A1-F)

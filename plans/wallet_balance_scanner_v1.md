@@ -1,4 +1,6 @@
-# Plan: Production Wallet Balance Scanner (Category E + F)
+# Plan: Production Wallet Balance Scanner (Category E + F) — COMPLETED
+
+**Status**: Implemented in `src/collect_balances.py`. Now also called from `src/collect.py` as Step 1.
 
 ## Context
 Move from test script (`test_wallet_balances.py`) to production wallet balance scanner covering:
