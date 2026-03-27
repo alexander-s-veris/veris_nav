@@ -27,7 +27,7 @@ This project builds a Python-based data collection system for the Veris Capital 
 
 **Valuation Block**: The block on each blockchain with timestamp closest to but NOT exceeding 15:00 UTC on the Valuation Date. All on-chain queries must be made at this block, not "latest".
 
-**First NAV date**: 30 April 2026.
+**First NAV date**: 31 March 2026.
 
 **NAV Report deadline**: Within 7 business days of the Valuation Date.
 
@@ -498,6 +498,55 @@ Store API keys in a `.env` file (never commit to GitHub).
 
 ---
 
+## Architecture
+
+### Config-Driven Protocol Dispatch
+
+The system uses a **handler registry** pattern. Adding a new position is config-only (no code changes for standard protocol patterns):
+
+1. **`wallets.json`** declares which protocols each wallet uses on each chain (e.g., `"morpho": true, "erc4626_vaults": true`)
+2. **`contracts.json`** defines protocol contracts with `_query_type` fields that map to handlers
+3. **`protocol_queries.py`** has a `HANDLER_REGISTRY` dict mapping query types to handler functions
+4. The orchestrator reads the wallet's protocols, looks up the handler, and dispatches
+
+**Protocol handlers** (in `HANDLER_REGISTRY`):
+- `erc4626` — generic ERC-4626 vault (balanceOf + convertToAssets)
+- `morpho_leverage` — Morpho markets via morpho_markets.json
+- `aave_leverage` — Aave aToken + debt token pairs
+- `euler_erc4626` — ERC-4626 with sub-account scan
+- `midas_oracle` — ERC-20 balance + oracle price
+- `manual_accrual_gauntlet` / `manual_accrual_direct` — FalconX workbook
+- `credit_coop` — ERC-4626 + sub-strategy breakdown
+- `ethena_cooldown` — sUSDe pending unstakes
+- `nft_lp` — Uniswap V4 NFT position
+
+Solana positions read from **`solana_protocols.json`** (Kamino obligations, Exponent LP/YT markets).
+
+### Valuation Block Pinning
+
+When run with `--date YYYY-MM-DD`, collect.py pins all queries to 15:00 UTC on that date:
+- EVM: `find_valuation_block()` in evm.py finds the block closest to but not exceeding the target timestamp
+- Solana: `find_valuation_slot()` in solana_client.py binary-searches for the correct slot
+- All balance queries and protocol queries receive the pinned block/slot
+- Without `--date`, queries run at latest block (for development/testing)
+
+### Pricing Indices
+
+`valuation.py` builds pricing lookup indices from config at init:
+- **`par_symbols`** — set of symbols with `pricing.method == "par"` from tokens.json
+- **`atoken_map`** — aToken → underlying symbol from contracts.json `underlying_symbol` fields
+- **`symbol_index`** — symbol → token_entry for routing through `pricing.get_price()`
+
+No hardcoded Pyth feed IDs or fallback prices — all pricing is config-driven via tokens.json.
+
+### Snapshot Diff Tool
+
+`src/diff_snapshots.py` compares two NAV snapshots and flags:
+- New/disappeared positions, zero-value positions, value changes >10%, price source changes, balance changes >50%
+- Usage: `python src/diff_snapshots.py --latest`
+
+---
+
 ## Project Structure
 
 ```
@@ -507,24 +556,26 @@ veris-nav/
 ├── .gitignore
 ├── requirements.txt           # Python dependencies
 ├── src/
-│   ├── evm.py                 # Shared EVM utilities (cached Web3, block queries, constants)
-│   ├── block_utils.py         # Block estimation + concurrent RPC (Options 1 & 4)
-│   ├── solana_client.py       # Solana RPC helpers (balances, eUSX exchange rate)
+│   ├── evm.py                 # Shared EVM utilities (cached Web3, block queries, find_valuation_block)
+│   ├── block_utils.py         # Block estimation + concurrent RPC
+│   ├── solana_client.py       # Solana RPC helpers (balances, eUSX rate, find_valuation_slot)
 │   ├── pricing.py             # Price adapters (Chainlink, Pyth, Kraken, CoinGecko Pro, par+depeg)
 │   ├── collect_balances.py    # Production wallet balance scanner (Cat E + F + A1/A2 tokens)
 │   ├── cache_xlsx.py          # Cache xlsx sheets as CSVs for fast access
+│   ├── diff_snapshots.py      # Snapshot diff tool — compares two NAV snapshots for changes/errors
 │   ├── temp/                  # Supporting scripts (run separately from collect.py)
 │   │   ├── update_falconx_optimized.py  # FalconX A3 hourly accrual updater
 │   │   └── query_pareto_tranche_history.py  # Pareto TP history for A3 cross-reference
 │   ├── collect.py             # Production orchestrator — parallel balance+protocol scanning, valuation, output (~95s)
-│   ├── protocol_queries.py    # Config-driven queries: Morpho D, ERC-4626 A1, Euler A1, Aave D, Midas A2, FalconX A3, CreditCoop A1, Kamino D, Exponent C/F, Uniswap V4, Ethena cooldowns
-│   ├── valuation.py           # Category-specific valuation: value_position() dispatches to _value_a1/_value_a2/_value_a3/_value_b/_value_c/_value_d_side/_value_ef
+│   ├── protocol_queries.py    # Config-driven handler registry: dispatches to protocol-specific query functions
+│   ├── valuation.py           # Category-specific valuation with config-driven pricing indices
 │   └── output.py              # NAV snapshot writer (positions.csv/json, leverage_detail, pt_lots, lp_decomposition, nav_summary)
 ├── config/
 │   ├── chains.json            # Chain configs — RPC URLs, chain IDs, explorers
-│   ├── wallets.json           # Wallet addresses per chain
+│   ├── wallets.json           # Wallet addresses per chain with protocol registrations
 │   ├── tokens.json            # Token registry — whitelist per chain with pricing config
-│   ├── contracts.json         # Protocol contracts grouped by chain and protocol
+│   ├── contracts.json         # Protocol contracts with _query_type fields for handler dispatch
+│   ├── solana_protocols.json  # Solana protocol configs (Kamino obligations, Exponent markets)
 │   ├── abis.json              # Minimal ABIs for all contract interactions
 │   ├── morpho_markets.json    # Morpho market IDs and position configs
 │   └── pt_lots.json           # PT token individual lot details

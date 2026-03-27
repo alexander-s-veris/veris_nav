@@ -19,13 +19,48 @@ KATANA_RPC_URL=https://rpc.katana.network
 SOLSCAN_API_KEY=your_key
 ```
 
+## Usage
+
+### NAV Collection (production)
+
+```bash
+# Latest block (development/testing)
+python src/collect.py
+
+# Pinned to Valuation Block at 15:00 UTC on a specific date (production)
+python src/collect.py --date 2026-03-31
+```
+
+When `--date` is provided, all on-chain queries are pinned to the block/slot closest to but not exceeding 15:00 UTC on that date, per the Valuation Policy. Without `--date`, queries run at latest block.
+
+### Snapshot Diff (pre-submission check)
+
+```bash
+# Compare the two most recent snapshots
+python src/diff_snapshots.py --latest
+
+# Compare specific snapshots
+python src/diff_snapshots.py outputs/nav_20260228 outputs/nav_20260331
+
+# Output as JSON
+python src/diff_snapshots.py --latest --json
+```
+
+Flags: new/disappeared positions, zero-value positions, value changes >10%, price source changes, balance changes >50%. Returns exit code 1 if critical issues found.
+
+### Supporting scripts
+
+```bash
+# Wallet balance scanner (standalone quick check, ~45s)
+python src/collect_balances.py
+
+# FalconX/Pareto A3 hourly accrual updater (run before collect.py)
+python src/temp/update_falconx_optimized.py
+```
+
 ## Current Status
 
 **Production NAV collection** (`src/collect.py`) is operational. Queries all protocol positions + wallet balances across 7 EVM chains + Solana, values per category methodology, and outputs to `outputs/nav_YYYYMMDD/`. Runs in ~95 seconds. 107 positions, ~$26M net.
-
-**Wallet balance scanner** (`src/collect_balances.py`) — standalone mode for quick balance checks (~45s).
-
-**FalconX/Pareto A3 position** (`src/temp/update_falconx_optimized.py`) — run separately to extend hourly accrual workbook, then open in Excel and save before running collect.py. Total position: ~$4.73M.
 
 **All protocol positions are registered:**
 
@@ -34,58 +69,62 @@ SOLSCAN_API_KEY=your_key
 | 0xa33e | Open Market Positions | Morpho D (3 active, 1 closed), Steakhouse USDC A1, Steakhouse USDT A1, Euler A1, Aave Base A1, mF-ONE A2, mHYPER A2, Ethena cooldown, Uniswap V4 LP |
 | 0x6691 | Private Deal Positions | msyrupUSDp A2, Aave Plasma A1, Avantis A1, Yearn Katana A1, ARMA proxy, Curve LP |
 | 0x0c16 | Credit Positions | Gauntlet/FalconX A3 (indirect via vault + direct AA_FalconXUSDC), Morpho AA_FalconXUSDC closed |
-| 0xeC0B | Credit Positions 2 | Pending |
+| 0xeC0B | Credit Positions 2 | CreditCoop A1, Hyperithm A1, Ethena cooldown |
 | 0xaca2 | Open Market Positions 3 | ARMA proxy (Arbitrum) |
 | 0x8055 | Open Market Positions 2 | Aave Horizon D, Clearstar A1, mHYPER A2 |
 | ASQ4... | Solana Vault 1 | Kamino D (2 obligations: USCC/USDC + PT-USX/PT-eUSX/USX), PT-USX B (7 lots), PT-eUSX B (1 lot), Exponent C (2 LPs: ONyc + eUSX), Exponent F (2 YTs: ONyc + eUSX), farming rewards F |
+
+## Architecture
+
+The system uses a **config-driven handler registry** pattern. Adding a new position for a standard protocol pattern requires only config changes, no code:
+
+1. `wallets.json` declares which protocols each wallet uses on each chain
+2. `contracts.json` defines protocol contracts with `_query_type` fields
+3. `protocol_queries.py` dispatches via `HANDLER_REGISTRY` based on protocol type
+4. `solana_protocols.json` configures Solana positions (Kamino, Exponent)
+5. `tokens.json` defines pricing config per token (method, feed IDs, fallback sources)
+6. `valuation.py` builds pricing indices from config at init — no hardcoded prices or feed IDs
+
+See `protocol_sourcing.md` for the "Adding a New Position" quick reference table.
 
 ## Project Structure
 
 ```
 src/
-  evm.py                   # Shared EVM utilities (cached Web3, block queries)
-  block_utils.py           # Block estimation + concurrent RPC utilities
-  solana_client.py         # Solana RPC helpers (balances, eUSX rate, Kamino obligations, Exponent markets/LP/YT)
-  pt_valuation.py          # PT token lot-based valuation (Category B linear amortisation)
+  collect.py               # Production orchestrator with --date valuation block pinning
+  protocol_queries.py      # Config-driven handler registry for protocol position queries
+  valuation.py             # Category-specific valuation with config-driven pricing indices
   pricing.py               # Price adapters (Chainlink, Pyth, Kraken, CoinGecko, par+depeg)
-  collect_balances.py      # Production wallet balance scanner (Cat E + F + A1/A2)
+  evm.py                   # Shared EVM utilities (cached Web3, find_valuation_block)
+  block_utils.py           # Block estimation + concurrent RPC utilities
+  solana_client.py         # Solana RPC helpers (balances, eUSX rate, find_valuation_slot)
+  pt_valuation.py          # PT token lot-based valuation (Category B linear amortisation)
+  collect_balances.py      # Standalone wallet balance scanner (~45s)
+  diff_snapshots.py        # Snapshot diff tool — compares NAV snapshots for changes/errors
+  output.py                # NAV snapshot writer (positions, leverage detail, PT lots, LP decomposition, summary)
   cache_xlsx.py            # Cache xlsx sheets as CSVs for fast access
   temp/                    # Supporting scripts (production, not temporary)
-    update_falconx_optimized.py  # FalconX/Pareto A3 hourly data updater (run before collect.py)
-    query_pareto_tranche_history.py  # Pareto tranche price history for A3 cross-reference
-  collect.py               # Production orchestrator — queries all positions, values, outputs NAV snapshot
-  protocol_queries.py      # Config-driven position queries (Morpho, Aave, Euler, Kamino, Exponent, CreditCoop)
-  valuation.py             # Category-specific valuation logic (A1-F)
-  output.py                # NAV snapshot writer (positions, leverage detail, PT lots, LP decomposition, summary)
+    update_falconx_optimized.py  # FalconX/Pareto A3 hourly data updater
+    query_pareto_tranche_history.py  # Pareto tranche price history
 config/
   chains.json              # Chain configs (RPC URLs, chain IDs, explorers)
-  wallets.json             # Wallet addresses per chain + ARMA proxy wallets
+  wallets.json             # Wallet addresses per chain with protocol registrations
   tokens.json              # Token registry (whitelist per chain with pricing config)
-  contracts.json           # Protocol contracts grouped by chain and protocol
+  contracts.json           # Protocol contracts with _query_type for handler dispatch
+  solana_protocols.json    # Solana protocol configs (Kamino obligations, Exponent markets)
   abis.json                # Minimal ABIs for all contract interactions
   morpho_markets.json      # Morpho market IDs and position configs
   pt_lots.json             # PT token individual lot details for linear amortisation
-protocol_sourcing.md       # How to read positions from each protocol
-cache/                     # Cached xlsx sheets as CSVs (gitignored)
-outputs/
-  wallet_balances.json     # Latest wallet balance snapshot
-  wallet_balances.csv      # Same data in CSV
-  falconx_position.xlsx    # FalconX/Pareto A3 accrual workbook (Gauntlet + Direct Accrual)
-  pareto_tranche_price_history.json  # Tranche price update history with epoch metadata
-  nav_YYYYMMDD/            # [Planned] Date-stamped NAV snapshots
-plans/                     # Implementation plans
-docs/
-  reference/               # Source documents (policy, spreadsheet, loan docs)
-  analysis/                # Working notes and analysis
-  methodology/             # NAV methodology documents
+protocol_sourcing.md       # Protocol-by-protocol position reading guide
 ```
 
 ## Configuration Files
 
 - `config/chains.json` — RPC endpoints per chain, including `token_balance_method` (default=Alchemy, `etherscan_v2` for Plasma, `balance_of` for Katana)
-- `config/wallets.json` — Wallet addresses per chain, plus ARMA smart account proxy addresses
-- `config/tokens.json` — Token registry per chain with category (A1-F) and pricing config
-- `config/contracts.json` — Protocol contracts grouped by chain and protocol, with ABI references
+- `config/wallets.json` — Wallet addresses per chain with per-wallet protocol registrations. Used by the handler dispatch to determine which protocols to query for each wallet.
+- `config/tokens.json` — Token registry per chain with category (A1-F) and pricing config (method, feed IDs, fallback sources). Pricing indices are built from this at init.
+- `config/contracts.json` — Protocol contracts grouped by chain and protocol, with `_query_type` fields that map to handlers in `HANDLER_REGISTRY`
+- `config/solana_protocols.json` — Solana protocol position configs (Kamino obligations with reserve mappings, Exponent markets with SY/PT/YT details)
 - `config/abis.json` — Minimal ABIs for all contract interactions (ERC-20, ERC-4626, Morpho, Chainlink, Aave, Pareto, Ethena)
 - `config/morpho_markets.json` — Morpho leveraged position market IDs with collateral/loan token details
 - `config/pt_lots.json` — PT token individual lot details for linear amortisation
@@ -100,18 +139,18 @@ docs/
 | B | PT tokens (zero-coupon, hold-to-maturity) | Linear amortisation per lot |
 | C | LP positions (Curve, Uniswap, Exponent) | Decompose into constituents |
 | D | Leveraged positions (Morpho, Aave, Kamino, Fluid) | Net = Collateral - Debt |
-| E | Stablecoins and cash | Par ($1.00) for USDC-pegged; oracle (Pyth/Chainlink) for non-USDC-pegged (USDT, USX, USDG) |
+| E | Stablecoins and cash | Par ($1.00) for USDC-pegged; oracle for non-USDC-pegged |
 | F | Governance tokens, rewards, other | Kraken/CoinGecko/DEX TWAP |
 
 ## Output Format
 
 Each NAV run produces a date-stamped folder in `outputs/nav_YYYYMMDD/` containing:
 - `positions.json` / `positions.csv` — One row per position with full audit trail
-- `query_log.json` / `query_log.csv` — Every on-chain/API call made during collection
-- `nav_summary.json` — Aggregated NAV by category, wallet, and custodian
-- Detail CSVs for PT lots, A3 accruals, LP decomposition, and leverage pairs
-
-See `plans/output_schema_plan.md` for the complete schema specification.
+- `nav_summary.json` — Aggregated NAV by category and wallet, with valuation block metadata
+- `leverage_detail.csv` — Category D collateral/debt breakdown
+- `pt_lots.csv` — Per-lot PT linear amortisation detail
+- `lp_decomposition.csv` — Category C LP constituent breakdown
+- `diff_report.json` — Snapshot diff (when run via diff_snapshots.py --json)
 
 ## Reference
 

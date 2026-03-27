@@ -4,6 +4,25 @@ How to read balances and positions from each protocol encountered in the portfol
 
 ---
 
+## Adding a New Position (Quick Reference)
+
+The system is **config-driven**. For standard protocol patterns, adding a new position requires **no code changes** — only config edits:
+
+| Pattern | Config files to edit |
+|---------|---------------------|
+| New ERC-4626 vault | `contracts.json` (add vault entry with `abi: "erc4626"` under a section with `_query_type: "erc4626"`), `wallets.json` (add `"erc4626_vaults": true` to wallet if not already), `tokens.json` (add share token if needed for pricing) |
+| New Morpho market | `morpho_markets.json` (add market entry with market_id, tokens, wallets) |
+| New Aave deployment | `contracts.json` (add aToken + debt token entries under `_aave` section), `wallets.json` (add `"aave": true`) |
+| New Midas token | `contracts.json` (add token + oracle entry under `_midas` section), `wallets.json` (add `"midas": true`) |
+| New Kamino obligation | `solana_protocols.json` (add to kamino.obligations), `wallets.json` (add `"kamino": true`) |
+| New Exponent market | `solana_protocols.json` (add to exponent.markets with sy/pt/yt sub-objects) |
+| New PT lot | `pt_lots.json` (add lot details) |
+| New token for pricing | `tokens.json` (add with appropriate pricing method/feed IDs) |
+
+Protocol dispatch is driven by `wallets.json` protocol registrations → `PROTOCOL_TO_HANDLER` mapping → `HANDLER_REGISTRY` in `protocol_queries.py`.
+
+---
+
 ## Data Sourcing Method
 
 **All position data is sourced via RPC endpoints** (Alchemy) as configured in `config/chains.json`. This is the primary and only method for reading on-chain balances and positions.
@@ -58,7 +77,7 @@ Isolated lending markets. Each market has a unique `market_id` (bytes32). A posi
 
 **ABI**: `config/abis.json` → `morpho_core` (functions: `position`, `market`)
 
-**Config**: `config/morpho_markets.json` — one entry per market with market_id, loan token, collateral token, wallets.
+**Config**: `config/morpho_markets.json` — one entry per market with market_id, loan token, collateral token, wallets. Handler: `morpho_leverage` in `HANDLER_REGISTRY`.
 
 **Classification**: Category D. Net value = collateral value − debt value. Collateral priced per its own token category (A2, A3, etc.), debt (loan token) priced per Category E.
 
@@ -84,7 +103,7 @@ ERC-4626 vaults that allocate deposits across multiple Morpho markets. User depo
 2. `convertToAssets(shares)` on the vault contract → underlying token amount
 3. Price the underlying per its own category (E for stablecoins)
 
-**Config**: Add vault to `config/contracts.json` and share token to `config/tokens.json` with `"method": "a1_exchange_rate"`.
+**Config**: Add vault to `config/contracts.json` under a section with `_query_type: "erc4626"`, and share token to `config/tokens.json` with `"method": "a1_exchange_rate"`. Handler: `erc4626` in `HANDLER_REGISTRY`.
 
 **Classification**: Category A1. Value = convertToAssets(shares) × underlying token price.
 
@@ -114,6 +133,8 @@ Tokenised fund shares. Each product has a token + a Chainlink-style oracle.
 **Classification**: Category A2. Value = balance × oracle price.
 
 **No vault involvement for valuation** — if tokens are in the wallet, just read balanceOf and price via oracle. Midas deposit/redemption vaults are subscription/redemption mechanisms, not relevant for NAV purposes.
+
+**Config**: Token addresses and oracles are in `contracts.json` under `_midas` sections per chain (with `_query_type: "midas_oracle"`). Handler: `midas_oracle` in `HANDLER_REGISTRY`. Adding a new Midas token = add entry to the `_midas` section with address, symbol, decimals, oracle, oracle_chain.
 
 **Known tokens**:
 | Token | Address | Oracle | Chain |
@@ -395,7 +416,7 @@ Interest on the Rain credit line accrues on-chain and is periodically collected 
 
 **Classification**: Category A1. Value = `convertToAssets(shares)` (USDC, at par).
 
-**Implementation**: `src/protocol_queries.py` → `query_creditcoop()` — queries aggregate `convertToAssets` + sub-strategy breakdown (`totalActiveCredit`, `totalAssets` on LiquidStrategy, USDC cash). Breakdown included in position notes for the methodology log.
+**Implementation**: `src/protocol_queries.py` → `query_creditcoop()` (handler: `credit_coop` in `HANDLER_REGISTRY`). Reads all contract addresses from `contracts.json` `_credit_coop` section. Queries aggregate `convertToAssets` + sub-strategy breakdown (`totalActiveCredit`, `totalAssets` on LiquidStrategy, USDC cash). Breakdown included in position notes for the methodology log.
 
 ### Hyperithm USDC Apex (Ethereum, wallet 0xec0b)
 
@@ -555,8 +576,9 @@ Kamino farming rewards accrue to obligations via a separate Farms program (`Farm
 2. Query user obligations in that market (`GET /kamino-market/{market}/users/{user}/obligations`)
 3. Note the obligation pubkey, deposit reserves (collateral), and borrow reserves (debt)
 4. Use metrics/history to get the mint addresses for each reserve
-5. Add to the Known positions table above
-6. For on-chain reads: use `get_kamino_obligation()` in `solana_client.py`
+5. Add the obligation to `config/solana_protocols.json` under `kamino.obligations` — include market_name, obligation_pubkey, deposits (reserve, symbol, decimals, category), borrows
+6. Add `"kamino": true` to the wallet's protocols in `wallets.json` if not already present
+7. For on-chain reads: `get_kamino_obligation()` in `solana_client.py` is called automatically via the handler
 
 ---
 
