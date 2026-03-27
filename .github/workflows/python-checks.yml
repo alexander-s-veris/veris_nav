@@ -3,7 +3,7 @@ name: Python checks
 on:
   pull_request:
   push:
-    branches: [ main, master, work ]
+    branches: [ main, master ]
 
 jobs:
   unit-and-compile:
