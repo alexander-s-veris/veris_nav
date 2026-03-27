@@ -1,7 +1,12 @@
-# Staleness Assessment Plan — NOT YET IMPLEMENTED
+# Staleness Assessment Plan — IMPLEMENTED
 
-**Status**: Plan documented but staleness checking not yet coded. Required before first NAV (30 Apr 2026).
-Needs: `expected_update_freq_hours` in tokens.json, staleness flag logic in valuation.py.
+**Status**: Implemented 2026-03-27. Staleness checking is live in `src/pricing.py` and propagated through `src/valuation.py` to `src/output.py`.
+- `expected_update_freq_hours` added to all A2 tokens in `config/tokens.json`
+- `chainlink_price()` and `pyth_price()` compute `staleness_hours` and `stale_flag` (>2x expected = STALE)
+- `_price_chainlink_with_fallback()` falls through to Pyth/CoinGecko when Chainlink is stale
+- All price result dicts include `staleness_hours` and `stale_flag` for consistent schema
+- `valuation.py` propagates staleness fields from price results to position dicts
+- `output.py` includes `staleness_hours` and `stale_flag` in positions.csv output
 
 ## Policy Requirement
 

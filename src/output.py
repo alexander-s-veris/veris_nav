@@ -49,6 +49,7 @@ POSITION_COLUMNS = [
     "category", "position_type", "token_symbol", "token_contract",
     "balance_human", "price_usd", "price_source", "value_usd",
     "block_number", "block_timestamp_utc",
+    "staleness_hours", "stale_flag",
     "notes", "run_timestamp_cet",
 ]
 
@@ -110,6 +111,8 @@ def write_positions(positions, output_dir, run_ts_cet):
             "value_usd": str(pos.get("value_usd", "")),
             "block_number": str(pos.get("block_number", "")),
             "block_timestamp_utc": pos.get("block_timestamp_utc", ""),
+            "staleness_hours": str(pos.get("staleness_hours", "")),
+            "stale_flag": pos.get("stale_flag", ""),
             "notes": pos.get("notes", ""),
             "run_timestamp_cet": run_ts_cet,
         }

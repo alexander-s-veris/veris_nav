@@ -63,9 +63,10 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         result = _price_kraken_with_fallback(token_entry)
     elif method == "pyth":
         feed_id = pricing.get("pyth_feed_id")
+        expected_freq = pricing.get("expected_update_freq_hours")
         if feed_id:
             try:
-                result = pyth_price(feed_id)
+                result = pyth_price(feed_id, expected_freq)
             except Exception:
                 result = _unavailable(symbol)
         else:
@@ -102,6 +103,8 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         "depeg_flag": "none",
         "depeg_deviation_pct": None,
         "oracle_updated_at": None,
+        "staleness_hours": None,
+        "stale_flag": "",
         "notes": "",
     }
 
@@ -137,10 +140,11 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     return result
 
 
-def chainlink_price(feed_address: str, w3: Web3) -> dict:
+def chainlink_price(feed_address: str, w3: Web3, expected_freq_hours: float = None) -> dict:
     """Query a Chainlink AggregatorV3 feed.
 
     Returns price as Decimal with metadata.
+    If expected_freq_hours is provided, checks staleness (>2x expected = stale).
     """
     contract = w3.eth.contract(
         address=Web3.to_checksum_address(feed_address),
@@ -155,18 +159,34 @@ def chainlink_price(feed_address: str, w3: Web3) -> dict:
     price = Decimal(answer) / Decimal(10**decimals)
     updated_utc = datetime.fromtimestamp(updated_at, tz=timezone.utc)
 
+    # Calculate staleness
+    age_seconds = (datetime.now(timezone.utc) - updated_utc).total_seconds()
+    age_hours = age_seconds / 3600
+
+    stale_flag = ""
+    if expected_freq_hours and age_hours > 2 * expected_freq_hours:
+        stale_flag = (
+            f"STALE ({age_hours:.0f}h old, expected update every "
+            f"{expected_freq_hours}h, threshold {2 * expected_freq_hours}h)"
+        )
+
     return {
         "price_usd": price,
         "price_source": "chainlink",
         "depeg_flag": "none",
         "depeg_deviation_pct": None,
         "oracle_updated_at": updated_utc.strftime(TS_FMT),
+        "staleness_hours": round(age_hours, 1),
+        "stale_flag": stale_flag,
         "notes": "",
     }
 
 
-def pyth_price(feed_id: str) -> dict:
-    """Query Pyth Hermes REST API for a price feed."""
+def pyth_price(feed_id: str, expected_freq_hours: float = None) -> dict:
+    """Query Pyth Hermes REST API for a price feed.
+
+    If expected_freq_hours is provided, checks staleness (>2x expected = stale).
+    """
     url = f"https://hermes.pyth.network/v2/updates/price/latest"
     resp = requests.get(url, params={"ids[]": feed_id}, timeout=10)
     resp.raise_for_status()
@@ -178,12 +198,33 @@ def pyth_price(feed_id: str) -> dict:
     price_data = data["parsed"][0]["price"]
     price = Decimal(price_data["price"]) * Decimal(10) ** Decimal(price_data["expo"])
 
+    # Pyth publish_time is inside the price object
+    publish_time = price_data.get("publish_time")
+
+    oracle_updated_at = None
+    staleness_hours = None
+    stale_flag = ""
+
+    if publish_time and isinstance(publish_time, (int, float)):
+        updated_utc = datetime.fromtimestamp(publish_time, tz=timezone.utc)
+        oracle_updated_at = updated_utc.strftime(TS_FMT)
+        age_hours = (datetime.now(timezone.utc) - updated_utc).total_seconds() / 3600
+        staleness_hours = round(age_hours, 1)
+
+        if expected_freq_hours and age_hours > 2 * expected_freq_hours:
+            stale_flag = (
+                f"STALE ({age_hours:.0f}h old, expected every "
+                f"{expected_freq_hours}h, threshold {2 * expected_freq_hours}h)"
+            )
+
     return {
         "price_usd": price,
         "price_source": "pyth",
         "depeg_flag": "none",
         "depeg_deviation_pct": None,
-        "oracle_updated_at": None,
+        "oracle_updated_at": oracle_updated_at,
+        "staleness_hours": staleness_hours,
+        "stale_flag": stale_flag,
         "notes": "",
     }
 
@@ -209,6 +250,8 @@ def kraken_price(pair: str) -> dict:
         "depeg_flag": "none",
         "depeg_deviation_pct": None,
         "oracle_updated_at": None,
+        "staleness_hours": None,
+        "stale_flag": "",
         "notes": "",
     }
 
@@ -240,6 +283,8 @@ def coingecko_price(coin_id: str) -> dict:
         "depeg_flag": "none",
         "depeg_deviation_pct": None,
         "oracle_updated_at": None,
+        "staleness_hours": None,
+        "stale_flag": "",
         "notes": "",
     }
 
@@ -272,6 +317,8 @@ def _curve_lp_price(token_entry: dict, w3_eth: Web3 | None) -> dict:
             "depeg_flag": "none",
             "depeg_deviation_pct": None,
             "oracle_updated_at": None,
+            "staleness_hours": None,
+            "stale_flag": "",
             "notes": f"Curve virtual price: {price:.6f}",
         }
     except Exception as e:
@@ -305,6 +352,8 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
                 "depeg_flag": "none",
                 "depeg_deviation_pct": None,
                 "oracle_updated_at": underlying_price.get("oracle_updated_at"),
+                "staleness_hours": underlying_price.get("staleness_hours"),
+                "stale_flag": underlying_price.get("stale_flag", ""),
                 "notes": f"eUSX/USX rate: {exchange_rate:.6f}, USX/USD: {usx_usd}",
             }
         except Exception as e:
@@ -330,6 +379,8 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
                 "depeg_flag": "none",
                 "depeg_deviation_pct": None,
                 "oracle_updated_at": None,
+                "staleness_hours": None,
+                "stale_flag": "",
                 "notes": f"sUSDe/USDe rate: {exchange_rate:.6f}, USDe at par",
             }
         except Exception as e:
@@ -351,30 +402,67 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
 # --- Internal fallback helpers ---
 
 def _price_chainlink_with_fallback(token_entry: dict, w3_eth: Web3 | None) -> dict:
-    """Category E oracle-priced: Chainlink → Pyth → CoinGecko fallback."""
+    """Category E/A2 oracle-priced: Chainlink → Pyth → CoinGecko fallback.
+
+    If Chainlink returns a stale price (>2x expected update frequency),
+    falls through to Pyth/CoinGecko before accepting the stale result.
+    """
     pricing = token_entry["pricing"]
+    expected_freq = pricing.get("expected_update_freq_hours")
 
     # Try Chainlink
     if pricing.get("chainlink_feed"):
         feed_chain = pricing.get("chainlink_feed_chain")
-        if feed_chain and feed_chain != "ethereum":
-            # Oracle on a non-Ethereum chain — need that chain's Web3
-            try:
+        try:
+            if feed_chain and feed_chain != "ethereum":
                 from evm import get_web3
                 w3_chain = get_web3(feed_chain)
-                return chainlink_price(pricing["chainlink_feed"], w3_chain)
-            except Exception:
-                pass  # fall through to Pyth
-        elif w3_eth:
-            try:
-                return chainlink_price(pricing["chainlink_feed"], w3_eth)
-            except Exception:
-                pass  # fall through to Pyth
+                result = chainlink_price(pricing["chainlink_feed"], w3_chain, expected_freq)
+            elif w3_eth:
+                result = chainlink_price(pricing["chainlink_feed"], w3_eth, expected_freq)
+            else:
+                result = None
 
-    # Try Pyth
+            # If not stale, return it
+            if result and not result.get("stale_flag"):
+                return result
+
+            # If stale, note it and try fallbacks
+            if result and result.get("stale_flag"):
+                stale_note = result["stale_flag"]
+
+                # Try Pyth fallback
+                if pricing.get("pyth_feed_id"):
+                    try:
+                        pyth_result = pyth_price(pricing["pyth_feed_id"], expected_freq)
+                        if not pyth_result.get("stale_flag"):
+                            pyth_result["notes"] = f"Chainlink was stale ({stale_note}), using Pyth instead"
+                            pyth_result["price_source"] = "pyth (chainlink_stale_fallback)"
+                            return pyth_result
+                    except Exception:
+                        pass
+
+                # Try CoinGecko fallback
+                if pricing.get("coingecko_id"):
+                    try:
+                        cg_result = coingecko_price(pricing["coingecko_id"])
+                        cg_result["notes"] = f"Chainlink was stale ({stale_note}), using CoinGecko instead"
+                        cg_result["price_source"] = "coingecko (chainlink_stale_fallback)"
+                        return cg_result
+                    except Exception:
+                        pass
+
+                # All fallbacks failed or stale — return the stale Chainlink price with flag
+                result["notes"] = f"WARNING: {stale_note}. No fresher fallback available."
+                return result
+
+        except Exception:
+            pass  # Chainlink unreachable — fall through to Pyth
+
+    # Try Pyth (primary, not triggered by staleness fallback above)
     if pricing.get("pyth_feed_id"):
         try:
-            return pyth_price(pricing["pyth_feed_id"])
+            return pyth_price(pricing["pyth_feed_id"], expected_freq)
         except Exception:
             pass
 
@@ -417,6 +505,8 @@ def _unavailable(symbol: str) -> dict:
         "depeg_flag": "none",
         "depeg_deviation_pct": None,
         "oracle_updated_at": None,
+        "staleness_hours": None,
+        "stale_flag": "",
         "notes": f"No price source available for {symbol}",
     }
 
@@ -471,6 +561,8 @@ def _batch_coingecko(tokens: dict[str, dict]) -> dict[str, dict]:
                 "depeg_flag": "none",
                 "depeg_deviation_pct": None,
                 "oracle_updated_at": None,
+                "staleness_hours": None,
+                "stale_flag": "",
                 "notes": "",
             }
 
