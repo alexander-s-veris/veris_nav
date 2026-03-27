@@ -2,46 +2,124 @@
   "solana": [
     {
       "address": "ASQ4kYjSYGUYbbYtsaLhUeJS6RtrN4Uwp4XbF4gDifvr",
-      "description": "Solana Vault 1"
+      "description": "Solana Vault 1",
+      "protocols": {
+        "kamino": true,
+        "exponent": true,
+        "pt_lots": true
+      }
     }
   ],
   "ethereum": [
     {
       "address": "0xa33e1f748754d2d624638ab335100d92fcbe62a2",
-      "description": "Open Market Positions"
+      "description": "Open Market Positions",
+      "protocols": {
+        "morpho": true,
+        "erc4626_vaults": true,
+        "midas": true,
+        "uniswap_v4": true,
+        "ethena_cooldowns": true
+      }
     },
     {
       "address": "0x6691005cd97656d488b72594c42cae987264e0e7",
-      "description": "Private Deal Positions"
+      "description": "Private Deal Positions",
+      "protocols": {
+        "midas": true
+      }
     },
     {
       "address": "0x0c1644d7af63df4a3b15423dbe04a1927c00a4f4",
-      "description": "Credit Positions"
+      "description": "Credit Positions",
+      "protocols": {
+        "morpho": true,
+        "gauntlet_falconx": true,
+        "falconx_direct": true
+      }
     },
     {
       "address": "0xec0b3a9321a5a0a0492bbe20c4d9cd908b10e21a",
-      "description": "Credit Positions 2"
+      "description": "Credit Positions 2",
+      "protocols": {
+        "erc4626_vaults": true,
+        "credit_coop": true,
+        "ethena_cooldowns": true
+      }
     },
     {
       "address": "0xaca2ef22f720ae3f622b9ce3065848c4333687ae",
-      "description": "Open Market Positions 3"
+      "description": "Open Market Positions 3",
+      "protocols": {}
     },
     {
       "address": "0x80559941c1a741bc435cb6782b6f161d5772ac4b",
-      "description": "Open Market Positions 2"
+      "description": "Open Market Positions 2",
+      "protocols": {
+        "aave": true,
+        "erc4626_vaults": true,
+        "midas": true,
+        "ethena_cooldowns": true
+      }
     }
   ],
-  "katana": [
-    {
-      "address": "0x6691005cd97656d488b72594c42cae987264e0e7",
-      "description": "Private Deal Positions"
+  "_chain_protocols": {
+    "_doc": "Per-chain protocol registrations. A wallet is only queried for protocols listed in its 'protocols' object AND that exist on the chain. Adding a new position = add protocol key to the wallet's protocols object on the relevant chain entry.",
+    "arbitrum": {
+      "0xa33e1f748754d2d624638ab335100d92fcbe62a2": {
+        "protocols": {
+          "morpho": true,
+          "euler": true
+        }
+      }
+    },
+    "base": {
+      "0xa33e1f748754d2d624638ab335100d92fcbe62a2": {
+        "protocols": {
+          "aave": true
+        }
+      },
+      "0x6691005cd97656d488b72594c42cae987264e0e7": {
+        "protocols": {
+          "erc4626_vaults": true
+        }
+      },
+      "0x80559941c1a741bc435cb6782b6f161d5772ac4b": {
+        "protocols": {
+          "erc4626_vaults": true
+        }
+      }
+    },
+    "plasma": {
+      "0x6691005cd97656d488b72594c42cae987264e0e7": {
+        "protocols": {
+          "aave": true
+        }
+      },
+      "0xa33e1f748754d2d624638ab335100d92fcbe62a2": {
+        "protocols": {
+          "midas": true
+        }
+      },
+      "0x80559941c1a741bc435cb6782b6f161d5772ac4b": {
+        "protocols": {
+          "midas": true
+        }
+      }
+    },
+    "katana": {
+      "0x6691005cd97656d488b72594c42cae987264e0e7": {
+        "protocols": {
+          "erc4626_vaults": true
+        }
+      }
     }
-  ],
+  },
   "arma_proxies": [
     {
       "address": "0xa8d4e894f268438d3438d0030f2e36852aeba97d",
       "chain": "base",
-      "description": "ARMA (Giza) smart account proxy — autonomous yield agent, scan as wallet",
+      "description": "ARMA (Giza) smart account proxy",
       "parent_wallet": "0x6691005cd97656d488b72594c42cae987264e0e7",
       "proxy_type": "erc4337_smart_account",
       "implementation": "0x17bac39f916c21ac825aed89607fdba251dce97d"
@@ -49,7 +127,7 @@
     {
       "address": "0xd5086229c2fdea72f8c3292cfafbae7337126c9b",
       "chain": "arbitrum",
-      "description": "ARMA (Giza) smart account proxy — autonomous yield agent, scan as wallet",
+      "description": "ARMA (Giza) smart account proxy",
       "parent_wallet": "0xaca2ef22f720ae3f622b9ce3065848c4333687ae",
       "proxy_type": "erc4337_smart_account",
       "implementation": "0x17bac39f916c21ac825aed89607fdba251dce97d"

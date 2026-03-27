@@ -13,6 +13,7 @@ pricing methodology per Valuation Policy:
   F:  market price (Kraken → CoinGecko)
 """
 
+import json
 import os
 import sys
 from datetime import date, datetime, timezone
@@ -24,6 +25,68 @@ from evm import CONFIG_DIR
 from pricing import get_price
 from pt_valuation import value_pt_from_config
 from solana_client import get_eusx_exchange_rate
+
+
+# --- Pricing indices (built once from config) ---
+_PRICING_INDICES = None
+
+
+def _get_pricing_indices(tokens_registry, contracts_cfg=None):
+    """Build or return cached pricing lookup indices from config files.
+
+    Builds:
+    - par_symbols: set of lowercase symbols with pricing.method == "par"
+    - atoken_map: dict of entry_key.lower() -> underlying_symbol.lower()
+    - symbol_index: dict of symbol.lower() -> token_entry for price lookups
+    """
+    global _PRICING_INDICES
+    if _PRICING_INDICES is not None:
+        return _PRICING_INDICES
+
+    par_symbols = set()
+    symbol_index = {}
+
+    # Build from tokens.json
+    if tokens_registry:
+        for chain_tokens in tokens_registry.values():
+            if not isinstance(chain_tokens, dict):
+                continue
+            for addr, entry in chain_tokens.items():
+                if not isinstance(entry, dict):
+                    continue
+                sym = entry.get("symbol", "").lower()
+                method = entry.get("pricing", {}).get("method", "")
+                if method == "par":
+                    par_symbols.add(sym)
+                if sym and sym not in symbol_index:
+                    symbol_index[sym] = entry
+
+    # Build atoken map from contracts.json
+    atoken_map = {}
+    if contracts_cfg is None:
+        try:
+            contracts_path = os.path.join(CONFIG_DIR, "contracts.json")
+            with open(contracts_path) as f:
+                contracts_cfg = json.load(f)
+        except Exception:
+            contracts_cfg = {}
+
+    for chain_key, chain_data in contracts_cfg.items():
+        if not isinstance(chain_data, dict):
+            continue
+        for section_key, section in chain_data.items():
+            if not isinstance(section, dict):
+                continue
+            for entry_key, entry in section.items():
+                if isinstance(entry, dict) and "underlying_symbol" in entry:
+                    atoken_map[entry_key.lower()] = entry["underlying_symbol"].lower()
+
+    _PRICING_INDICES = {
+        "par_symbols": par_symbols,
+        "atoken_map": atoken_map,
+        "symbol_index": symbol_index,
+    }
+    return _PRICING_INDICES
 
 
 def value_position(pos, w3_eth=None, valuation_date=None, tokens_registry=None):
@@ -49,7 +112,7 @@ def value_position(pos, w3_eth=None, valuation_date=None, tokens_registry=None):
         return pos
 
     if pos_type == "pt_lot_aggregate":
-        return _value_b(pos, w3_eth, valuation_date)
+        return _value_b(pos, w3_eth, valuation_date, tokens_registry)
     elif category == "D":
         return _value_d_side(pos, w3_eth, tokens_registry)
     elif category == "A1":
@@ -82,14 +145,8 @@ def _value_a1(pos, w3_eth, tokens_registry):
     underlying_amount = pos.get("underlying_amount", pos.get("balance_human", Decimal(0)))
     underlying_sym = pos.get("underlying_symbol", "USDC")
 
-    # Price the underlying token
-    if underlying_sym.upper() in ("USDC", "USDT"):
-        price = Decimal(1)
-        source = "par"
-    elif "syrupusdc" in underlying_sym.lower():
-        price, source = _get_token_price_by_symbol("syrupUSDC", pos.get("chain", ""), w3_eth, tokens_registry)
-    else:
-        price, source = _get_token_price_by_symbol(underlying_sym, pos.get("chain", ""), w3_eth, tokens_registry)
+    # Price the underlying token via config-driven lookup
+    price, source = _get_token_price_by_symbol(underlying_sym, pos.get("chain", ""), w3_eth, tokens_registry)
 
     # For A1 vaults, show the underlying amount as balance_human (what you own),
     # not the share count. Share count stays in balance_raw.
@@ -151,7 +208,7 @@ def _value_a3(pos):
 # B: PT lots — per-lot linear amortisation
 # =============================================================================
 
-def _value_b(pos, w3_eth, valuation_date):
+def _value_b(pos, w3_eth, valuation_date, tokens_registry=None):
     """Value PT position via lot-based linear amortisation."""
     pt_symbol = pos.get("_pt_symbol", "")
     if not pt_symbol or not valuation_date:
@@ -162,24 +219,12 @@ def _value_b(pos, w3_eth, valuation_date):
 
     underlying = pos.get("underlying", "")
 
-    # Get underlying price
-    if underlying == "USX":
-        # USX priced via Pyth
-        from pricing import pyth_price
-        try:
-            result = pyth_price("0x85d11b381ccc3e3021b7f84fa757cc01b9b5b5b1b899192b28bae7429e92926b")
-            underlying_price = result["price_usd"]
-        except Exception:
-            underlying_price = Decimal(1)  # fallback
-    elif underlying == "eUSX":
-        # eUSX = exchange_rate × USX_price
-        try:
-            eusx_rate = get_eusx_exchange_rate()
-            from pricing import pyth_price
-            usx_result = pyth_price("0x85d11b381ccc3e3021b7f84fa757cc01b9b5b5b1b899192b28bae7429e92926b")
-            underlying_price = eusx_rate * usx_result["price_usd"]
-        except Exception:
-            underlying_price = Decimal(1)
+    # Get underlying price via registry (no hardcoded Pyth feed IDs)
+    if underlying:
+        underlying_price, _ = _get_token_price_by_symbol(
+            underlying, pos.get("chain", "solana"), w3_eth, tokens_registry)
+        if underlying_price <= 0:
+            underlying_price = Decimal(1)  # safety fallback
     else:
         underlying_price = Decimal(1)
 
@@ -228,21 +273,34 @@ def _value_c(pos, w3_eth, tokens_registry):
 def _get_underlying_price_for_lp(pos, w3_eth, tokens_registry):
     """Get the underlying price for an LP position's constituents."""
     sym = pos.get("token_symbol", "")
+
+    # Use the standard symbol-based lookup which reads from config.
+    # Strip "PT-" prefix if present to get the underlying token symbol.
+    lookup_sym = sym
+    if sym.startswith("PT-"):
+        # For PT constituents, find the SY token's underlying
+        underlying = pos.get("underlying_symbol", "")
+        if underlying:
+            lookup_sym = underlying
+
+    if lookup_sym:
+        price, source = _get_token_price_by_symbol(
+            lookup_sym, pos.get("chain", ""), w3_eth, tokens_registry)
+        if price > 0:
+            return price
+
+    # Fallback for LP underlying: try common patterns from token symbol
     if "ONyc" in sym:
-        # ONyc priced via Pyth
-        try:
-            from pricing import pyth_price
-            return pyth_price("0xbabbfcc7f46b6e7df73adcccece8b6782408ed27c4e77f35ba39a449440170ab")["price_usd"]
-        except Exception:
-            return Decimal(1)
-    elif "eUSX" in sym:
-        try:
-            eusx_rate = get_eusx_exchange_rate()
-            from pricing import pyth_price
-            usx_result = pyth_price("0x85d11b381ccc3e3021b7f84fa757cc01b9b5b5b1b899192b28bae7429e92926b")
-            return eusx_rate * usx_result["price_usd"]
-        except Exception:
-            return Decimal(1)
+        price, source = _get_token_price_by_symbol(
+            "ONyc", pos.get("chain", ""), w3_eth, tokens_registry)
+        if price > 0:
+            return price
+    if "eUSX" in sym:
+        price, source = _get_token_price_by_symbol(
+            "eUSX", pos.get("chain", ""), w3_eth, tokens_registry)
+        if price > 0:
+            return price
+
     return Decimal(1)
 
 
@@ -314,122 +372,34 @@ def _get_token_price(pos, w3_eth, tokens_registry):
 
 
 def _get_token_price_by_symbol(symbol, chain, w3_eth, tokens_registry):
-    """Look up token price by symbol across all chains in registry."""
-    if not tokens_registry:
-        return Decimal(0), "no_registry"
+    """Look up token price by symbol using config-derived indices.
 
+    Lookup order:
+    1. aToken/debt token -> recurse with underlying symbol
+    2. Par-priced stablecoins -> $1.00
+    3. Token registry symbol index -> pricing.get_price()
+    4. Not found -> (Decimal(0), "price_not_found_{symbol}")
+    """
+    indices = _get_pricing_indices(tokens_registry)
     sym_lower = symbol.lower()
 
-    # Known direct mappings for common tokens
-    SYMBOL_PRICING = {
-        "usdc": (Decimal(1), "par"),
-        "usds": (Decimal(1), "par"),
-        "dai": (Decimal(1), "par"),
-        "pyusd": (Decimal(1), "par"),
-        "ausd": (Decimal(1), "par"),
-    }
+    # 1. aToken/debt token mapping -> recurse with underlying
+    underlying = indices["atoken_map"].get(sym_lower)
+    if underlying:
+        return _get_token_price_by_symbol(underlying, chain, w3_eth, tokens_registry)
 
-    # Aave aToken/debt token → underlying symbol mapping
-    ATOKEN_MAP = {
-        "horizon_atoken_uscc": "uscc",
-        "horizon_vdebt_rlusd": "rlusd",
-        "atoken_syrupusdc": "syrupusdc",
-        "atoken_usde": "usde",
-        "atoken_susde": "susde",
-        "abassyrupusdc": "syrupusdc",
-    }
-    mapped = ATOKEN_MAP.get(sym_lower)
-    if mapped:
-        return _get_token_price_by_symbol(mapped, chain, w3_eth, tokens_registry)
-    if sym_lower in SYMBOL_PRICING:
-        return SYMBOL_PRICING[sym_lower]
-
-    # Search registry for matching symbol
-    for chain_key, chain_tokens in tokens_registry.items():
-        if not isinstance(chain_tokens, dict):
-            continue
-        for addr, entry in chain_tokens.items():
-            if not isinstance(entry, dict):
-                continue
-            if entry.get("symbol", "").lower() == sym_lower:
-                try:
-                    result = get_price(entry, w3_eth)
-                    return result["price_usd"], result["price_source"]
-                except Exception:
-                    continue
-
-    # Special cases
-    if "uscc" in sym_lower:
-        try:
-            from pricing import pyth_price
-            r = pyth_price("0x5d73a5953dc86c4773adc778c30e8a6dfc94c5c3a74d7ebb56dd5e70350f044a")
-            return r["price_usd"], "pyth"
-        except Exception:
-            pass
-
-    if sym_lower in ("onyc",):
-        try:
-            from pricing import pyth_price
-            r = pyth_price("0xbabbfcc7f46b6e7df73adcccece8b6782408ed27c4e77f35ba39a449440170ab")
-            return r["price_usd"], "pyth"
-        except Exception:
-            pass
-
-    if "syrupusdc" in sym_lower:
-        try:
-            from pricing import pyth_price
-            r = pyth_price("0xe616297dab48626eaacf6d030717b25823b13ae6520b83f4735bf8deec8e2c9a")
-            return r["price_usd"], "pyth"
-        except Exception:
-            pass
-
-    if sym_lower in ("usx",):
-        try:
-            from pricing import pyth_price
-            r = pyth_price("0x85d11b381ccc3e3021b7f84fa757cc01b9b5b5b1b899192b28bae7429e92926b")
-            return r["price_usd"], "pyth"
-        except Exception:
-            pass
-
-    if sym_lower in ("eusx",):
-        try:
-            eusx_rate = get_eusx_exchange_rate()
-            from pricing import pyth_price
-            usx = pyth_price("0x85d11b381ccc3e3021b7f84fa757cc01b9b5b5b1b899192b28bae7429e92926b")
-            return eusx_rate * usx["price_usd"], "a1_exchange_rate"
-        except Exception:
-            pass
-
-    if "rlusd" in sym_lower:
+    # 2. Par-priced stablecoins
+    if sym_lower in indices["par_symbols"]:
         return Decimal(1), "par"
 
-    if sym_lower == "usde":
-        return Decimal(1), "par"  # USDe is a stablecoin, ~$1
-
-    if sym_lower in ("susde", "aplasusde"):
-        # sUSDe is A1 — Ethena staked USDe. Price via exchange rate.
-        if tokens_registry:
-            for chain_tokens in tokens_registry.values():
-                if isinstance(chain_tokens, dict):
-                    for addr, entry in chain_tokens.items():
-                        if isinstance(entry, dict) and entry.get("symbol", "").lower() == "susde":
-                            try:
-                                result = get_price(entry, w3_eth)
-                                return result["price_usd"], result["price_source"]
-                            except Exception:
-                                pass
-        return Decimal("1.22"), "fallback_susde"
-
-    if sym_lower in ("aplausde", "atoken_usde"):
-        return Decimal(1), "par"  # USDe at par  # approximate
-
-    if "usdt" in sym_lower:
-        # USDT priced via Chainlink on Ethereum
+    # 3. Symbol index -> use pricing.get_price()
+    entry = indices["symbol_index"].get(sym_lower)
+    if entry:
         try:
-            from pricing import chainlink_price
-            r = chainlink_price("0x3E7d1eAB13ad0104d2750B8863b489D65364e32D", w3_eth)
-            return r["price_usd"], "chainlink"
+            result = get_price(entry, w3_eth)
+            return result["price_usd"], result["price_source"]
         except Exception:
-            return Decimal("0.9997"), "fallback"
+            pass
 
+    # 4. Not found
     return Decimal(0), f"price_not_found_{symbol}"

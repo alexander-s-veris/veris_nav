@@ -1,32 +1,38 @@
 {
-  "_doc": "Protocol contracts used for on-chain queries. Grouped by chain, then by protocol. Token addresses are in tokens.json, Morpho market IDs in morpho_markets.json, ABIs in abis.json.",
+  "_doc": "Protocol contracts used for on-chain queries. Grouped by chain, then by protocol. Each protocol section has a _query_type field that maps to a handler in protocol_queries.py. Token addresses are in tokens.json, Morpho market IDs in morpho_markets.json, ABIs in abis.json.",
 
   "ethereum": {
     "_morpho": {
       "core": {
         "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
         "abi": "morpho_core",
-        "description": "Morpho Core — position() and market() queries"
+        "description": "Morpho Core -- position() and market() queries"
       }
     },
     "_aave": {
+      "_query_type": "aave_leverage",
       "horizon_pool": {
         "address": "0xAe05Cd22df81871bc7cC2a04BeCfb516bFe332C8",
         "abi": "aave_pool",
-        "description": "Aave Horizon RWA Pool — separate from standard V3"
+        "description": "Aave Horizon RWA Pool -- separate from standard V3"
       },
       "horizon_atoken_uscc": {
         "address": "0x08b798c40b9AB931356d9aB4235F548325C4cb80",
         "abi": "erc20",
-        "description": "aHorRwaUSCC — supply side of USCC/RLUSD position"
+        "display_name": "Aave Horizon USCC",
+        "underlying_symbol": "USCC",
+        "description": "aHorRwaUSCC -- supply side of USCC/RLUSD position"
       },
       "horizon_vdebt_rlusd": {
         "address": "0xace8a1c0ec12ae81814377491265b47f4ee5d3dd",
         "abi": "erc20",
-        "description": "variableDebtHorRwaRLUSD — debt side of USCC/RLUSD position"
+        "display_name": "Aave Horizon RLUSD debt",
+        "underlying_symbol": "RLUSD",
+        "description": "variableDebtHorRwaRLUSD -- debt side of USCC/RLUSD position"
       }
     },
     "_gauntlet_pareto": {
+      "_query_type": "manual_accrual",
       "gauntlet_vault": {
         "address": "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44",
         "abi": "erc20",
@@ -49,52 +55,93 @@
       "aa_falconxusdc_tranche": {
         "address": "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C",
         "abi": "erc20",
+        "decimals": 18,
         "description": "AA_FalconXUSDC tranche token. ERC-20, 18 dec, NOT ERC-4626."
       }
     },
     "_credit_coop": {
+      "_query_type": "credit_coop",
       "vault": {
         "address": "0xb21eAFB126cEf15CB99fe2D23989b58e40097919",
         "abi": "credit_coop_vault",
-        "description": "Veris Credit Vault — ERC-4626/7540. Category A1 (convertToAssets is primary). Sub-strategies: Rain credit line + Gauntlet USDC Core liquid reserve."
+        "display_name": "Credit Coop Veris Vault",
+        "underlying_symbol": "USDC",
+        "decimals": 6,
+        "description": "Veris Credit Vault -- ERC-4626/7540. Category A1 (convertToAssets is primary). Sub-strategies: Rain credit line + Gauntlet USDC Core liquid reserve."
       },
       "liquid_strategy": {
         "address": "0x671B5B6F01C5FEe16E6F9De2eb85AC027Dc9fE0e",
-        "description": "LiquidStrategy — deploys idle capital into Gauntlet USDC Core (ERC-4626)"
+        "description": "LiquidStrategy -- deploys idle capital into Gauntlet USDC Core (ERC-4626)"
       },
       "credit_strategy": {
         "address": "0x433E415b0fA54C570C450DD976E2402e408cB6db",
-        "description": "CreditStrategy — Line-of-Credit-v2 to Rain. getPositionActiveCredit(line, tokenId) for breakdown."
+        "description": "CreditStrategy -- Line-of-Credit-v2 to Rain. getPositionActiveCredit(line, tokenId) for breakdown."
       },
       "rain_credit_line": {
         "address": "0x1e86E49780Dd5FF522B43889A7C196caa0CABd85",
         "description": "Rain Line-of-Credit-v2. Borrower for the credit strategy."
+      },
+      "usdc_token": {
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "decimals": 6,
+        "description": "USDC token used for cash balance queries in sub-strategy breakdown"
       }
     },
     "_morpho_vaults": {
+      "_query_type": "erc4626",
       "steakhouse_reservoir_usdc": {
         "address": "0xBEeFF047C03714965a54b671A37C18beF6b96210",
         "abi": "erc4626",
+        "display_name": "Steakhouse Reservoir USDC",
+        "underlying_symbol": "USDC",
         "description": "Steakhouse Reservoir USDC (bbqSUDCreservoir)"
       },
       "steakhouse_usdt": {
         "address": "0xbEef047a543E45807105E51A8BBEFCc5950fcfBa",
         "abi": "erc4626",
+        "display_name": "Steakhouse USDT",
+        "underlying_symbol": "USDT",
         "description": "Steakhouse USDT (steakUSDT)"
       }
     },
     "_morpho_vaults_0xec0b": {
+      "_query_type": "erc4626",
       "hyperithm_usdc_apex": {
         "address": "0x777791c4d6dc2ce140d00d2828a7c93503c67777",
         "abi": "erc4626",
-        "description": "Hyperithm USDC Apex (hyperUSDCa) — MetaMorpho vault, ~1,152 USDC for wallet 0xec0b"
+        "display_name": "Hyperithm USDC Apex",
+        "underlying_symbol": "USDC",
+        "description": "Hyperithm USDC Apex (hyperUSDCa)"
       }
     },
     "_ethena": {
+      "_query_type": "ethena_cooldown",
       "susde": {
         "address": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
         "abi": "ethena_cooldown",
-        "description": "sUSDe — ERC-4626 + cooldowns(address) for pending unstakes"
+        "usde_token": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
+        "description": "sUSDe -- ERC-4626 + cooldowns(address) for pending unstakes"
+      }
+    },
+    "_midas": {
+      "_query_type": "midas_oracle",
+      "mfone": {
+        "address": "0x238a700eD6165261Cf8b2e544ba797BC11e466Ba",
+        "abi": "erc20",
+        "symbol": "mF-ONE",
+        "display_name": "Midas Fasanara ONE",
+        "decimals": 18,
+        "oracle": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
+        "oracle_chain": "ethereum"
+      },
+      "msyrupusdp": {
+        "address": "0x2fE058CcF29f123f9dd2aEC0418AA66a877d8E50",
+        "abi": "erc20",
+        "symbol": "msyrupUSDp",
+        "display_name": "Midas syrupUSD Pre-deposit",
+        "decimals": 18,
+        "oracle": "0x337d914ff6622510FC2C63ac59c1D07983895241",
+        "oracle_chain": "ethereum"
       }
     },
     "_fluid": {
@@ -110,9 +157,11 @@
       }
     },
     "_uniswap": {
+      "_query_type": "nft_lp",
       "v4_position_manager": {
         "address": "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
-        "description": "Uniswap V4 Position Manager — NFT #142965 held by 0xa33e"
+        "nft_ids": [142965],
+        "description": "Uniswap V4 Position Manager -- NFT #142965 held by 0xa33e"
       }
     }
   },
@@ -126,10 +175,13 @@
       }
     },
     "_euler": {
+      "_query_type": "euler_erc4626",
       "syrupusdc_vault": {
         "address": "0xA999f8a38A902f27F278358c4bD20fe1459Ae47C",
         "abi": "erc4626",
-        "description": "Euler V2 esyrupUSDC-1. Sub-accounts: balanceOf(wallet XOR i) for i=0..255. Sub-account 1 active for 0xa33e."
+        "display_name": "Euler esyrupUSDC",
+        "underlying_symbol": "syrupUSDC",
+        "description": "Euler V2 esyrupUSDC-1. Sub-accounts: balanceOf(wallet XOR i) for i=0..255."
       }
     }
   },
@@ -143,6 +195,7 @@
       }
     },
     "_aave": {
+      "_query_type": "aave_leverage",
       "pool": {
         "address": "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
         "abi": "aave_pool",
@@ -151,27 +204,35 @@
       "atoken_syrupusdc": {
         "address": "0xD7424238CcbE7b7198Ab3cFE232e0271E22da7bd",
         "abi": "erc20",
-        "description": "aBassyrupUSDC — Aave Base syrupUSDC aToken"
+        "display_name": "Aave Base syrupUSDC",
+        "underlying_symbol": "syrupUSDC",
+        "description": "aBassyrupUSDC -- Aave Base syrupUSDC aToken"
       }
     },
     "_morpho_vaults": {
+      "_query_type": "erc4626",
       "clearstar_usdc_reactor": {
         "address": "0x1D3b1Cd0a0f242d598834b3F2d126dC6bd774657",
         "abi": "erc4626",
+        "display_name": "Clearstar USDC Reactor",
+        "underlying_symbol": "USDC",
         "description": "Clearstar USDC Reactor (CSUSDC)"
       }
     },
     "_avantis": {
+      "_query_type": "erc4626",
       "vault": {
         "address": "0x944766f715b51967E56aFdE5f0Aa76cEaCc9E7f9",
         "abi": "erc4626",
+        "display_name": "Avantis USDC",
+        "underlying_symbol": "USDC",
         "description": "Avantis USDC Vault (avUSDC)"
       }
     },
     "_arma": {
       "proxy": {
         "address": "0xa8d4e894f268438d3438d0030f2e36852aeba97d",
-        "description": "ARMA (Giza) smart account proxy — scan as wallet"
+        "description": "ARMA (Giza) smart account proxy -- scan as wallet"
       },
       "implementation": {
         "address": "0x17bac39f916c21ac825aed89607fdba251dce97d",
@@ -182,6 +243,7 @@
 
   "plasma": {
     "_aave": {
+      "_query_type": "aave_leverage",
       "pool": {
         "address": "0x925a2A7214Ed92428B5b1B090F80b25700095e12",
         "abi": "aave_pool",
@@ -190,15 +252,29 @@
       "atoken_usde": {
         "address": "0x7519403E12111ff6b710877Fcd821D0c12CAF43A",
         "abi": "erc20",
-        "description": "aPlaUSDe — Aave Plasma USDe aToken"
+        "display_name": "Aave Plasma USDe",
+        "underlying_symbol": "USDe",
+        "description": "aPlaUSDe -- Aave Plasma USDe aToken"
       },
       "atoken_susde": {
         "address": "0xc1a318493ff07a68fe438cee60a7ad0d0dba300e",
         "abi": "erc20",
-        "description": "aPlasUSDe — Aave Plasma sUSDe aToken"
+        "display_name": "Aave Plasma sUSDe",
+        "underlying_symbol": "sUSDe",
+        "description": "aPlasUSDe -- Aave Plasma sUSDe aToken"
       }
     },
     "_midas": {
+      "_query_type": "midas_oracle",
+      "mhyper": {
+        "address": "0xb31BeA5c2a43f942a3800558B1aa25978da75F8a",
+        "abi": "erc20",
+        "symbol": "mHYPER",
+        "display_name": "Midas Hyperithm",
+        "decimals": 18,
+        "oracle": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
+        "oracle_chain": "plasma"
+      },
       "mhyper_oracle": {
         "address": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
         "abi": "chainlink_aggregator_v3",
@@ -219,9 +295,12 @@
 
   "katana": {
     "_yearn": {
+      "_query_type": "erc4626",
       "vbusdc_vault": {
         "address": "0x80c34BD3A3569E126e7055831036aa7b212cB159",
         "abi": "erc4626",
+        "display_name": "Yearn V3 vbUSDC",
+        "underlying_symbol": "USDC",
         "description": "Yearn V3 vbUSDC yVault (yvvbUSDC)"
       }
     }

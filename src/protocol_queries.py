@@ -30,35 +30,57 @@ from pt_valuation import value_pt_from_config
 from web3 import Web3
 
 
-# Vault/contract → clean display name (for position labels)
-_DISPLAY_NAMES = {
-    "0xbeeff047c03714965a54b671a37c18bef6b96210": "Steakhouse Reservoir USDC",
-    "0xbeef047a543e45807105e51a8bbefcc5950fcfba": "Steakhouse USDT",
-    "0x1d3b1cd0a0f242d598834b3f2d126dc6bd774657": "Clearstar USDC Reactor",
-    "0x944766f715b51967e56afde5f0aa76ceacc9e7f9": "Avantis USDC",
-    "0x80c34bd3a3569e126e7055831036aa7b212cb159": "Yearn V3 vbUSDC",
-    "0xb21eafb126cef15cb99fe2d23989b58e40097919": "Credit Coop Veris Vault",
-    "0xa999f8a38a902f27f278358c4bd20fe1459ae47c": "Euler esyrupUSDC",
-    "0x777791c4d6dc2ce140d00d2828a7c93503c67777": "Hyperithm USDC Apex",
-    # Aave aTokens
-    "0x08b798c40b9ab931356d9ab4235f548325c4cb80": "Aave Horizon USCC",
-    "0xace8a1c0ec12ae81814377491265b47f4ee5d3dd": "Aave Horizon RLUSD debt",
-    "0xd7424238ccbe7b7198ab3cfe232e0271e22da7bd": "Aave Base syrupUSDC",
-    "0x7519403e12111ff6b710877fcd821d0c12caf43a": "Aave Plasma USDe",
-    "0xc1a318493ff07a68fe438cee60a7ad0d0dba300e": "Aave Plasma sUSDe",
-}
+# =============================================================================
+# Config caches and loaders
+# =============================================================================
 
-# Vault address → underlying token symbol (for A1 valuation pricing)
-_VAULT_UNDERLYING = {
-    "0xbeeff047c03714965a54b671a37c18bef6b96210": "USDC",    # Steakhouse Reservoir USDC
-    "0xbeef047a543e45807105e51a8bbefcc5950fcfba": "USDT",    # Steakhouse USDT
-    "0x1d3b1cd0a0f242d598834b3f2d126dc6bd774657": "USDC",    # Clearstar USDC Reactor
-    "0x944766f715b51967e56afde5f0aa76ceacc9e7f9": "USDC",    # Avantis avUSDC
-    "0x80c34bd3a3569e126e7055831036aa7b212cb159": "USDC",    # Yearn V3 vbUSDC
-    "0xb21eafb126cef15cb99fe2d23989b58e40097919": "USDC",    # CreditCoop Vault
-    "0xa999f8a38a902f27f278358c4bd20fe1459ae47c": "syrupUSDC",  # Euler esyrupUSDC
-    "0x777791c4d6dc2ce140d00d2828a7c93503c67777": "USDC",       # Hyperithm USDC Apex
-}
+_ABIS = None
+_MORPHO_CFG_CACHE = None
+_CONTRACTS_CFG_CACHE = None
+_SOLANA_CFG_CACHE = None
+_WALLETS_CFG_CACHE = None
+
+
+def _load_morpho_cfg():
+    global _MORPHO_CFG_CACHE
+    if _MORPHO_CFG_CACHE is None:
+        with open(os.path.join(CONFIG_DIR, "morpho_markets.json")) as f:
+            _MORPHO_CFG_CACHE = json.load(f)
+    return _MORPHO_CFG_CACHE
+
+
+def _load_contracts_cfg():
+    global _CONTRACTS_CFG_CACHE
+    if _CONTRACTS_CFG_CACHE is None:
+        with open(os.path.join(CONFIG_DIR, "contracts.json")) as f:
+            _CONTRACTS_CFG_CACHE = json.load(f)
+    return _CONTRACTS_CFG_CACHE
+
+
+def _load_solana_cfg():
+    global _SOLANA_CFG_CACHE
+    if _SOLANA_CFG_CACHE is None:
+        with open(os.path.join(CONFIG_DIR, "solana_protocols.json")) as f:
+            _SOLANA_CFG_CACHE = json.load(f)
+    return _SOLANA_CFG_CACHE
+
+
+def _load_wallets_cfg():
+    global _WALLETS_CFG_CACHE
+    if _WALLETS_CFG_CACHE is None:
+        with open(os.path.join(CONFIG_DIR, "wallets.json")) as f:
+            _WALLETS_CFG_CACHE = json.load(f)
+    return _WALLETS_CFG_CACHE
+
+
+def _get_display_name(entry, vault_addr, fallback=""):
+    """Get display name from config entry, falling back to entry_key."""
+    return entry.get("display_name", fallback)
+
+
+def _get_underlying_symbol(entry, vault_addr, fallback="USDC"):
+    """Get underlying token symbol from config entry."""
+    return entry.get("underlying_symbol", fallback)
 
 
 def _fmt(val, decimals):
@@ -71,8 +93,6 @@ def _load_abis():
     with open(os.path.join(CONFIG_DIR, "abis.json")) as f:
         return json.load(f)
 
-
-_ABIS = None
 
 def _get_abi(name):
     global _ABIS
@@ -233,9 +253,8 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
         shares_human = _fmt(shares, share_decimals)
         assets_human = _fmt(assets, underlying_decimals)
 
-        # Determine underlying symbol from known vault mappings
-        underlying_sym = _VAULT_UNDERLYING.get(vault_addr.lower(), "USDC")
-        display_name = _DISPLAY_NAMES.get(vault_addr.lower(), entry_key)
+        underlying_sym = _get_underlying_symbol(entry, vault_addr)
+        display_name = _get_display_name(entry, vault_addr, entry_key)
 
         rows.append({
             "chain": chain, "protocol": protocol, "wallet": wallet,
@@ -308,10 +327,9 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
                 shares_human = _fmt(shares, share_dec)
                 assets_human = _fmt(assets, u_dec)
 
-                display_name = _DISPLAY_NAMES.get(vault_addr.lower(), entry_key)
                 rows.append({
                     "chain": chain, "protocol": "euler", "wallet": wallet,
-                    "position_label": display_name,
+                    "position_label": _get_display_name(entry, vault_addr, entry_key),
                     "category": "A1", "position_type": "vault_share",
                     "token_symbol": entry_key,
                     "token_contract": vault_addr,
@@ -320,7 +338,7 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
                     "decimals": share_dec,
                     "exchange_rate": assets_human / shares_human if shares_human > 0 else Decimal(0),
                     "underlying_amount": assets_human,
-                    "underlying_symbol": "syrupUSDC",
+                    "underlying_symbol": _get_underlying_symbol(entry, vault_addr, "syrupUSDC"),
                     "euler_sub_account": sub_id,
                     "euler_sub_address": sub_addr.lower(),
                     "block_number": block_number, "block_timestamp_utc": block_ts,
@@ -380,11 +398,10 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
             decimals = 6  # default
 
         bal_human = _fmt(bal, decimals)
-        display_name = _DISPLAY_NAMES.get(aentry["address"].lower(), akey)
 
         rows.append({
             "chain": chain, "protocol": "aave", "wallet": wallet,
-            "position_label": display_name,
+            "position_label": _get_display_name(aentry, aentry["address"], akey),
             "category": "D",  # may be reclassified if no debt
             "position_type": "collateral",
             "token_symbol": akey,
@@ -413,10 +430,9 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
 
         bal_human = _fmt(bal, decimals)
 
-        display_name = _DISPLAY_NAMES.get(dentry["address"].lower(), dkey)
         rows.append({
             "chain": chain, "protocol": "aave", "wallet": wallet,
-            "position_label": display_name,
+            "position_label": _get_display_name(dentry, dentry["address"], dkey),
             "category": "D", "position_type": "debt",
             "token_symbol": dkey,
             "token_contract": dentry["address"],
@@ -433,7 +449,7 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
 # EVM: Gauntlet / FalconX (Category A3 cross-reference)
 # =============================================================================
 
-def query_gauntlet_falconx(w3, wallet, block_number, block_ts):
+def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     """Query Gauntlet vault FalconX A3 position.
 
     Computes the NAV value using accrual methodology from the raw data in the
@@ -448,8 +464,9 @@ def query_gauntlet_falconx(w3, wallet, block_number, block_ts):
       Veris share = Net × Veris %
     """
     import csv
-
-    GAUNTLET_VAULT = "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44"
+    contracts = _load_contracts_cfg()
+    gp_section = contracts.get("ethereum", {}).get("_gauntlet_pareto", {})
+    GAUNTLET_VAULT = gp_section.get("gauntlet_vault", {}).get("address", "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44")
     erc20_abi = _get_abi("erc20")
 
     # Only need veris shares for reporting (balance_human)
@@ -623,14 +640,19 @@ def _compute_direct_value(rows):
 # EVM: Uniswap V4 (Category C — concentrated liquidity NFT)
 # =============================================================================
 
-def query_uniswap_v4(w3, wallet, block_number, block_ts):
-    """Query Uniswap V4 NFT position #142965 (USDC/DUSD).
+def query_uniswap_v4(w3, chain, wallet, block_number, block_ts):
+    """Query Uniswap V4 NFT LP positions.
 
-    Small position (~$9 USDC). Reports liquidity amount; value estimated
-    from the position's USDC component only (DUSD is depegged).
+    Reads position manager address and NFT IDs from contracts.json _uniswap section.
+    Reports liquidity amount for each owned NFT.
     """
-    PM = "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e"
-    NFT_ID = 142965
+    contracts = _load_contracts_cfg()
+    uni_section = contracts.get(chain, {}).get("_uniswap", {})
+    pm_entry = uni_section.get("v4_position_manager", {})
+    PM = pm_entry.get("address")
+    nft_ids = pm_entry.get("nft_ids", [])
+    if not PM or not nft_ids:
+        return []
 
     # Check ownership
     owner_abi = [{"inputs": [{"name": "tokenId", "type": "uint256"}], "name": "ownerOf",
@@ -640,52 +662,58 @@ def query_uniswap_v4(w3, wallet, block_number, block_ts):
 
     pm = w3.eth.contract(address=Web3.to_checksum_address(PM), abi=owner_abi + liq_abi)
 
-    try:
-        owner = pm.functions.ownerOf(NFT_ID).call()
-    except Exception:
-        return []
+    rows = []
+    for nft_id in nft_ids:
+        try:
+            owner = pm.functions.ownerOf(nft_id).call()
+        except Exception:
+            continue
 
-    if owner.lower() != wallet.lower():
-        return []
+        if owner.lower() != wallet.lower():
+            continue
 
-    liquidity = pm.functions.getPositionLiquidity(NFT_ID).call()
-    if liquidity == 0:
-        return []
+        liquidity = pm.functions.getPositionLiquidity(nft_id).call()
+        if liquidity == 0:
+            continue
 
-    # Position is USDC/DUSD CL, ~$9 total from 1Token snapshots
-    # Exact decomposition requires V4 pool state (sqrtPriceX96, ticks)
-    # For this small position, report as LP with approximate value
-    return [{
-        "chain": "ethereum", "protocol": "uniswap_v4", "wallet": wallet,
-        "position_label": "Uniswap V4 USDC/DUSD #142965",
-        "category": "C", "position_type": "lp_position",
-        "token_symbol": "UNI-V4-142965",
-        "token_contract": PM,
-        "balance_human": Decimal(str(liquidity)),
-        "nft_id": NFT_ID,
-        "block_number": block_number, "block_timestamp_utc": block_ts,
-        "notes": "Concentrated liquidity USDC/DUSD 0.01% fee. Range 0.95-0.9999. ~$9 per 1Token snapshots.",
-    }]
+        rows.append({
+            "chain": chain, "protocol": "uniswap_v4", "wallet": wallet,
+            "position_label": f"Uniswap V4 USDC/DUSD #{nft_id}",
+            "category": "C", "position_type": "lp_position",
+            "token_symbol": f"UNI-V4-{nft_id}",
+            "token_contract": PM,
+            "balance_human": Decimal(str(liquidity)),
+            "nft_id": nft_id,
+            "block_number": block_number, "block_timestamp_utc": block_ts,
+            "notes": f"Concentrated liquidity USDC/DUSD 0.01% fee. NFT #{nft_id}.",
+        })
+
+    return rows
 
 
 # =============================================================================
 # EVM: Ethena sUSDe Cooldowns (pending unstakes)
 # =============================================================================
 
-def query_ethena_cooldowns(w3, wallet, block_number, block_ts):
+def query_ethena_cooldowns(w3, chain, wallet, block_number, block_ts):
     """Query Ethena sUSDe cooldown (pending unstakes).
-
-    cooldowns(wallet) returns (cooldownEnd, underlyingAmount).
-    These are NOT visible via balanceOf — separate from the sUSDe balance.
+    Reads sUSDe address from contracts.json _ethena section.
     """
-    SUSDE = "0x9d39a5de30e57443bff2a8307a4256c8797a3497"
+    contracts = _load_contracts_cfg()
+    ethena_section = contracts.get(chain, {}).get("_ethena", {})
+    susde_entry = ethena_section.get("susde", {})
+    susde_addr = susde_entry.get("address")
+    usde_addr = susde_entry.get("usde_token", "0x4c9edd5852cd905f086c759e8383e09bff1e68b3")
+    if not susde_addr:
+        return []
+
     cooldown_abi = [{"inputs": [{"name": "account", "type": "address"}],
                      "name": "cooldowns",
                      "outputs": [{"name": "cooldownEnd", "type": "uint104"},
                                  {"name": "underlyingAmount", "type": "uint152"}],
                      "stateMutability": "view", "type": "function"}]
 
-    susde = w3.eth.contract(address=Web3.to_checksum_address(SUSDE), abi=cooldown_abi)
+    susde = w3.eth.contract(address=Web3.to_checksum_address(susde_addr), abi=cooldown_abi)
 
     try:
         result = susde.functions.cooldowns(Web3.to_checksum_address(wallet)).call()
@@ -702,11 +730,11 @@ def query_ethena_cooldowns(w3, wallet, block_number, block_ts):
     claimable = end_ts and end_ts < datetime.now(__import__("datetime").timezone.utc)
 
     return [{
-        "chain": "ethereum", "protocol": "ethena", "wallet": wallet,
+        "chain": chain, "protocol": "ethena", "wallet": wallet,
         "position_label": "Ethena sUSDe Cooldown",
         "category": "E", "position_type": "token_balance",
         "token_symbol": "USDe",
-        "token_contract": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",  # USDe
+        "token_contract": usde_addr,
         "balance_human": amount,
         "decimals": 18,
         "block_number": block_number, "block_timestamp_utc": block_ts,
@@ -721,42 +749,24 @@ def query_ethena_cooldowns(w3, wallet, block_number, block_ts):
 def query_midas_positions(w3, chain, wallet, block_number, block_ts):
     """Query Midas tokenised fund positions (mF-ONE, mHYPER, msyrupUSDp).
 
-    These are ERC-20 tokens with Chainlink-style oracles. Category A2.
+    Reads token addresses and oracles from contracts.json _midas section.
     """
-    # Known Midas tokens per chain
-    MIDAS_TOKENS = {
-        "ethereum": [
-            {
-                "address": "0x238a700eD6165261Cf8b2e544ba797BC11e466Ba",
-                "symbol": "mF-ONE", "name": "Midas Fasanara ONE",
-                "decimals": 18, "oracle": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
-            },
-            {
-                "address": "0x2fE058CcF29f123f9dd2aEC0418AA66a877d8E50",
-                "symbol": "msyrupUSDp", "name": "Midas syrupUSD Pre-deposit",
-                "decimals": 18, "oracle": "0x337d914ff6622510FC2C63ac59c1D07983895241",
-            },
-        ],
-        "plasma": [
-            {
-                "address": "0xb31BeA5c2a43f942a3800558B1aa25978da75F8a",
-                "symbol": "mHYPER", "name": "Midas Hyperithm",
-                "decimals": 18, "oracle": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
-                "oracle_chain": "plasma",
-            },
-        ],
-    }
-
-    chain_tokens = MIDAS_TOKENS.get(chain, [])
-    if not chain_tokens:
+    contracts = _load_contracts_cfg()
+    midas_section = contracts.get(chain, {}).get("_midas", {})
+    if not midas_section:
         return []
 
     erc20_abi = _get_abi("erc20")
     rows = []
 
-    for tok in chain_tokens:
+    for entry_key, entry in midas_section.items():
+        if entry_key.startswith("_") or not isinstance(entry, dict):
+            continue
+        if "address" not in entry or "oracle" not in entry:
+            continue  # Skip oracle-only entries (like mhyper_oracle)
+
         token = w3.eth.contract(
-            address=Web3.to_checksum_address(tok["address"]), abi=erc20_abi)
+            address=Web3.to_checksum_address(entry["address"]), abi=erc20_abi)
         try:
             bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
         except Exception:
@@ -765,19 +775,19 @@ def query_midas_positions(w3, chain, wallet, block_number, block_ts):
         if bal == 0:
             continue
 
-        bal_human = _fmt(bal, tok["decimals"])
+        bal_human = _fmt(bal, entry.get("decimals", 18))
 
         rows.append({
             "chain": chain, "protocol": "midas", "wallet": wallet,
-            "position_label": tok["name"],
+            "position_label": entry.get("display_name", entry.get("symbol", entry_key)),
             "category": "A2", "position_type": "oracle_priced",
-            "token_symbol": tok["symbol"],
-            "token_contract": tok["address"],
+            "token_symbol": entry.get("symbol", entry_key),
+            "token_contract": entry["address"],
             "balance_raw": str(bal),
             "balance_human": bal_human,
-            "decimals": tok["decimals"],
-            "oracle_address": tok["oracle"],
-            "oracle_chain": tok.get("oracle_chain", "ethereum"),
+            "decimals": entry.get("decimals", 18),
+            "oracle_address": entry["oracle"],
+            "oracle_chain": entry.get("oracle_chain", "ethereum"),
             "block_number": block_number, "block_timestamp_utc": block_ts,
         })
 
@@ -788,12 +798,14 @@ def query_midas_positions(w3, chain, wallet, block_number, block_ts):
 # EVM: FalconX Direct AA_FalconXUSDC (Category A3)
 # =============================================================================
 
-def query_falconx_direct(w3, wallet, block_number, block_ts):
+def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
     """Query direct AA_FalconXUSDC holding for A3 accrual.
 
     Reads the Running Balance from the supporting workbook (Direct Accrual sheet).
     """
-    AA_TRANCHE = "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C"
+    contracts = _load_contracts_cfg()
+    gp_section = contracts.get("ethereum", {}).get("_gauntlet_pareto", {})
+    AA_TRANCHE = gp_section.get("aa_falconxusdc_tranche", {}).get("address", "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C")
     erc20_abi = _get_abi("erc20")
 
     # Check if wallet holds AA_FalconXUSDC
@@ -833,7 +845,7 @@ def query_falconx_direct(w3, wallet, block_number, block_ts):
 # EVM: CreditCoop (Category A1)
 # =============================================================================
 
-def query_creditcoop(w3, wallet, block_number, block_ts):
+def query_creditcoop(w3, chain, wallet, block_number, block_ts):
     """Query CreditCoop vault — ERC-4626 convertToAssets + sub-strategy breakdown.
 
     Returns:
@@ -843,10 +855,14 @@ def query_creditcoop(w3, wallet, block_number, block_ts):
       - Gauntlet USDC Core (totalAssets on LiquidStrategy)
       - Undeployed cash (USDC balanceOf on vault + credit strategy)
     """
-    VAULT = "0xb21eAFB126cEf15CB99fe2D23989b58e40097919"
-    LIQUID_STRATEGY = "0x671B5B6F01C5FEe16E6F9De2eb85AC027Dc9fE0e"
-    CREDIT_STRATEGY = "0x433E415b0fA54C570C450DD976E2402e408cB6db"
-    USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+    contracts = _load_contracts_cfg()
+    cc_section = contracts.get("ethereum", {}).get("_credit_coop", {})
+    VAULT = cc_section.get("vault", {}).get("address")
+    LIQUID_STRATEGY = cc_section.get("liquid_strategy", {}).get("address")
+    CREDIT_STRATEGY = cc_section.get("credit_strategy", {}).get("address")
+    USDC = cc_section.get("usdc_token", {}).get("address", "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+    if not VAULT:
+        return []
 
     erc20_abi = _get_abi("erc20")
     erc4626_abi = _get_abi("erc4626")
@@ -930,37 +946,11 @@ def query_creditcoop(w3, wallet, block_number, block_ts):
 def query_kamino_obligations(wallet, block_ts):
     """Query Kamino lending obligation positions (leveraged).
 
+    Reads obligation configs from solana_protocols.json kamino section.
     Returns collateral + debt rows for each known obligation.
     """
-    # Known obligations from protocol_sourcing.md
-    obligations = [
-        {
-            "market_name": "Superstate Opening Bell",
-            "obligation_pubkey": "D2rcayJTqmZvqaoViEyamQh2vw9T1KYwjbySQZSz6fsS",
-            "deposits": [
-                {"reserve": "FQnQgBYzJkiVfUZgggfTRn4FGKE3FN94UoZgBreZMgTR",
-                 "symbol": "USCC", "decimals": 6, "category": "A2"},
-            ],
-            "borrows": [
-                {"reserve": "BnYNV7TdhwASUab7mQCRhzHvasjp8o8xmmvVtKnPe3Zi",
-                 "symbol": "USDC", "decimals": 6, "category": "E"},
-            ],
-        },
-        {
-            "market_name": "Solstice",
-            "obligation_pubkey": "HMMc5d9sMrGrAY18wE5yYTPpJNk72nrBrgqz5mtE3yrq",
-            "deposits": [
-                {"reserve": "BLKW7xCY5g5qE8S5Z3riw7TYRQnm8NMfeqB9qb269Bo3",
-                 "symbol": "PT-USX-01JUN26", "decimals": 6, "category": "B"},
-                {"reserve": "EzmztxShSt8AwpBBbJxpYaKAY3E3PWQCyPQPkUYbP9u",
-                 "symbol": "PT-eUSX-01JUN26", "decimals": 6, "category": "B"},
-            ],
-            "borrows": [
-                {"reserve": "H2pmnDSjfxeQ8zUeyUohokegYbXZgkjH4kgmoQVybyAX",
-                 "symbol": "USX", "decimals": 6, "category": "E"},
-            ],
-        },
-    ]
+    solana_cfg = _load_solana_cfg()
+    obligations = solana_cfg.get("kamino", {}).get("obligations", [])
 
     rows = []
     for ob_cfg in obligations:
@@ -1020,35 +1010,28 @@ def query_kamino_obligations(wallet, block_ts):
 # =============================================================================
 
 def query_exponent_lps(wallet, block_ts):
-    """Query Exponent LP positions and decompose into SY + PT constituents."""
-    # Known markets
-    market_configs = [
-        {
-            "market_pubkey": "8QJRc12BDXHRLghZXFyPtYtAQeRwnZGKMJQa3G2NVQoC",
-            "name": "ONyc-13MAY26",
-            "sy_symbol": "ONyc", "sy_category": "A2", "sy_decimals": 9,
-            "pt_symbol": "PT-ONyc-13MAY26", "pt_decimals": 9,
-        },
-        {
-            "market_pubkey": "rBbzpGk3PTX8mvQg95VWJ24EDgvxyDJYrEo9jtauvjP",
-            "name": "eUSX-01JUN26",
-            "sy_symbol": "eUSX", "sy_category": "A1", "sy_decimals": 6,
-            "pt_symbol": "PT-eUSX-01JUN26", "pt_decimals": 6,
-        },
-    ]
+    """Query Exponent LP positions and decompose into SY + PT constituents.
+
+    Reads market configs from solana_protocols.json exponent section.
+    """
+    solana_cfg = _load_solana_cfg()
+    markets = solana_cfg.get("exponent", {}).get("markets", [])
 
     lp_positions = get_exponent_lp_positions(wallet)
     if not lp_positions:
         return []
 
     rows = []
-    for mcfg in market_configs:
+    for mcfg in markets:
         lp = next(
             (l for l in lp_positions if l["market"] == mcfg["market_pubkey"]),
             None
         )
         if lp is None or lp["lp_balance"] == 0:
             continue
+
+        sy = mcfg["sy"]
+        pt = mcfg["pt"]
 
         time.sleep(0.3)
         market = get_exponent_market(mcfg["market_pubkey"])
@@ -1058,8 +1041,8 @@ def query_exponent_lps(wallet, block_ts):
 
         decomp = decompose_exponent_lp(market, lp["lp_balance"], lp_supply)
 
-        sy_amount = Decimal(decomp["user_sy"]) / Decimal(10 ** mcfg["sy_decimals"])
-        pt_amount = Decimal(decomp["user_pt"]) / Decimal(10 ** mcfg["pt_decimals"])
+        sy_amount = Decimal(decomp["user_sy"]) / Decimal(10 ** sy["decimals"])
+        pt_amount = Decimal(decomp["user_pt"]) / Decimal(10 ** pt["decimals"])
         pt_price_ratio = Decimal(str(decomp["pt_price_ratio"]))
 
         # SY constituent row
@@ -1067,10 +1050,10 @@ def query_exponent_lps(wallet, block_ts):
             "chain": "solana", "protocol": "exponent", "wallet": wallet,
             "position_label": f"Exponent {mcfg['name']} LP",
             "category": "C", "position_type": "lp_constituent",
-            "token_symbol": mcfg["sy_symbol"],
-            "token_category": mcfg["sy_category"],
+            "token_symbol": sy["symbol"],
+            "token_category": sy["category"],
             "balance_human": sy_amount,
-            "decimals": mcfg["sy_decimals"],
+            "decimals": sy["decimals"],
             "lp_constituent_type": "SY",
             "lp_share": decomp["lp_share"],
             "block_timestamp_utc": block_ts,
@@ -1081,10 +1064,10 @@ def query_exponent_lps(wallet, block_ts):
             "chain": "solana", "protocol": "exponent", "wallet": wallet,
             "position_label": f"Exponent {mcfg['name']} LP",
             "category": "C", "position_type": "lp_constituent",
-            "token_symbol": mcfg["pt_symbol"],
+            "token_symbol": pt["symbol"],
             "token_category": "C",  # PT in LP uses AMM rate, not lot amortisation
             "balance_human": pt_amount,
-            "decimals": mcfg["pt_decimals"],
+            "decimals": pt["decimals"],
             "lp_constituent_type": "PT",
             "pt_price_ratio": pt_price_ratio,
             "last_ln_implied_rate": decomp["last_ln_implied_rate"],
@@ -1101,30 +1084,28 @@ def query_exponent_lps(wallet, block_ts):
 # =============================================================================
 
 def query_exponent_yts(wallet, block_ts):
-    """Query Exponent Yield Token positions."""
-    yt_configs = [
-        {
-            "vault": "J2apQJvzq1yuhBoa1mVwAXr3P5oEzFaCVohq1GQMcW2c",
-            "market_pubkey": "8QJRc12BDXHRLghZXFyPtYtAQeRwnZGKMJQa3G2NVQoC",
-            "symbol": "YT-ONyc-13MAY26", "underlying": "ONyc",
-            "decimals": 9,
-        },
-        {
-            "vault": "7NviQEEiA5RSY4aL1wpqGE8CYAx2Lx7THHinsW1CWDXu",
-            "market_pubkey": "rBbzpGk3PTX8mvQg95VWJ24EDgvxyDJYrEo9jtauvjP",
-            "symbol": "YT-eUSX-01JUN26", "underlying": "eUSX",
-            "decimals": 6,
-        },
-    ]
+    """Query Exponent Yield Token positions.
+
+    Reads market configs from solana_protocols.json exponent section.
+    """
+    solana_cfg = _load_solana_cfg()
+    markets = solana_cfg.get("exponent", {}).get("markets", [])
 
     yt_positions = get_exponent_yt_positions(wallet)
     if not yt_positions:
         return []
 
     rows = []
-    for yt_cfg in yt_configs:
+    for mcfg in markets:
+        yt_cfg = mcfg.get("yt")
+        if not yt_cfg:
+            continue
+        yt_vault = mcfg.get("yt_vault")
+        if not yt_vault:
+            continue
+
         yt = next(
-            (y for y in yt_positions if y["vault"] == yt_cfg["vault"]),
+            (y for y in yt_positions if y["vault"] == yt_vault),
             None
         )
         if yt is None or yt["yt_balance"] == 0:
@@ -1134,7 +1115,7 @@ def query_exponent_yts(wallet, block_ts):
 
         # Get PT price ratio from market for YT pricing
         time.sleep(0.3)
-        market = get_exponent_market(yt_cfg["market_pubkey"])
+        market = get_exponent_market(mcfg["market_pubkey"])
         sec_remaining = market["expiration_ts"] - int(time.time())
         if sec_remaining > 0 and market["last_ln_implied_rate"] > 0:
             exchange_rate = math.exp(
@@ -1150,7 +1131,7 @@ def query_exponent_yts(wallet, block_ts):
             "position_label": f"Exponent {yt_cfg['symbol']}",
             "category": "F", "position_type": "reward",
             "token_symbol": yt_cfg["symbol"],
-            "underlying_symbol": yt_cfg["underlying"],
+            "underlying_symbol": yt_cfg.get("underlying", ""),
             "balance_human": yt_human,
             "decimals": yt_cfg["decimals"],
             "yt_price_ratio": yt_price_ratio,
@@ -1203,71 +1184,94 @@ def query_pt_lots(valuation_date, block_ts):
 
 
 # =============================================================================
-# Orchestrator helper: query all EVM positions for a wallet on a chain
+# Config-driven wallet → protocol mapping
 # =============================================================================
 
-_MORPHO_CFG_CACHE = None
-_CONTRACTS_CFG_CACHE = None
+def _get_wallet_protocols(chain, wallet):
+    """Get list of protocol keys this wallet is registered for on this chain.
 
-
-def _load_morpho_cfg():
-    global _MORPHO_CFG_CACHE
-    if _MORPHO_CFG_CACHE is None:
-        with open(os.path.join(CONFIG_DIR, "morpho_markets.json")) as f:
-            _MORPHO_CFG_CACHE = json.load(f)
-    return _MORPHO_CFG_CACHE
-
-
-def _load_contracts_cfg():
-    global _CONTRACTS_CFG_CACHE
-    if _CONTRACTS_CFG_CACHE is None:
-        with open(os.path.join(CONFIG_DIR, "contracts.json")) as f:
-            _CONTRACTS_CFG_CACHE = json.load(f)
-    return _CONTRACTS_CFG_CACHE
-
-
-def _has_protocol_positions(chain, wallet):
-    """Quick check: does this wallet have any registered protocol positions on this chain?
-
-    Avoids expensive RPC calls for wallet/chain combos with nothing registered.
+    Reads from wallets.json instead of hardcoded KNOWN_POSITIONS.
+    For ethereum chain: uses the wallet's 'protocols' dict.
+    For other chains: uses '_chain_protocols' section.
+    Also checks morpho_markets.json for Morpho positions.
     """
     wallet_lower = wallet.lower()
-    wallet_short = wallet_lower[:6]
+    wallets_cfg = _load_wallets_cfg()
+    protocols = set()
 
-    # Morpho markets — wallet-specific
+    # Check ethereum wallet entries (used for all EVM chains on ethereum section)
+    if chain == "ethereum":
+        for w in wallets_cfg.get("ethereum", []):
+            if w["address"].lower() == wallet_lower:
+                for p_key, enabled in w.get("protocols", {}).items():
+                    if enabled:
+                        protocols.add(p_key)
+                break
+
+    # Check chain-specific protocol registrations
+    chain_protocols = wallets_cfg.get("_chain_protocols", {}).get(chain, {})
+    wallet_chain_entry = chain_protocols.get(wallet_lower)
+    if wallet_chain_entry:
+        for p_key, enabled in wallet_chain_entry.get("protocols", {}).items():
+            if enabled:
+                protocols.add(p_key)
+
+    # Check morpho_markets.json for wallet-specific Morpho positions
     morpho_cfg = _load_morpho_cfg()
     chain_morpho = morpho_cfg.get(chain, {})
     for mkt in chain_morpho.get("markets", []):
         if wallet_lower in [w.lower() for w in mkt.get("wallets", [])]:
-            return True
+            protocols.add("morpho")
+            break
 
-    # Known wallet → chain → position mappings (avoid scanning all wallets on all chains)
-    KNOWN_POSITIONS = {
-        # (wallet_prefix, chain) → True
-        ("0xa33e", "ethereum"): True,   # Morpho D, Steakhouse A1, Midas mF-ONE A2
-        ("0xa33e", "arbitrum"): True,   # Morpho D, Euler A1
-        ("0xa33e", "base"): True,       # Aave A1
-        ("0x8055", "ethereum"): True,   # Aave Horizon D
-        ("0x8055", "base"): True,       # Clearstar A1, Avantis A1
-        ("0x0c16", "ethereum"): True,   # Gauntlet/FalconX A3
-        ("0xec0b", "ethereum"): True,   # CreditCoop A1, Hyperithm A1
-        ("0x6691", "base"): True,       # Avantis A1
-        ("0x6691", "plasma"): True,     # Aave sUSDe/USDe
-        ("0x8055", "plasma"): True,     # Midas mHYPER
-        ("0xa33e", "plasma"): True,     # Midas mHYPER
-        ("0x6691", "katana"): True,     # Yearn V3
-    }
+    return list(protocols)
 
-    return KNOWN_POSITIONS.get((wallet_short, chain), False)
 
+# =============================================================================
+# Protocol key -> handler mapping
+# =============================================================================
+
+# Protocol key (from wallets.json) -> handler key
+PROTOCOL_TO_HANDLER = {
+    "morpho":           "morpho_leverage",
+    "erc4626_vaults":   "erc4626",
+    "euler":            "euler_erc4626",
+    "aave":             "aave_leverage",
+    "midas":            "midas_oracle",
+    "gauntlet_falconx": "manual_accrual_gauntlet",
+    "falconx_direct":   "manual_accrual_direct",
+    "uniswap_v4":       "nft_lp",
+    "ethena_cooldowns": "ethena_cooldown",
+    "credit_coop":      "credit_coop",
+}
+
+# Handler key -> handler function
+HANDLER_REGISTRY = {
+    "morpho_leverage":          query_morpho_markets,
+    "erc4626":                  query_erc4626_vaults,
+    "euler_erc4626":            query_euler_vaults,
+    "aave_leverage":            query_aave_positions,
+    "midas_oracle":             query_midas_positions,
+    "manual_accrual_gauntlet":  query_gauntlet_falconx,
+    "manual_accrual_direct":    query_falconx_direct,
+    "nft_lp":                   query_uniswap_v4,
+    "ethena_cooldown":          query_ethena_cooldowns,
+    "credit_coop":              query_creditcoop,
+}
+
+
+# =============================================================================
+# Orchestrator: query all EVM positions for a wallet on a chain
+# =============================================================================
 
 def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
     """Query all protocol positions for one wallet on one EVM chain.
 
-    Returns list of raw position dicts (not yet priced).
-    Skips chains with no registered positions for this wallet.
+    Config-driven: reads wallet protocol registrations from wallets.json,
+    dispatches to the appropriate handler via HANDLER_REGISTRY.
     """
-    if not _has_protocol_positions(chain, wallet):
+    protocols = _get_wallet_protocols(chain, wallet)
+    if not protocols:
         return []
 
     try:
@@ -1278,80 +1282,18 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc=""):
         return []
 
     rows = []
-
-    # Morpho markets (D)
-    try:
-        morpho_rows = query_morpho_markets(w3, chain, wallet, block_number, block_ts)
-        rows.extend(morpho_rows)
-    except Exception as e:
-        print(f"  [{chain}] Morpho error: {e}")
-
-    # ERC-4626 vaults (A1)
-    try:
-        vault_rows = query_erc4626_vaults(w3, chain, wallet, block_number, block_ts)
-        rows.extend(vault_rows)
-    except Exception as e:
-        print(f"  [{chain}] ERC-4626 error: {e}")
-
-    # Euler vaults (A1, only on chains with Euler)
-    try:
-        euler_rows = query_euler_vaults(w3, chain, wallet, block_number, block_ts)
-        rows.extend(euler_rows)
-    except Exception as e:
-        pass  # Euler not on all chains
-
-    # Aave positions (D or A1)
-    try:
-        aave_rows = query_aave_positions(w3, chain, wallet, block_number, block_ts)
-        rows.extend(aave_rows)
-    except Exception as e:
-        print(f"  [{chain}] Aave error: {e}")
-
-    # Midas positions (A2)
-    try:
-        midas_rows = query_midas_positions(w3, chain, wallet, block_number, block_ts)
-        rows.extend(midas_rows)
-    except Exception as e:
-        pass  # Midas not on all chains
-
-    # Gauntlet/FalconX (A3, only for 0x0c16 on Ethereum)
-    if chain == "ethereum" and "0x0c16" in wallet.lower():
+    for protocol_key in protocols:
+        handler_key = PROTOCOL_TO_HANDLER.get(protocol_key)
+        if not handler_key:
+            continue
+        handler = HANDLER_REGISTRY.get(handler_key)
+        if not handler:
+            continue
         try:
-            gf_rows = query_gauntlet_falconx(w3, wallet, block_number, block_ts)
-            rows.extend(gf_rows)
+            handler_rows = handler(w3, chain, wallet, block_number, block_ts)
+            rows.extend(handler_rows)
         except Exception as e:
-            print(f"  [{chain}] Gauntlet/FalconX error: {e}")
-
-        # Direct AA_FalconXUSDC holding (A3, separate accrual)
-        try:
-            da_rows = query_falconx_direct(w3, wallet, block_number, block_ts)
-            rows.extend(da_rows)
-        except Exception as e:
-            print(f"  [{chain}] FalconX Direct error: {e}")
-
-    # Uniswap V4 LP (C, only for 0xa33e on Ethereum — NFT #142965, ~$9 USDC/DUSD)
-    if chain == "ethereum" and "0xa33e" in wallet.lower():
-        try:
-            uni_rows = query_uniswap_v4(w3, wallet, block_number, block_ts)
-            rows.extend(uni_rows)
-        except Exception as e:
-            pass
-
-    # Ethena sUSDe cooldowns (pending unstakes, only on Ethereum)
-    if chain == "ethereum":
-        try:
-            cooldown_rows = query_ethena_cooldowns(w3, wallet, block_number, block_ts)
-            rows.extend(cooldown_rows)
-        except Exception as e:
-            pass
-
-    # CreditCoop (A1, only for 0xec0b on Ethereum)
-    if chain == "ethereum" and "0xec0b" in wallet.lower():
-        try:
-            cc_rows = query_creditcoop(w3, wallet, block_number, block_ts)
-            rows.extend(cc_rows)
-        except Exception as e:
-            print(f"  [{chain}] CreditCoop error: {e}")
+            print(f"  [{chain}] {protocol_key} error: {e}")
 
     return rows
 
