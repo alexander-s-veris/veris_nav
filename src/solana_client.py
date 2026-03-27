@@ -319,8 +319,10 @@ def get_kamino_obligation(obligation_pubkey: str, slot: int | None = None) -> di
 # Yield-splitting protocol: SY → PT + YT. Markets are AMM pools (SY vs PT).
 # LP and YT positions are PDA accounts, not SPL tokens.
 
-EXPONENT_PROGRAM_ID = "ExponentnaRg3CQbW6dqQNZKXp7gtZ9DGMp1cwC4HAS7"
-_EXPONENT_PUBLIC_RPC = "https://api.mainnet-beta.solana.com"
+def _get_exponent_program_id() -> str:
+    return _load_solana_cfg()["exponent"]["program_id"]
+
+_EXPONENT_PUBLIC_RPC = os.getenv("SOLANA_PUBLIC_RPC_URL", "https://api.mainnet-beta.solana.com")
 
 # Account discriminators (from IDL)
 _LP_POSITION_DISC = bytes([105, 241, 37, 200, 224, 2, 252, 90])
@@ -408,7 +410,7 @@ def get_exponent_lp_positions(wallet: str) -> list[dict]:
     Returns list of dicts with market pubkey and lp_balance.
     """
     resp = _exponent_rpc("getProgramAccounts", [
-        EXPONENT_PROGRAM_ID,
+        _get_exponent_program_id(),
         {
             "encoding": "base64",
             "filters": [
@@ -443,7 +445,7 @@ def get_exponent_yt_positions(wallet: str) -> list[dict]:
     Returns list of dicts with vault pubkey and yt_balance.
     """
     resp = _exponent_rpc("getProgramAccounts", [
-        EXPONENT_PROGRAM_ID,
+        _get_exponent_program_id(),
         {
             "encoding": "base64",
             "filters": [
