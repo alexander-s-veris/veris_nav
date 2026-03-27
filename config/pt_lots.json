@@ -2,25 +2,64 @@
   "PT-USX-01JUN26": {
     "underlying": "USX",
     "maturity": "2026-06-01",
-    "lots": [],
-    "total_tokens": 1802168,
     "chain": "solana",
     "protocol": "exponent",
-    "notes": "7 tranches — individual lot details to be added"
+    "mint": "3kctCXgt6pP3uZcek8SqNK2KZdQ6cqtj9hc3U46jhgBk",
+    "underlying_mint": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG",
+    "decimals": 6,
+    "held_as": "kamino_solstice_collateral",
+    "total_tokens": 1802168.472450,
+    "total_lots": 7,
+    "lp_lot_tx_groups": [
+      [
+        "5LPeGq5TecwQJHxpzi3gkp3tvF6W9aVwV8pd1db9eFtmoPyNaNc8wYw8KA6GxTnzVs1utLhFcUKoeGhL9z5Zkf6T",
+        "2Hf7QVwCt6FyhUs8vZgb2GdPpUbSbghVLZsj2PF9HsvQJgTSsCBr8xV1P1gwcVedpduaVMjauCuUrbSYshDG8kVb",
+        "2pBH35NKdpjKTToC5EhTzDSgtwVTN9MSwM4uTsTSzvvJSwHWrLZxTfvaa7rnUNSmt7KpZLWcGZbRwLFu4yd7J6Ky"
+      ]
+    ],
+    "lots_discovered": [
+      {"date": "2026-02-06", "type": "amm_swap", "pt_qty": 521212.680252, "underlying_paid": 499902.056791, "apy": 0.1353},
+      {"date": "2026-02-06", "type": "amm_swap", "pt_qty": 260301.226647, "underlying_paid": 249932.034773, "apy": 0.1317},
+      {"date": "2026-02-10", "type": "amm_swap", "pt_qty": 254890.918614, "underlying_paid": 250000.026890, "apy": 0.0643},
+      {"date": "2026-02-11", "type": "amm_swap", "pt_qty": 205680.782298, "underlying_paid": 199900.039666, "apy": 0.0960},
+      {"date": "2026-02-11", "type": "amm_swap", "pt_qty": 53077.597567, "underlying_paid": 51600.005837, "apy": 0.0950},
+      {"date": "2026-02-18", "type": "amm_swap", "pt_qty": 441712.060233, "underlying_paid": 435250.179408, "apy": 0.0526},
+      {"date": "2026-02-18", "type": "lp_net", "pt_qty": 65293.206839, "underlying_paid": 62912.956795, "apy": 0.1341}
+    ],
+    "validated_against_spreadsheet": {
+      "date": "2026-03-18",
+      "script_value_usd": 1766815.76,
+      "spreadsheet_value_usd": 1766815.73,
+      "difference_usd": 0.03
+    }
   },
   "PT-eUSX-01JUN26": {
     "underlying": "eUSX",
     "maturity": "2026-06-01",
-    "tokens": 77840,
     "chain": "solana",
     "protocol": "exponent",
-    "notes": "In Kamino Solstice"
+    "mint": "BNR2FsHo8JrYGWx2V8yxG5GBWiG3uU8voi2eMGBHFwEj",
+    "underlying_mint": "3ThdFZQKM6kRyVGLG48kaPg5TRMhYMKY1iCRa9xop1WC",
+    "decimals": 6,
+    "held_as": "kamino_solstice_collateral",
+    "total_tokens": 77839.861427,
+    "total_lots": 1,
+    "lp_lot_tx_groups": [
+      [
+        "4N9MSaWYdEAcjWf6zQ82ti4Kqo4Jqpr66j3M95JCESm5DQvx3EButYvpNu34DxD6rTPrrBQtVEd5SeAeNQK35XCH",
+        "3ei4gZZhWaoWt3oMwcgCTVtXK56o7kQQrBhczx9tmCgGhbTaTRrkpWKJZwgHpfmQrK3gT8ZxXoDe2ZCRBxLpumPr"
+      ]
+    ],
+    "lots_discovered": [
+      {"date": "2026-03-04", "type": "lp_net", "pt_qty": 77839.861427, "underlying_paid": 76291.100231, "apy": 0.0833}
+    ],
+    "notes": "Underlying is eUSX — value in USD = lot_value_eUSX × eUSX_exchange_rate × USX_price"
   },
   "PT-ONyc-13MAY26": {
     "underlying": "ONyc",
     "maturity": "2026-05-13",
     "chain": "solana",
     "protocol": "exponent",
-    "notes": "In LP position"
+    "notes": "In LP position — not held directly. Priced using Exponent formula within LP decomposition (Category C), not lot-based amortisation."
   }
 }

@@ -459,7 +459,98 @@ ARMA is an autonomous yield agent by Giza. It uses ERC-4337 smart account proxie
 
 ---
 
+## Kamino Lend (Solana)
+
+Isolated lending markets on Solana. Each market has its own reserves (tokens) and obligations (user positions with collateral + debt). All markets share the same program.
+
+**Program ID**: `KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD`
+
+### Architecture
+
+"Solstice", "Superstate Opening Bell", etc. are just separate lending markets under the same program — not different program types. An obligation is a PDA that holds a user's collateral deposits and borrows within a specific market.
+
+### How to read — on-chain (preferred for Valuation Block)
+
+Query the obligation account via `getAccountInfo` at the Valuation Block slot, then deserialize the binary data:
+
+**Obligation account layout** (after 8-byte Anchor discriminator):
+- `tag` (u64, 8 bytes): Obligation type (0=Vanilla, 1=Multiply, 2=Lending, 3=Leverage)
+- `lastUpdate` (16 bytes): slot(u64) + stale(u8) + priceStatus(u8) + placeholder(6 bytes)
+- `lendingMarket` (Pubkey, 32 bytes)
+- `owner` (Pubkey, 32 bytes)
+- `deposits` (array of 8 `ObligationCollateral`, 136 bytes each):
+  - `depositReserve` (Pubkey, 32 bytes) — zero pubkey = empty slot
+  - `depositedAmount` (u64, 8 bytes) — raw token amount in lamports
+  - `marketValueSf` (u128, 16 bytes) — USD value (stale, do NOT use for NAV)
+  - `borrowedAmountAgainstThisCollateralInElevationGroup` (u64, 8 bytes)
+  - `padding` (9 × u64, 72 bytes)
+- `lowestReserveDepositLiquidationLtv` (u64, 8 bytes)
+- `depositedValueSf` (u128, 16 bytes) — total deposit USD (stale)
+- `borrows` (array of 5 `ObligationLiquidity`, 200 bytes each):
+  - `borrowReserve` (Pubkey, 32 bytes) — zero pubkey = empty slot
+  - `cumulativeBorrowRateBsf` (48 bytes): BigFractionBytes
+  - `lastBorrowedAtTimestamp` (u64, 8 bytes)
+  - `borrowedAmountSf` (u128, 16 bytes) — amount with accrued interest, divide by 2^60
+  - `marketValueSf` (u128, 16 bytes) — USD value (stale)
+  - remaining fields (88 bytes)
+
+**Key**: Use `depositedAmount` (raw token balance) and `borrowedAmountSf / 2^60` (debt with interest) — these are always accurate. The `marketValueSf` fields are stale unless the obligation was recently refreshed on-chain. Apply our own pricing per Valuation Policy.
+
+**Implementation**: `src/solana_client.py` → `parse_kamino_obligation()` and `get_kamino_obligation()`
+
+### How to read — REST API (for discovery and cross-referencing)
+
+Base URL: `https://api.kamino.finance`
+
+- **User obligations**: `GET /kamino-market/{market}/users/{user}/obligations` — returns all obligations with refreshed USD values
+- **Metrics/history**: `GET /v2/kamino-market/{market}/obligations/{obligation}/metrics/history?start=YYYY-MM-DD&end=YYYY-MM-DD` — hourly snapshots with per-deposit/borrow mint addresses and USD values
+- **All markets**: `GET /v2/kamino-market` — list all market pubkeys with names
+
+The API refreshes `marketValueSf` before returning (unlike on-chain), so API USD values are more current. Use for cross-referencing against our own valuations.
+
+### Reserve-to-token mapping
+
+Reserves are identified by pubkey. The metrics/history endpoint returns `mintAddress` per deposit/borrow, which maps to the actual token.
+
+### Known positions
+
+| Market | Market Pubkey | Obligation | Collateral | Debt |
+|--------|--------------|------------|------------|------|
+| Superstate Opening Bell | `CF32kn7AY8X1bW7ZkGcHc4X9ZWTxqKGCJk6QwrQkDcdw` | `D2rcayJTqmZvqaoViEyamQh2vw9T1KYwjbySQZSz6fsS` | USCC (reserve `FQnQgB...`, mint `BTRR3s...`, 6 dec) | USDC (reserve `BnYNV7...`, mint `EPjFWd...`, 6 dec) |
+| Solstice | `9Y7uwXgQ68mGqRtZfuFaP4hc4fxeJ7cE9zTtqTxVhfGU` | `HMMc5d9sMrGrAY18wE5yYTPpJNk72nrBrgqz5mtE3yrq` | PT-USX (reserve `BLKW7x...`, mint `3kctCX...`, 6 dec) + PT-eUSX (reserve `Ezmztx...`, mint `BNR2Fs...`, 6 dec) | USX (reserve `H2pmnD...`, mint `6FrrzD...`, 6 dec) |
+
+**Classification**: Category D. Net value = collateral value − debt value. Collateral priced per its own token category (A2 for USCC, B for PT-USX/PT-eUSX), debt per Category E.
+
+### Farming / Rewards
+
+Kamino farming rewards accrue to obligations via a separate Farms program (`FarmsPZpWu9i7Kky8tPN37rs2TpmMrAZrC7S7vJa91Hr`). Claimable rewards are included in NAV per Category F rules.
+
+**How to read**: `GET /farms/users/{wallet}/transactions` returns claim history. For current unclaimed balances, use the klend-sdk `Farms.getAllFarmsForUser()` or query farm user state accounts on-chain.
+
+**Known farms for Veris wallet**:
+
+| Farm | Reward Token | Reward Mint | Status |
+|------|-------------|-------------|--------|
+| `sXqHDSD...` | USX | `6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG` | Active (weekly claims) |
+| `DQGadHq...` | USDG | `2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH` | Active (last claim Jan 2026) |
+| `DEe2NZ5...`, `8hznHD3...` | PYUSD | `2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo` | Inactive since Nov 2025 |
+
+**KMNO season rewards** (claimable from kamino.com/season4): Excluded from NAV — airdrop/points mechanism, not standard farming.
+
+### Adding a new Kamino position
+
+1. Find the market pubkey (`GET /v2/kamino-market`)
+2. Query user obligations in that market (`GET /kamino-market/{market}/users/{user}/obligations`)
+3. Note the obligation pubkey, deposit reserves (collateral), and borrow reserves (debt)
+4. Use metrics/history to get the mint addresses for each reserve
+5. Add to the Known positions table above
+6. For on-chain reads: use `get_kamino_obligation()` in `solana_client.py`
+
+---
+
 ## General Patterns
+
+### EVM
 
 | Protocol Type | Read Method | Category |
 |---------------|------------|----------|
@@ -472,3 +563,20 @@ ARMA is an autonomous yield agent by Giza. It uses ERC-4337 smart account proxie
 | NFT position (Uni V4, Fluid) | Query by NFT ID | C or D |
 | Smart account proxy | Scan as wallet | — |
 | Plain token in wallet | `balanceOf` + price per token category | per token |
+
+### Solana
+
+| Protocol Type | Read Method | Category | Implementation |
+|---------------|-------------|----------|----------------|
+| Kamino obligation (leveraged) | `getAccountInfo` → deserialize obligation binary data | D | `solana_client.get_kamino_obligation()` |
+| Kamino farming rewards | REST API `/farms/users/{wallet}/transactions` | F | Manual / API |
+| PT token (hold-to-maturity) | Lot discovery via token account tx history, then linear amortisation from config | B | `pt_valuation.discover_pt_lots()` + `value_pt_from_config()` |
+| eUSX exchange rate | `total USX in vault / total eUSX supply` on-chain | A1 | `solana_client.get_eusx_exchange_rate()` |
+| Exponent LP | Decompose into constituent tokens | C | TBD |
+| Plain SPL token | `getTokenAccountsByOwner` | per token | `collect_balances.query_balances_solana()` |
+
+### Solana sourcing approach (3 paths)
+
+1. **REST API** — for discovery and cross-referencing. Not sufficient for NAV (no slot queries, protocol's oracles not ours).
+2. **Direct RPC** (`getAccountInfo` at Valuation Block slot) — authoritative for NAV. Read raw token amounts, apply our own pricing.
+3. **Transaction history** (`getSignaturesForAddress` on token account) — for lot-based tracking (PT purchases, LP events). Discover once, save to config.

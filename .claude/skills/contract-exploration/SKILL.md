@@ -109,6 +109,21 @@ After successful exploration:
 | `ethena_cooldown` | cooldowns | sUSDe pending unstakes |
 | `credit_coop_vault` | balanceOf, convertToAssets | Credit Coop vault (A1) |
 
+## Solana equivalent
+
+This skill covers EVM contract exploration. For Solana protocols, the approach differs:
+
+1. **No universal ABI** — use the protocol's Anchor IDL or SDK to understand account structures
+2. **Probe accounts** via `getAccountInfo` → deserialize binary data using known byte offsets
+3. **Transaction history** via `getSignaturesForAddress` on the wallet's **token account** (not wallet itself)
+4. **REST APIs** (e.g. `api.kamino.finance`) for initial discovery, not for NAV
+
+Implemented Solana helpers:
+- `src/solana_client.py` — RPC calls, eUSX exchange rate, Kamino obligation parsing
+- `src/pt_valuation.py` — PT lot discovery from on-chain tx history + linear amortisation
+
+See `protocol_sourcing.md` → "Solana sourcing approach" for the full methodology.
+
 ## Concurrency for bulk queries
 
 For scanning multiple addresses or blocks, use `src/block_utils.py`:

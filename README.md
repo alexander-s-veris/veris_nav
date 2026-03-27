@@ -16,6 +16,7 @@ ALCHEMY_API_KEY=your_key
 ETHERSCAN_API_KEY=your_key
 COINGECKO_API_KEY=your_key
 KATANA_RPC_URL=https://rpc.katana.network
+SOLSCAN_API_KEY=your_key
 ```
 
 ## Current Status
@@ -34,7 +35,7 @@ KATANA_RPC_URL=https://rpc.katana.network
 | 0xeC0B | Credit Positions 2 | Pending |
 | 0xaca2 | Open Market Positions 3 | ARMA proxy (Arbitrum) |
 | 0x8055 | Open Market Positions 2 | Aave Horizon D, Clearstar A1, mHYPER A2 |
-| ASQ4... | Solana Vault 1 | Pending |
+| ASQ4... | Solana Vault 1 | Kamino D (2 obligations: USCC/USDC + PT-USX/PT-eUSX/USX), PT-USX B (7 lots), PT-eUSX B (1 lot), farming rewards F |
 
 ## Project Structure
 
@@ -42,7 +43,8 @@ KATANA_RPC_URL=https://rpc.katana.network
 src/
   evm.py                   # Shared EVM utilities (cached Web3, block queries)
   block_utils.py           # Block estimation + concurrent RPC utilities
-  solana_client.py         # Solana RPC helpers (balances, eUSX exchange rate)
+  solana_client.py         # Solana RPC helpers (balances, eUSX exchange rate, Kamino obligation parsing)
+  pt_valuation.py          # PT token lot-based valuation (Category B linear amortisation)
   pricing.py               # Price adapters (Chainlink, Pyth, Kraken, CoinGecko, par+depeg)
   collect_balances.py      # Production wallet balance scanner (Cat E + F + A1/A2)
   cache_xlsx.py            # Cache xlsx sheets as CSVs for fast access
@@ -92,11 +94,11 @@ docs/
 |----------|-------------|---------------|
 | A1 | On-chain yield-bearing (ERC-4626 vaults, sUSDe, eUSX) | Smart contract `convertToAssets` |
 | A2 | Off-chain yield-bearing (mF-ONE, USCC, syrupUSDC, ONyc) | Oracle (Chainlink/Pyth) or issuer NAV |
-| A3 | Private credit (FalconX, CreditCoop, Giza, Resolv) | Manual accrual from contractual terms |
+| A3 | Private credit (FalconX/Pareto) | Manual accrual from contractual terms |
 | B | PT tokens (zero-coupon, hold-to-maturity) | Linear amortisation per lot |
 | C | LP positions (Curve, Uniswap, Exponent) | Decompose into constituents |
 | D | Leveraged positions (Morpho, Aave, Kamino, Fluid) | Net = Collateral - Debt |
-| E | Stablecoins and cash | Par ($1.00) or oracle for non-USDC-pegged |
+| E | Stablecoins and cash | Par ($1.00) for USDC-pegged; oracle (Pyth/Chainlink) for non-USDC-pegged (USDT, USX, USDG) |
 | F | Governance tokens, rewards, other | Kraken/CoinGecko/DEX TWAP |
 
 ## Output Format

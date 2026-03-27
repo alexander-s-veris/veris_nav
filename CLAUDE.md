@@ -206,8 +206,8 @@ Pricing is **category-driven, not a single waterfall**. The category determines 
 - **Examples**: Kamino USCC/USDC, Morpho syrupUSDC/USDT, Aave Horizon USCC/RLUSD
 
 ### E: Stablecoins & Cash
-- **USDC-pegged** (USDC, USDS, DAI, PYUSD, USX): Valued at **par ($1.00)** if within ±0.5% of peg
-- **Non-USDC-pegged** (USDT, USDG, others): Valued at oracle price using A2 oracle hierarchy (Chainlink → Pyth → Redstone)
+- **USDC-pegged** (USDC, USDS, DAI, PYUSD): Valued at **par ($1.00)** if within ±0.5% of peg
+- **Non-USDC-pegged** (USDT, USX, USDG, others): Valued at oracle price using A2 oracle hierarchy (Chainlink → Pyth → Redstone)
 - **Fiat at Bank Frick**: Face value in USD. Non-USD converted at ECB reference rate
 - **De-peg rules**:
   - Minor (0.5–2%): Price at actual traded value (CEX price or DEX TWAP), note in NAV report
@@ -282,7 +282,7 @@ All NAV Reports, workfiles, and supporting documentation must be retained for mi
 
 | Token | Feed Type | Contract / ENS | Chain |
 |-------|-----------|---------------|-------|
-| USCC NAV per share | NAVLink (SmartData) | `uscc-nav.data.eth` / `0xAfFd...00d9` | Ethereum |
+| USCC NAV per share | NAVLink (SmartData) | `uscc-nav.data.eth` / `0xAfFd...00d9` | Ethereum | *(cross-reference only — SmartData, not standard AggregatorV3. Primary: Pyth)* |
 | USDT/USD | Price Feed | `0x3E7d1eAB13ad0104d2750B8863b489D65364e32D` | Ethereum |
 | USDC/USD | Price Feed | `0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6` | Ethereum |
 | DAI/USD | Price Feed | `0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9` | Ethereum |
@@ -342,6 +342,11 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 | Ethereum | Pareto | Tranche Price Contract | 0x433d5b175148da32ffe1e1a37a939e1b7e79be4d |
 | Ethereum | Pareto | FalconX Tranche | 0xC26A6Fa2C37b38E549a4a1807543801Db684f99C |
 | Ethereum | Fluid | Vault (syrupUSDC/USDC) | 0xbc345229c1b52e4c30530c614bb487323ba38da5 |
+| Solana | Kamino Lend | Program ID | KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD |
+| Solana | Kamino | Superstate Opening Bell Market | CF32kn7AY8X1bW7ZkGcHc4X9ZWTxqKGCJk6QwrQkDcdw |
+| Solana | Kamino | Solstice Market | 9Y7uwXgQ68mGqRtZfuFaP4hc4fxeJ7cE9zTtqTxVhfGU |
+| Solana | Kamino | USCC/USDC Obligation | D2rcayJTqmZvqaoViEyamQh2vw9T1KYwjbySQZSz6fsS |
+| Solana | Kamino | PT-USX+PT-eUSX/USX Obligation | HMMc5d9sMrGrAY18wE5yYTPpJNk72nrBrgqz5mtE3yrq |
 | Solana | Exponent | Program ID | ExponentnaRg3CQbW6dqQNZKXp7gtZ9DGMp1cwC4HAS7 |
 
 ---
@@ -349,7 +354,7 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 ## Current Portfolio Positions (as of March 2026)
 
 ### A2 Positions (Off-chain yield-bearing)
-- **USCC (Superstate Crypto Carry Fund)**: ~738K USCC as collateral on Kamino Solstice (Solana), ~177K USCC on Aave Horizon (Ethereum). NAV ~$11.51/share. **Use Chainlink NAVLink feed as primary.**
+- **USCC (Superstate Crypto Carry Fund)**: ~738K USCC as collateral on Kamino Superstate Opening Bell market (Solana), ~177K USCC on Aave Horizon (Ethereum). NAV ~$11.51/share. **Primary: Pyth feed. Chainlink NAVLink as cross-reference.**
 - **mF-ONE (Midas Fasanara)**: ~3.85M tokens in wallet 0xa33e. Oracle price ~$1.067. **Use Midas Chainlink-style oracle.**
 - **syrupUSDC (Maple)**: Large positions across Morpho loops (Ethereum, Arbitrum). CG price ~$1.12.
 - **ONyc (OnRe reinsurance)**: On Solana (Exponent LPs + standalone). Weekly NAV updates.
@@ -365,7 +370,7 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 
 ### B Positions (PT tokens)
 - **PT-USX (Exponent, Solana)**: 7 tranches totaling 1,802,168 PT-USX, maturity 01-Jun-2026. Individual lot tracking with linear amortisation.
-- **PT-eUSX (Exponent, Solana)**: 77,840 tokens in Kamino Solstice.
+- **PT-eUSX (Exponent, Solana)**: 77,840 tokens as collateral in Kamino Solstice market.
 - **PT-ONyc-13MAY26 (Exponent, Solana)**: In LP position.
 
 ### C Positions (LP)
@@ -373,7 +378,8 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 - **Exponent eUSX-01JUN26 LP**: 195,927 eUSX + 41,422 PT-eUSX.
 
 ### D Positions (Leveraged / Looping)
-- **Kamino USCC/USDC Solstice**: 737,994 USCC collateral, -6,790,572 USDC debt (largest position)
+- **Kamino USCC/USDC (Superstate Opening Bell market)**: 737,994 USCC collateral, -6,790,572 USDC debt (largest position)
+- **Kamino PT-USX+PT-eUSX/USX (Solstice market)**: 1,802,168 PT-USX + 77,840 PT-eUSX collateral, USX debt. Collateral priced per Category B lot methodology.
 - **Morpho syrupUSDC/USDT (Arbitrum)**: 10.46M syrupUSDC collateral, -9.85M USDT0 debt
 - **Morpho syrupUSDC/PYUSD**: 778,640 syrupUSDC, -724,736 PYUSD debt
 - **Morpho syrupUSDC/AUSD**: 483,000 syrupUSDC, -450,479 AUSD debt
@@ -384,14 +390,15 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 ### E Positions (Stablecoins & Cash)
 - **Hyperliquid**: ~$1M USDC
 - **Various small balances**: USDC, USDT, USDG across wallets
-- USDC-pegged stablecoins (USDC, USDS, DAI, PYUSD, USX) valued at par within ±0.5%
-- Non-USDC-pegged (USDT, USDG) valued at oracle price
+- USDC-pegged stablecoins (USDC, USDS, DAI, PYUSD) valued at par within ±0.5%
+- Non-USDC-pegged (USDT, USX, USDG) valued at oracle price (Pyth/Chainlink)
 
 ### F Positions (Other)
 - **MORPHO, PENDLE, ARB, KMNO**: Governance token rewards across wallets
 - **GIZA**: 223,251 tokens on Base
 - **RLP (Resolv)**: 204,746 tokens
 - **YT-ONyc-13MAY26**: ~725,568 tokens
+- **Kamino farming rewards** (Solana): Unclaimed USDG (~6,035) and USX from farming. Included if claimable at Valuation Block. KMNO season rewards excluded.
 - All whitelisted tokens with balance >$0 included in valuation
 
 ---
@@ -399,8 +406,36 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 ## Solana-Specific Notes
 
 - Solana positions cannot be queried via simple RPC calls like EVM. Use:
-  - **Kamino REST API** (`api.kamino.finance`) for Kamino Solstice obligations
+  - **Kamino REST API** (`api.kamino.finance`) for Kamino lending obligations
+  - **Kamino on-chain** via `getAccountInfo` at specific slot for Valuation Block precision
   - **Anchorpy + Solana RPC** for Exponent Finance (Program ID: ExponentnaRg3CQbW6dqQNZKXp7gtZ9DGMp1cwC4HAS7). MarketFinancials account stores `last_ln_implied_rate` at byte offset 396.
+
+### Kamino Lend (Solana)
+
+**Program ID**: `KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD`
+
+Kamino lending markets are isolated markets under the same program. "Solstice", "Superstate Opening Bell", etc. are just different market pubkeys.
+
+**Veris positions:**
+
+| Market | Market Pubkey | Obligation Pubkey | Position |
+|--------|--------------|-------------------|----------|
+| Superstate Opening Bell | `CF32kn7AY8X1bW7ZkGcHc4X9ZWTxqKGCJk6QwrQkDcdw` | `D2rcayJTqmZvqaoViEyamQh2vw9T1KYwjbySQZSz6fsS` | USCC collateral / USDC debt |
+| Solstice | `9Y7uwXgQ68mGqRtZfuFaP4hc4fxeJ7cE9zTtqTxVhfGU` | `HMMc5d9sMrGrAY18wE5yYTPpJNk72nrBrgqz5mtE3yrq` | PT-USX + PT-eUSX collateral / USX debt |
+
+**REST API endpoints:**
+- All markets: `GET /v2/kamino-market`
+- User obligations: `GET /kamino-market/{market}/users/{user}/obligations`
+- Metrics/history (hourly snapshots): `GET /v2/kamino-market/{market}/obligations/{obligation}/metrics/history?start=YYYY-MM-DD&end=YYYY-MM-DD`
+- Transactions: `GET /v2/kamino-market/{market}/obligations/{obligation}/transactions`
+- No historical slot support in API — for Valuation Block, query on-chain via `getAccountInfo`
+
+**Obligation PDA derivation**: `seeds = [tag(1b), id(1b), user(32b), market(32b), seed1(32b), seed2(32b)]`
+- Tag: 0=Vanilla, 1=Multiply, 2=Lending, 3=Leverage
+- On-chain amounts: `depositedAmount` (u64, in cTokens), `borrowedAmountSf` (u128, divide by 2^60)
+
+### Exponent Finance (Solana)
+
 - Exponent PT formula: `PT_price = underlying_price × EXP(-last_ln_implied_rate × days/365.25)`
 - Exponent YT formula: `YT_price = underlying_price × (1 - PT_ratio)`
 

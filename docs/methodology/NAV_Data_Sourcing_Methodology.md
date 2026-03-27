@@ -169,8 +169,8 @@ This document describes the data sourcing and processing methodology used to pro
 
 **Methodology**:
 
-1. **USDC-pegged** (USDC, DAI, PYUSD, USDS, USX): Valued at par ($1.00). Chainlink oracle on Ethereum queried for de-peg check.
-2. **Non-USDC-pegged** (USDT, USDG, USDD): Valued at oracle price per source hierarchy:
+1. **USDC-pegged** (USDC, DAI, PYUSD, USDS): Valued at par ($1.00). Chainlink oracle on Ethereum queried for de-peg check.
+2. **Non-USDC-pegged** (USDT, USX, USDG, USDD): Valued at oracle price per source hierarchy:
     - Chainlink
     - Pyth
     - CoinGecko

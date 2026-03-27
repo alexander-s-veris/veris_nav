@@ -142,8 +142,8 @@ The JSON output includes a `_methodology` header block at the top, documenting:
     "scope": "Category E (stablecoins & cash) and Category F (governance tokens, rewards, other)",
     "valuation_policy_ref": "Sections 6.7 (Cat E) and 6.8 (Cat F) of Valuation Policy v1.0",
     "pricing_rules": {
-      "E_par": "USDC-pegged stablecoins (USDC, DAI, PYUSD, USDS, USX) valued at par ($1.00). Chainlink oracle queried for de-peg check per Section 9.4. Deviation >0.5% triggers actual traded value pricing.",
-      "E_oracle": "Non-USDC-pegged stablecoins (USDT, USDG) valued at oracle price. Source hierarchy: Chainlink → Pyth → Redstone (Section 6.2 tier 1).",
+      "E_par": "USDC-pegged stablecoins (USDC, DAI, PYUSD, USDS) valued at par ($1.00). Chainlink oracle queried for de-peg check per Section 9.4. Deviation >0.5% triggers actual traded value pricing.",
+      "E_oracle": "Non-USDC-pegged stablecoins (USDT, USX, USDG) valued at oracle price. Source hierarchy: Chainlink → Pyth → Redstone (Section 6.2 tier 1).",
       "F_governance": "Governance tokens priced via: (1) Kraken reported price, (2) CoinGecko aggregated price, (3) DEX TWAP (Section 6.8).",
       "F_dust": "Positions under $100 valued at zero per Section 6.8 dust threshold.",
       "F_unregistered": "Tokens not in the token registry (spam, airdrops, unsolicited deposits) are excluded from the snapshot."

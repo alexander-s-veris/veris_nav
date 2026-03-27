@@ -419,7 +419,7 @@ def build_methodology(request_ts_utc: str, request_ts_cet: str,
         "scope": "Category A1, A2, E, and F tokens held directly in wallet balances",
         "valuation_policy_ref": "Valuation Policy v1.0 — Sections 6.1 (A1), 6.2 (A2), 6.7 (E), 6.8 (F), 9.4 (de-peg)",
         "pricing_rules": {
-            "E_par": "USDC-pegged stablecoins (USDC, DAI, PYUSD, USDS, USX) valued at par ($1.00). Chainlink oracle on Ethereum queried for de-peg check per Section 9.4. Deviation >0.5% triggers actual traded value pricing; >2% = material de-peg.",
+            "E_par": "USDC-pegged stablecoins (USDC, DAI, PYUSD, USDS) valued at par ($1.00). Chainlink oracle on Ethereum queried for de-peg check per Section 9.4. Deviation >0.5% triggers actual traded value pricing; >2% = material de-peg.",
             "E_oracle": "Non-USDC-pegged stablecoins (USDT, USDG, USDD) valued at oracle price. Source hierarchy: Chainlink → Pyth → CoinGecko (Section 6.2 tier 1).",
             "A2_oracle": "Off-chain yield-bearing tokens (ONyc) priced via Pyth Network oracle (Section 6.2).",
             "A1_exchange_rate": "On-chain yield-bearing tokens (eUSX) priced by querying the on-chain exchange rate from Solana, then multiplying by the underlying token price via Pyth (Section 6.1).",

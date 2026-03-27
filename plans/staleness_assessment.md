@@ -45,7 +45,7 @@ Tokens: sUSDe, bbqSUDCreservoir, steakUSDT, avUSDC, esyrupUSDC, aBassyrupUSDC, C
 | DAI | Par ($1.00) | Chainlink DAI/USD feed `0xAed0...` | ±0.5% from par |
 | PYUSD | Par ($1.00) | No Chainlink feed registered | ±0.5% from par |
 | USDT | Chainlink oracle | Chainlink USDT/USD feed `0x3E7d...` | ±0.5% from $1.00 |
-| USX | Par ($1.00) | Pyth feed | ±0.5% from par |
+| USX | Oracle price | Pyth feed | ±0.5% from $1.00 |
 | AUSD | Par ($1.00) | No feed registered | ±0.5% from par |
 | RLUSD | Oracle price | Pyth/CoinGecko | ±0.5% from $1.00 |
 | USDe | Chainlink oracle | Chainlink on Plasma, Pyth on Ethereum | ±0.5% from $1.00 |
