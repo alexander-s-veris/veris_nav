@@ -113,11 +113,12 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         pricing = {}
     depeg_feed = pricing.get("depeg_check_feed")
     pyth_feed = pricing.get("pyth_feed_id")
+    rs_symbol = pricing.get("redstone_symbol")
 
-    if not depeg_feed and not pyth_feed:
+    if not depeg_feed and not pyth_feed and not rs_symbol:
         return result
 
-    # Try Chainlink first, then Pyth for de-peg check
+    # Try Chainlink → Pyth → Redstone for de-peg check
     oracle_price = None
     try:
         if depeg_feed and w3_eth:
@@ -130,6 +131,11 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
             oracle_price = pyth_result["price_usd"]
             result["oracle_updated_at"] = pyth_result.get("oracle_updated_at")
             result["staleness_hours"] = pyth_result.get("staleness_hours")
+        elif rs_symbol:
+            rs_result = redstone_price(rs_symbol)
+            oracle_price = rs_result["price_usd"]
+            result["oracle_updated_at"] = rs_result.get("oracle_updated_at")
+            result["staleness_hours"] = rs_result.get("staleness_hours")
     except Exception as e:
         result["notes"] = f"De-peg check failed: {e}"
         return result
@@ -265,6 +271,45 @@ def kraken_price(pair: str) -> dict:
         "depeg_deviation_pct": None,
         "oracle_updated_at": None,
         "staleness_hours": None,
+        "stale_flag": "",
+        "notes": "",
+    }
+
+
+def redstone_price(symbol: str) -> dict:
+    """Query Redstone Finance REST API for a price feed.
+
+    Free, no API key needed. Tier 3 in A2 hierarchy (after Chainlink, Pyth).
+    Used as fallback for stablecoins and governance tokens.
+    """
+    url = "https://api.redstone.finance/prices"
+    resp = requests.get(url, params={"symbols": symbol, "provider": "redstone"}, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+
+    if symbol not in data:
+        raise ValueError(f"Redstone: no price for {symbol}")
+
+    entry = data[symbol]
+    price = Decimal(str(entry["value"]))
+
+    # Redstone timestamp is in milliseconds
+    ts_ms = entry.get("timestamp")
+    oracle_updated_at = None
+    staleness_hours = None
+    if ts_ms:
+        updated_utc = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+        oracle_updated_at = updated_utc.strftime(TS_FMT)
+        age_hours = (datetime.now(timezone.utc) - updated_utc).total_seconds() / 3600
+        staleness_hours = round(age_hours, 1)
+
+    return {
+        "price_usd": price,
+        "price_source": "redstone",
+        "depeg_flag": "none",
+        "depeg_deviation_pct": None,
+        "oracle_updated_at": oracle_updated_at,
+        "staleness_hours": staleness_hours,
         "stale_flag": "",
         "notes": "",
     }
@@ -416,10 +461,10 @@ def _a1_exchange_rate_price(token_entry: dict) -> dict:
 # --- Internal fallback helpers ---
 
 def _price_chainlink_with_fallback(token_entry: dict, w3_eth: Web3 | None) -> dict:
-    """Category E/A2 oracle-priced: Chainlink → Pyth → CoinGecko fallback.
+    """Category E/A2 oracle-priced: Chainlink → Pyth → Redstone → CoinGecko.
 
     If Chainlink returns a stale price (>2x expected update frequency),
-    falls through to Pyth/CoinGecko before accepting the stale result.
+    falls through to Pyth/Redstone/CoinGecko before accepting the stale result.
     """
     pricing = token_entry["pricing"]
     expected_freq = pricing.get("expected_update_freq_hours")
@@ -456,6 +501,16 @@ def _price_chainlink_with_fallback(token_entry: dict, w3_eth: Web3 | None) -> di
                     except Exception:
                         pass
 
+                # Try Redstone fallback
+                if pricing.get("redstone_symbol"):
+                    try:
+                        rs_result = redstone_price(pricing["redstone_symbol"])
+                        rs_result["notes"] = f"Chainlink was stale ({stale_note}), using Redstone instead"
+                        rs_result["price_source"] = "redstone (chainlink_stale_fallback)"
+                        return rs_result
+                    except Exception:
+                        pass
+
                 # Try CoinGecko fallback
                 if pricing.get("coingecko_id"):
                     try:
@@ -480,6 +535,13 @@ def _price_chainlink_with_fallback(token_entry: dict, w3_eth: Web3 | None) -> di
         except Exception:
             pass
 
+    # Try Redstone
+    if pricing.get("redstone_symbol"):
+        try:
+            return redstone_price(pricing["redstone_symbol"])
+        except Exception:
+            pass
+
     # Try CoinGecko
     if pricing.get("coingecko_id"):
         try:
@@ -487,11 +549,11 @@ def _price_chainlink_with_fallback(token_entry: dict, w3_eth: Web3 | None) -> di
         except Exception:
             pass
 
-    return _unavailable(token_entry["symbol"])
+    return _unavailable(token_entry.get("symbol", "UNKNOWN"))
 
 
 def _price_kraken_with_fallback(token_entry: dict) -> dict:
-    """Category F: Kraken → CoinGecko fallback."""
+    """Category F: Kraken → Redstone → CoinGecko fallback."""
     pricing = token_entry["pricing"]
 
     # Try Kraken
@@ -501,6 +563,13 @@ def _price_kraken_with_fallback(token_entry: dict) -> dict:
         except Exception:
             pass
 
+    # Try Redstone
+    if pricing.get("redstone_symbol"):
+        try:
+            return redstone_price(pricing["redstone_symbol"])
+        except Exception:
+            pass
+
     # Try CoinGecko
     if pricing.get("coingecko_id"):
         try:
@@ -508,7 +577,7 @@ def _price_kraken_with_fallback(token_entry: dict) -> dict:
         except Exception:
             pass
 
-    return _unavailable(token_entry["symbol"])
+    return _unavailable(token_entry.get("symbol", "UNKNOWN"))
 
 
 def _unavailable(symbol: str) -> dict:
