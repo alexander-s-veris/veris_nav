@@ -30,8 +30,8 @@ def _cache_key(token_entry: dict) -> str:
     Includes the pricing method and primary feed ID to distinguish
     same-symbol tokens with different feeds (e.g. on different chains).
     """
-    symbol = token_entry["symbol"]
-    pricing = token_entry.get("pricing", {})
+    symbol = token_entry.get("symbol", "UNKNOWN")
+    pricing = token_entry.get("pricing", {}) if isinstance(token_entry.get("pricing"), dict) else {}
     method = pricing.get("method", "")
     # Include the primary feed ID to distinguish same-symbol tokens with different feeds
     feed = (pricing.get("chainlink_feed") or pricing.get("pyth_feed_id") or
@@ -49,7 +49,11 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     if key in _price_cache:
         return _price_cache[key]
 
-    method = token_entry["pricing"]["method"]
+    symbol = token_entry.get("symbol", "UNKNOWN")
+    pricing = token_entry.get("pricing", {})
+    if not isinstance(pricing, dict):
+        pricing = {}
+    method = pricing.get("method", "")
 
     if method == "par":
         result = par_price(token_entry, w3_eth)
@@ -58,7 +62,7 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     elif method == "kraken":
         result = _price_kraken_with_fallback(token_entry)
     elif method == "pyth":
-        feed_id = token_entry["pricing"].get("pyth_feed_id")
+        feed_id = pricing.get("pyth_feed_id")
         if feed_id:
             try:
                 result = pyth_price(feed_id)
@@ -67,7 +71,7 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
         else:
             result = _unavailable(symbol)
     elif method == "coingecko":
-        cg_id = token_entry["pricing"].get("coingecko_id")
+        cg_id = pricing.get("coingecko_id")
         if cg_id:
             try:
                 result = coingecko_price(cg_id)

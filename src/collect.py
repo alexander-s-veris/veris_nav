@@ -37,6 +37,7 @@ from collect_balances import (
 from protocol_queries import (
     query_evm_wallet_positions,
     query_solana_positions,
+    set_config_validation,
 )
 from valuation import value_position
 from output import (
@@ -50,6 +51,8 @@ CET = timezone(timedelta(hours=1))
 def main():
     parser = argparse.ArgumentParser(description="Veris NAV Position Collection")
     parser.add_argument("--date", type=str, help="Valuation date (YYYY-MM-DD)")
+    parser.add_argument("--strict-config", action="store_true",
+                        help="Fail fast if config validation finds missing required fields")
     args = parser.parse_args()
 
     valuation_date = date.fromisoformat(args.date) if args.date else date.today()
@@ -63,6 +66,8 @@ def main():
     print(f"Valuation date: {valuation_date}")
     print(f"Run: {run_ts_cet} CET")
     print("=" * 80, flush=True)
+
+    set_config_validation(strict=args.strict_config)
 
     # --- Load configs ---
     registry = load_tokens_registry()
