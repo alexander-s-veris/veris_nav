@@ -112,30 +112,44 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     if not isinstance(pricing, dict):
         pricing = {}
     depeg_feed = pricing.get("depeg_check_feed")
-    if not depeg_feed or not w3_eth:
+    pyth_feed = pricing.get("pyth_feed_id")
+
+    if not depeg_feed and not pyth_feed:
         return result
 
-    # Query Chainlink for de-peg check
+    # Try Chainlink first, then Pyth for de-peg check
+    oracle_price = None
     try:
-        cl_result = chainlink_price(depeg_feed, w3_eth)
-        oracle_price = cl_result["price_usd"]
-        deviation = abs(oracle_price - Decimal("1")) * Decimal("100")
-
-        result["oracle_updated_at"] = cl_result.get("oracle_updated_at")
-
-        if deviation > Decimal("2"):
-            result["price_usd"] = oracle_price
-            result["price_source"] = "chainlink (de-peg override)"
-            result["depeg_flag"] = f"material_{deviation:.2f}%"
-            result["notes"] = f"Material de-peg detected: {deviation:.2f}% deviation. Priced at oracle value per Section 9.4."
-        elif deviation > Decimal("0.5"):
-            result["price_usd"] = oracle_price
-            result["price_source"] = "chainlink (de-peg override)"
-            result["depeg_flag"] = f"minor_{deviation:.2f}%"
-            result["notes"] = f"Minor de-peg detected: {deviation:.2f}% deviation. Priced at oracle value per Section 9.4."
-        # else: within tolerance, keep par
+        if depeg_feed and w3_eth:
+            cl_result = chainlink_price(depeg_feed, w3_eth)
+            oracle_price = cl_result["price_usd"]
+            result["oracle_updated_at"] = cl_result.get("oracle_updated_at")
+            result["staleness_hours"] = cl_result.get("staleness_hours")
+        elif pyth_feed:
+            pyth_result = pyth_price(pyth_feed)
+            oracle_price = pyth_result["price_usd"]
+            result["oracle_updated_at"] = pyth_result.get("oracle_updated_at")
+            result["staleness_hours"] = pyth_result.get("staleness_hours")
     except Exception as e:
         result["notes"] = f"De-peg check failed: {e}"
+        return result
+
+    if oracle_price is None:
+        return result
+
+    deviation = abs(oracle_price - Decimal("1")) * Decimal("100")
+
+    if deviation > Decimal("2"):
+        result["price_usd"] = oracle_price
+        result["price_source"] = "oracle (de-peg override)"
+        result["depeg_flag"] = f"material_{deviation:.2f}%"
+        result["notes"] = f"Material de-peg detected: {deviation:.2f}% deviation. Priced at oracle value per Section 9.4."
+    elif deviation > Decimal("0.5"):
+        result["price_usd"] = oracle_price
+        result["price_source"] = "oracle (de-peg override)"
+        result["depeg_flag"] = f"minor_{deviation:.2f}%"
+        result["notes"] = f"Minor de-peg detected: {deviation:.2f}% deviation. Priced at oracle value per Section 9.4."
+    # else: within tolerance, keep par
 
     return result
 
