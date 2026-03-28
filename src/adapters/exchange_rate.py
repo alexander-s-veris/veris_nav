@@ -123,15 +123,20 @@ def a1_exchange_rate_price(token_entry: dict, w3_eth: Web3 | None = None,
 
 
 def _solana_vault_ratio_price(pricing: dict, symbol: str, price_underlying_fn=None) -> dict:
-    """Price a Solana token via vault ratio (total underlying / total supply)."""
-    from solana_client import get_eusx_exchange_rate
+    """Price a Solana token via vault ratio (total underlying / total supply).
+
+    Reads vault_key from pricing config to determine which solana_protocols.json
+    section to use. Token-agnostic.
+    """
+    from solana_client import get_solana_vault_exchange_rate
     from adapters.pyth import pyth_price
 
+    vault_key = pricing.get("vault_key", "eusx")
     underlying_feed = pricing.get("underlying_pyth_feed_id")
     underlying_symbol = pricing.get("underlying", "USX")
 
     try:
-        exchange_rate = get_eusx_exchange_rate()
+        exchange_rate = get_solana_vault_exchange_rate(vault_key)
 
         # Price underlying via Pyth feed if configured
         if underlying_feed:

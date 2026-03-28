@@ -146,30 +146,53 @@ def find_valuation_slot(target_ts: int) -> tuple[int, str]:
     return best_slot, ts_str
 
 
-def get_eusx_exchange_rate() -> Decimal:
-    """Calculate the eUSX/USX exchange rate from on-chain data.
+def get_solana_vault_exchange_rate(vault_key: str = "eusx") -> Decimal:
+    """Calculate exchange rate for a Solana vault token from on-chain data.
 
-    Method: total USX held in the eUSX vault / total eUSX supply.
-    The vault is the USX token account owned by the eUSX mint authority.
-    Mint addresses read from config/solana_protocols.json.
+    Method: total underlying held in vault / total vault token supply.
+    Config read from solana_protocols.json[vault_key] which must have:
+      - {vault_key}_mint: the vault token mint address
+      - {vault_key}_mint_authority: the vault's mint authority (holds underlying)
+      - underlying_mint (e.g. usx_mint): the underlying token mint
+
+    Currently used for eUSX/USX. Token-agnostic — any vault with the same
+    pattern (supply + authority-held underlying) can use this.
     """
     cfg = _load_solana_cfg()
-    eusx_cfg = cfg["eusx"]
+    vault_cfg = cfg[vault_key]
 
-    # Total eUSX supply
-    eusx_supply = get_token_supply(eusx_cfg["eusx_mint"])
+    # Vault token supply
+    vault_mint = vault_cfg.get(f"{vault_key}_mint")
+    vault_supply = get_token_supply(vault_mint)
 
-    if eusx_supply == 0:
-        raise ValueError("eUSX supply is zero")
+    if vault_supply == 0:
+        raise ValueError(f"{vault_key} supply is zero")
 
-    # Total USX held in the vault (token accounts owned by mint authority)
-    vault_accounts = get_token_accounts_by_owner(eusx_cfg["eusx_mint_authority"], eusx_cfg["usx_mint"])
-    total_usx = Decimal(0)
+    # Underlying held in vault (token accounts owned by mint authority)
+    mint_authority = vault_cfg.get(f"{vault_key}_mint_authority")
+    # Find the underlying mint key (e.g., "usx_mint" for eusx)
+    underlying_mint = None
+    for key, val in vault_cfg.items():
+        if key.endswith("_mint") and key != f"{vault_key}_mint" and key != f"{vault_key}_mint_authority":
+            underlying_mint = val
+            break
+
+    if not underlying_mint:
+        raise ValueError(f"No underlying mint found in {vault_key} config")
+
+    vault_accounts = get_token_accounts_by_owner(mint_authority, underlying_mint)
+    total_underlying = Decimal(0)
     for acc in vault_accounts:
         info = acc["account"]["data"]["parsed"]["info"]
-        total_usx += Decimal(info["tokenAmount"]["uiAmountString"])
+        total_underlying += Decimal(info["tokenAmount"]["uiAmountString"])
 
-    return total_usx / eusx_supply
+    return total_underlying / vault_supply
+
+
+# Backward compat alias
+def get_eusx_exchange_rate() -> Decimal:
+    """Backward-compatible alias for get_solana_vault_exchange_rate('eusx')."""
+    return get_solana_vault_exchange_rate("eusx")
 
 
 # --- Kamino Lend ---

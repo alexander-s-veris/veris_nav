@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from evm import CONFIG_DIR
 from pricing import get_price
 from pt_valuation import value_pt_from_config
-from solana_client import get_eusx_exchange_rate
+# solana_client.get_eusx_exchange_rate moved to adapters/exchange_rate.py
 
 
 # --- Pricing indices (built once from config) ---
@@ -306,18 +306,6 @@ def _get_underlying_price_for_lp(pos, w3_eth, tokens_registry):
     if lookup_sym:
         price, source, *_ = _get_token_price_by_symbol(
             lookup_sym, pos.get("chain", ""), w3_eth, tokens_registry)
-        if price > 0:
-            return price
-
-    # Fallback for LP underlying: try common patterns from token symbol
-    if "ONyc" in sym:
-        price, source, *_ = _get_token_price_by_symbol(
-            "ONyc", pos.get("chain", ""), w3_eth, tokens_registry)
-        if price > 0:
-            return price
-    if "eUSX" in sym:
-        price, source, *_ = _get_token_price_by_symbol(
-            "eUSX", pos.get("chain", ""), w3_eth, tokens_registry)
         if price > 0:
             return price
 

@@ -22,7 +22,7 @@ load_dotenv()
 
 from evm import CONFIG_DIR, get_web3, get_block_info, TS_FMT
 from solana_client import (
-    solana_rpc, get_kamino_obligation, get_eusx_exchange_rate,
+    solana_rpc, get_kamino_obligation,
     get_exponent_lp_positions, get_exponent_yt_positions,
     get_exponent_market, decompose_exponent_lp, get_token_supply,
 )
