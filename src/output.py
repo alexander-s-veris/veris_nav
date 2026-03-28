@@ -71,6 +71,14 @@ LP_COLUMNS = [
     "pt_price_ratio", "lp_share",
 ]
 
+VERIFICATION_COLUMNS = [
+    "token_symbol", "chain", "category",
+    "primary_price_usd", "verified_price_usd",
+    "divergence_pct", "threshold_pct", "divergence_flag",
+    "source", "total_nav_usd", "total_supply",
+    "attestation_hash", "verification_timestamp",
+]
+
 
 def make_position_id(pos):
     """Generate a unique position ID from position dict."""
@@ -247,8 +255,42 @@ def write_lp_decomposition(positions, output_dir):
     return csv_path
 
 
+def write_verification(verification_results, output_dir):
+    """Write verification.csv with asset-level verification results (Section 7.3)."""
+    if not verification_results:
+        return None
+
+    csv_path = os.path.join(output_dir, "verification.csv")
+    rows = []
+
+    for v in verification_results:
+        details = v.get("details", {})
+        rows.append({
+            "token_symbol": v.get("token_symbol", ""),
+            "chain": v.get("chain", ""),
+            "category": v.get("category", ""),
+            "primary_price_usd": str(v.get("primary_price_usd", "")),
+            "verified_price_usd": str(v.get("verified_price_usd", "")),
+            "divergence_pct": str(v.get("divergence_pct", "")),
+            "threshold_pct": str(v.get("threshold_pct", "")),
+            "divergence_flag": v.get("divergence_flag", v.get("error", "")),
+            "source": v.get("source", ""),
+            "total_nav_usd": details.get("total_nav_usd", ""),
+            "total_supply": details.get("total_supply", ""),
+            "attestation_hash": details.get("attestation_hash", ""),
+            "verification_timestamp": v.get("verification_timestamp", ""),
+        })
+
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=VERIFICATION_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return csv_path
+
+
 def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None,
-                      chain_health=None):
+                      chain_health=None, verification_results=None):
     """Write nav_summary.json with aggregations by category and wallet.
 
     Args:
@@ -329,6 +371,26 @@ def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None,
             "at run time. For official NAV calculation, re-run with --date YYYY-MM-DD "
             "to pin all queries to the Valuation Block (15:00 UTC)."
         )
+
+    # Verification results (Section 7.3)
+    if verification_results:
+        verification_summary = []
+        for v in verification_results:
+            entry = {
+                "token_symbol": v.get("token_symbol", ""),
+                "chain": v.get("chain", ""),
+                "category": v.get("category", ""),
+                "source": v.get("source", ""),
+                "primary_price_usd": str(v.get("primary_price_usd", "")),
+                "verified_price_usd": str(v.get("verified_price_usd", "")),
+                "divergence_pct": str(v.get("divergence_pct", "")),
+                "threshold_pct": str(v.get("threshold_pct", "")),
+                "divergence_flag": v.get("divergence_flag", ""),
+            }
+            if v.get("error"):
+                entry["error"] = v["error"]
+            verification_summary.append(entry)
+        summary["verification"] = verification_summary
 
     # Chain health report
     if chain_health:

@@ -19,9 +19,11 @@ Agents running periodically that:
 6. Calculate PnL per position using the correct category methodology
 7. Flag positions that need human review (new protocols, unusual patterns)
 
+---
+
 ## Architecture
 
-### Layer 1: Transaction History Scanner (async, periodic)
+### Layer 1: Transaction History Scanner
 
 For each wallet on each chain, maintain a cursor of the last processed transaction. On each run:
 
@@ -39,46 +41,18 @@ For each wallet on each chain, maintain a cursor of the last processed transacti
 - Parse pre/post token balance changes per mint
 - `getProgramAccounts` with discriminator filters for PDA-based positions (LP, YT, obligations)
 
-**Output:** Append-only transaction log per wallet, with structured events:
-```json
-{
-  "chain": "ethereum",
-  "wallet": "0xa33e...",
-  "tx_hash": "0x...",
-  "timestamp": "2026-03-27T15:00:00Z",
-  "block": 12345678,
-  "events": [
-    {"type": "token_transfer", "token": "USCC", "amount": 1000, "direction": "in", "counterparty": "0x..."},
-    {"type": "protocol_interaction", "protocol": "morpho", "contract": "0xBBBB...", "method": "supply"}
-  ]
-}
-```
+**Output:** Append-only transaction log per wallet, with structured events.
 
 ### Layer 2: Position State Tracker
 
 Maintains a live position inventory by processing the transaction log:
 
-- **Token balances**: Running balance per token per wallet per chain. Simple sum of in/out transfers.
-- **Protocol positions**: Detect open/close events:
-  - Morpho: `supply` opens, `withdraw` closes (or reduces)
-  - Aave: aToken minting = open, burning = close
-  - Kamino: obligation creation = open, full repay = close
-  - Exponent: LP position init = open, full remove = close
-  - PT lots: each swap = new lot, maturity = close
+- **Token balances**: Running balance per token per wallet per chain
+- **Protocol positions**: Detect open/close events per protocol type
 - **Position lifecycle**: Track opened_at, last_updated, closed_at, current_balance
-- **PnL calculation**: Apply category methodology to compute unrealised PnL:
-  - A1: convertToAssets growth since deposit
-  - A2: oracle price change × balance
-  - A3: manual accrual (interest earned)
-  - B: linear amortisation yield since purchase
-  - C: LP decomposition value change
-  - D: net position value change
-  - E: par (no PnL unless de-peg)
-  - F: market price change
+- **PnL calculation**: Apply category methodology to compute unrealised PnL
 
-**Output:** `positions_state.json` — complete inventory of all live and closed positions with PnL.
-
-### Layer 3: Protocol Discovery Agent (async, on-demand)
+### Layer 3: Protocol Discovery Agent
 
 Triggered when Layer 1 detects an unknown contract interaction:
 
@@ -91,63 +65,172 @@ Triggered when Layer 1 detects an unknown contract interaction:
 
 **Key principle**: Auto-discover, auto-classify, but **human approval** before inclusion in NAV. The agent proposes; the Investment Manager confirms.
 
-### Layer 4: Valuation Agent (scheduled, pre-NAV)
+### Layer 4: Valuation Agent
 
-Runs before each NAV date to produce the snapshot:
+Runs before each NAV date to produce the snapshot. Essentially the current `collect.py` pipeline but informed by the position inventory from Layer 2 rather than manual config.
 
-1. Read position inventory from Layer 2
-2. For each position, query on-chain state at the Valuation Block slot/block
-3. Apply pricing per category methodology
-4. Cross-reference against verification sources (DeBank, Octav)
-5. Flag divergences exceeding tolerance thresholds
-6. Produce the NAV snapshot file
+---
 
-This is essentially the current `collect.py` + `valuation.py` + `output.py` but informed by the position inventory from Layer 2 rather than manual config.
+## Implementation with Claude Agentic Stack
+
+The original plan assumed external cron or manual triggering. Claude's agentic tooling now provides native infrastructure for each layer.
+
+### Scheduling Options
+
+| Method | Persistence | Use Case |
+|--------|-------------|----------|
+| **CronCreate** (session-scoped) | Dies with session, 7-day max | Dev/testing: `CronCreate("7 */6 * * *", "scan wallets for changes")` |
+| **Durable scheduled tasks** | Survives restarts | Production monitoring: runs every 6 hours unattended |
+| **Agent SDK** + system cron | Full control | Production: Python script triggered by OS cron, uses Agent SDK for Claude reasoning |
+
+For production NAV monitoring, **Agent SDK + system cron** is the most reliable — no dependency on a live Claude session.
+
+### Agent SDK for Autonomous Monitoring
+
+Each layer maps to an Agent SDK invocation:
+
+```python
+# Layer 1: Transaction scanner (runs every 6 hours)
+from claude_agent_sdk import query, ClaudeAgentOptions
+
+async for msg in query(
+    prompt="Scan all wallets in config/wallets.json for new transactions since last scan. "
+           "Log new protocol interactions, token movements, balance changes. "
+           "Flag anything not in contracts.json or tokens.json.",
+    options=ClaudeAgentOptions(
+        allowed_tools=["Read", "Bash", "Write", "Grep"],
+        permission_mode="acceptEdits",
+        mcp_servers={"blockchain": {"type": "stdio", "command": "python", "args": ["src/mcp/rpc_server.py"]}}
+    ),
+):
+    ...
+```
+
+Key Agent SDK features for this system:
+- **Sessions API** — resume context across runs (session_id persistence). The scanner can remember where it left off without re-scanning everything.
+- **Permission modes** — `acceptEdits` for config updates, read-only for scanning.
+- **MCP servers** — custom blockchain RPC server provides structured access to Alchemy/Etherscan without Claude constructing raw curl commands.
+
+### MCP Server for Blockchain Access
+
+A custom MCP server wraps our existing `src/` modules:
+
+```python
+# src/mcp/rpc_server.py — exposes existing code as MCP tools
+# Tools: get_wallet_balances, query_protocol_positions, get_oracle_price,
+#        get_block_at_timestamp, query_transaction_history
+```
+
+This gives Claude structured, validated blockchain access instead of raw RPC calls. The MCP server:
+- Reuses `evm.py`, `block_utils.py`, `solana_client.py`, `collect_balances.py`
+- Enforces read-only access (no state-changing transactions)
+- Caches results to respect RPC rate limits
+- Returns typed results (Decimal amounts, formatted timestamps)
+
+### Hooks for Validation and Audit
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Write",
+      "hooks": [{
+        "type": "command",
+        "command": "python src/hooks/validate_config_change.py"
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "command": "python src/hooks/audit_log.py"
+      }]
+    }]
+  }
+}
+```
+
+- **PreToolUse** on Write: validate that config changes follow architecture principles (required fields, no hardcoded values, single source of truth)
+- **PostToolUse** on Bash: audit log of all RPC calls for compliance record-keeping (Valuation Policy Section 12)
+
+### Subagents for Parallel Chain Scanning
+
+Layer 1 can be parallelized with subagents — one per chain:
+
+```yaml
+# .claude/agents/chain-scanner.md
+---
+name: chain-scanner
+description: Scans a single chain for wallet activity changes
+tools: Read, Bash, Grep
+model: haiku  # Fast and cheap for polling
+---
+Scan the specified chain for new transactions across all configured wallets.
+Compare against last known state. Report new interactions, balance changes,
+and unknown contracts.
+```
+
+Haiku model keeps cost low for high-frequency polling. The main agent orchestrates, subagents do the per-chain work in parallel.
+
+### Agent Teams for NAV Day
+
+On Valuation Date, spawn a team for parallel collection:
+
+```
+Teammate 1: EVM balance collection (all chains)
+Teammate 2: Protocol position queries (Morpho, Aave, Euler, Midas, Credit Coop)
+Teammate 3: Solana positions (Kamino, Exponent, PT lots)
+Teammate 4: Pricing (oracle queries, CoinGecko, Kraken)
+Teammate 5: Verification (attestation cross-checks, divergence flags)
+```
+
+Each teammate has independent context and coordinates via shared task list. Results merge into the final NAV snapshot. This parallelizes what `collect.py` currently does sequentially in Steps 1-4.5.
+
+Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (opt-in, experimental).
+
+---
 
 ## Implementation Phases
 
-### Phase 1: Transaction log (foundation)
-- Build transaction history scanner for all wallets/chains
-- Store append-only log with structured events
-- Run as a scheduled agent (daily or more frequent)
-- Compare against current `wallet_balances.json` for validation
+### Phase 1: MCP server + basic monitoring
+- Build `src/mcp/rpc_server.py` wrapping existing modules
+- Create transaction diff script (compare current vs last snapshot)
+- Schedule via CronCreate for testing, then durable task for production
+- Output: change report flagging new contracts/tokens
 
-### Phase 2: Position state tracking
-- Process transaction log into position inventory
-- Detect open/close events per protocol
-- Maintain running balances and lot tracking
-- Replace manual position registration in configs
+### Phase 2: Agent SDK scanner
+- Agent SDK script for automated scanning with session persistence
+- Transaction log with append-only storage
+- Protocol pattern matching against known types
+- Human-in-the-loop approval via AskUserQuestion for new positions
 
-### Phase 3: Protocol discovery
-- Auto-detect new contract interactions
-- Pattern-match against known protocol types (ERC-4626, Morpho, Aave, etc.)
-- For unknown protocols: search GitHub, fetch ABI/IDL, propose classification
-- Human-in-the-loop approval for new positions
+### Phase 3: Full position tracking
+- Position lifecycle management (open/close detection)
+- Running balance reconciliation against on-chain state
+- Config auto-registration (proposed changes, human-approved)
+- PnL calculation per category methodology
 
-### Phase 4: PnL and full automation
-- Calculate PnL per position using category methodology
-- Generate position reports with historical performance
-- Integrate with NAV valuation pipeline
-- Full end-to-end: tx scan → position tracking → valuation → NAV snapshot
+### Phase 4: NAV Day automation
+- Agent team for parallel collection across chains
+- Automated verification pipeline (attestation + portfolio-level)
+- NAV report generation with full methodology log
+- Pre-flight checks before submitting to Calculation Agent
+
+---
 
 ## Key Design Decisions
 
 - **Append-only transaction log** — never delete historical data, enables audit trail
-- **Config files remain source of truth for methodology** — the agent updates them, but methodology (category, pricing method) is human-approved
+- **Config files remain source of truth for methodology** — agents propose changes, but methodology (category, pricing method) is human-approved
 - **Human-in-the-loop for new protocols** — auto-discovery proposes, human confirms before NAV inclusion
-- **Periodic async execution** — agents run on schedule (Claude Code triggers or cron), not blocking the NAV process
-- **Chain-agnostic event model** — same event structure for EVM and Solana, different scanners per chain
+- **MCP server wraps existing code** — no rewriting; the MCP server exposes `src/` modules as structured tools
+- **Subagents for cost efficiency** — Haiku for polling/scanning, Opus for reasoning/classification
+- **Hooks for compliance** — every RPC call and config change is logged per Valuation Policy Section 12
 
 ## Dependencies
 
+- Claude Agent SDK (Python)
 - Etherscan V2 API (EVM transaction history)
 - Solana RPC (transaction history, getProgramAccounts)
-- Existing `src/` modules (pricing, block_utils, solana_client)
-- Claude Code scheduled agents or external cron for periodic execution
-- GitHub API for protocol discovery (optional, can be manual)
-
-## Relationship to Existing Plans
-
-- Supersedes `plans/change_detection_agent.md` (which was the simpler version of this idea)
-- Builds on top of the existing position collection pipeline (`collect_balances.py`, `solana_client.py`, `pt_valuation.py`)
-- The output schema from `plans/output_schema_plan.md` remains the target format
+- Existing `src/` modules (pricing, block_utils, solana_client, collect_balances)
+- MCP server runtime (stdio transport)

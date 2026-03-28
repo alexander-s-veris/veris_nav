@@ -38,7 +38,8 @@ For each position, document:
 - Cross-references performed and their results (e.g. oracle vs. issuer NAV comparison)
 
 **Step 4 — Verification (per Section 7)**
-- Total on-chain portfolio value from at least one approved Verification Source (DeBank and/or Octav)
+- **Asset-level (Section 7.3)**: For tokens with verification sources configured in `verification.json`, cross-check primary oracle price against independent source (e.g. Midas attestation NAV / totalSupply). Results in `verification.csv` with divergence % and threshold flags.
+- **Portfolio-level (Section 7.1)**: Total on-chain portfolio value from at least one approved Verification Source (DeBank and/or Octav)
 - Percentage divergence between Primary valuation and Verification Source
 - List of positions NOT captured by the Verification Source, with confirmation they were valued using Primary methodology
 - For Kraken-held assets: Kraken reported prices used
@@ -64,28 +65,12 @@ NAV = (Total Assets − Total Fees) ÷ Total Outstanding Products
 
 **Total Assets**: Aggregate value of all positions across all custodians (ForDefi, Kraken, Bank Frick), inclusive of accrued but unclaimed interest, lending income, and trading fees.
 
-**Fee Schedule** (accrued and deducted by the Calculation Agent):
-- Management Fee: 0.15% p.a. of aggregate Basket value (pro-rated between Valuation Dates)
-- Administration Fee: USD 10,000 p.a. (pro-rated daily)
-- Service Fee: 0.15% p.a., minimum USD 15,000 (pro-rated between Valuation Dates)
-- Performance Fee: 0%, with High Watermark (calculated and accrued monthly)
-- Extra NAV fee: USD 500 per additional NAV calculation, if applicable
+**Fee Schedule**: Per Valuation Policy Section 10. Fees are accrued and deducted by the Calculation Agent.
 
 **Rounding**: NAV per Product rounded to 2 decimal places (USD 0.01). Intermediate calculations at full precision.
 
 ---
 
-## Divergence Tolerance Thresholds (Appendix B of Valuation Policy)
+## Divergence Tolerance Thresholds
 
-Maximum divergence between Primary and Verification Sources before investigation is required:
-
-| Category | Tolerance | Rationale |
-|----------|-----------|-----------|
-| A1 | 2% | Deterministic on-chain state; timing/accrual differences |
-| A2 | 3% | Oracle update frequency varies; sources may use different pricing |
-| A3 | 5% | Manual accrual; verification sources may not capture or may lag |
-| B | 6% | Linear amortisation diverges structurally from market pricing near maturity |
-| C | 5% | Decomposition methods differ; constituent pricing and fee treatment vary |
-| D (net) | 5% | Small differences amplify in net calculation (collateral minus debt) |
-| E | 0.5% | Should be at par; exceeding this triggers de-peg provisions |
-| F | 10% | Illiquid/complex; verification sources may not capture at all |
+Thresholds are in `config/pricing_policy.json` → `divergence_tolerances` (single source of truth). See Valuation Policy Appendix B for rationale.

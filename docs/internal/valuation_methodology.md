@@ -93,7 +93,8 @@ Assets held at Kraken are priced using **Kraken's reported market price** regard
 - **F airdrops/points**: Zero until token is confirmed, has a contract address, is claimable, AND has liquid markets
 
 ### Verification Requirements
-- Aggregate portfolio valuation must be cross-referenced against at least one independent DeFi portfolio aggregator: **DeBank** (EVM only) or **Octav** (paid subscription, broader coverage)
+- **Asset-level (Section 7.3)**: Tokens with verification sources in `config/verification.json` are cross-checked automatically. Verifiers derive an independent per-token price (e.g. Midas attestation total NAV / totalSupply) and compare against the primary oracle price. Divergence exceeding category thresholds (`pricing_policy.json` → `divergence_tolerances`) is flagged. Results in `verification.csv`.
+- **Portfolio-level (Section 7.1)**: Aggregate portfolio valuation must be cross-referenced against at least one independent DeFi portfolio aggregator: **DeBank** (EVM only) or **Octav** (paid subscription, broader coverage)
 - If divergence exceeds tolerance thresholds (Appendix B of policy), investigate before finalising NAV
 - **Fallback source**: ForDefi's portfolio valuation engine (used only when Primary + Verification sources fail)
 - DeBank/Octav cover on-chain positions only — they do NOT capture Kraken-held assets or Bank Frick fiat balances
@@ -123,7 +124,8 @@ All NAV Reports, workfiles, and supporting documentation must be retained for mi
 | Market Data Aggregators (CoinGecko, DefiLlama) | F governance tokens (tier 2) |
 | Centralised Exchange Prices (Kraken) | All Kraken-held assets (primary), F governance tokens (tier 1), E de-peg pricing |
 | Protocol AMMs (Pendle, Exponent, Curve, DEX TWAP) | B cross-reference, F YT and governance tokens (tier 3) |
-| Verification Sources (DeBank, Octav) | Independent cross-referencing (Section 7) |
+| Verification Sources (DeBank, Octav) | Portfolio-level cross-referencing (Section 7.1) |
+| Verification Sources (Attestation, Issuer NAV) | Asset-level cross-referencing (Section 7.3), config in `verification.json` |
 | Fallback Source (ForDefi) | When Primary + Verification unavailable (Section 8) |
 | ECB Reference Rates | E fiat currency conversion |
 | Contractual Documentation | A3 (primary) |

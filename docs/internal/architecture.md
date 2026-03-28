@@ -19,6 +19,7 @@ This document defines the architectural principles and patterns of the NAV colle
    - Solana protocol accounts --> `config/solana_protocols.json`
    - Price feed definitions --> `config/price_feeds.json`
    - Pricing hierarchy rules --> `config/pricing_policy.json`
+   - Verification sources --> `config/verification.json`
    - PT lot details --> `config/pt_lots.json`
    - ABIs --> `config/abis.json`
    - Shared constants (timestamp format, CET timezone) --> `src/evm.py`
@@ -32,6 +33,7 @@ This document defines the architectural principles and patterns of the NAV colle
    - `handlers/*.py` -- protocol-specific position reading (how to read each protocol)
    - `valuation.py` -- pricing and valuation (how to price each category)
    - `pricing.py` + `adapters/*.py` -- price feed adapters (how to query each oracle/API)
+   - `verifiers/*.py` -- independent verification (how to cross-check prices per Section 7)
    - `output.py` -- snapshot writing (how to format and write results)
 
 6. **Library modules, not standalone scripts.** Core modules (`collect_balances.py`, `protocol_queries.py`, `valuation.py`, `pricing.py`) are libraries imported by `collect.py`. They do not have standalone `main()` functions. Only `collect.py` is an entry point.
@@ -113,6 +115,23 @@ Pricing configuration is split into three files, each owning one concern:
 
 ---
 
+## Verification Architecture (Section 7)
+
+Independent verification is a separate concern from pricing. While adapters provide primary prices (Section 6), verifiers cross-check those prices against independent sources (Section 7).
+
+**Config**: `config/verification.json` maps token symbols to verification sources with source-specific parameters (API proof IDs, token addresses, etc.). API base URLs live in the `_api_endpoints` section. Divergence thresholds come from `pricing_policy.json` `divergence_tolerances`.
+
+**Verifier registry** (`src/verifiers/__init__.py`): Maps verification type names to verifier functions. `run_asset_verifications()` matches each valued position against verification config and dispatches to the matching verifier.
+
+**Verifier interface**: Each verifier module exports a `verify(config, primary_price, api_base)` function returning a result dict with `verified_price_usd`, `divergence_pct`, `source`, and `details`.
+
+**Current verifiers**:
+- `midas_attestation` -- Queries LlamaRisk API for attested total fund NAV, divides by on-chain totalSupply() to derive per-token price. Covers all Midas tokens (mHYPER, mF-ONE, msyrupUSDp).
+
+**Flow**: Runs after valuation (Step 4.5 in collect.py). Results written to `verification.csv` and included in `nav_summary.json`.
+
+---
+
 ## Collect.py Pipeline
 
 ```
@@ -127,8 +146,14 @@ Step 4: Valuation
   ALL positions (wallet balances + protocol) go through value_position()
   Category dispatch: A1/A2/A3/B/C/D/E/F each have dedicated valuation functions
 
+Step 4.5: Independent Verification (Section 7.3)
+  Asset-level cross-checks: verifiers compare primary oracle prices against
+  independent sources (issuer attestations, NAV reports). Results written to
+  verification.csv and included in nav_summary.json.
+
 Step 5: Output
-  positions.csv/json, leverage_detail.csv, pt_lots.csv, lp_decomposition.csv, nav_summary.json
+  positions.csv/json, leverage_detail.csv, pt_lots.csv, lp_decomposition.csv,
+  verification.csv, nav_summary.json
 
 Step 6: Summary
   Chain health report, category breakdown, total assets/debt/net
@@ -200,6 +225,8 @@ Euler V2 uses XOR-based sub-accounts. The scan range is limited to sub-accounts 
 | New PT lot | `pt_lots.json` | None |
 | New price feed | `price_feeds.json` + `tokens.json` (reference the feed) | None |
 | New pricing tier | `pricing_policy.json` (add to hierarchy) | None |
+| New verification source | `verification.json` (entry for token) | None |
+| New verification type | `src/verifiers/new_type.py` + registry in `verifiers/__init__.py` | Verifier function |
 | New protocol type | `handlers/new_protocol.py` + registry entry in `protocol_queries.py` | Handler function |
 | New price adapter | `src/adapters/new_adapter.py` + import in `pricing.py` | Adapter function |
 | New EVM chain with Multicall3 | `chains.json` (add `multicall3` address) | None |

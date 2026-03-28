@@ -29,10 +29,11 @@ Protocol dispatch is driven by `wallets.json` protocol registrations → `PROTOC
 
 **All position data is sourced via RPC endpoints** (Alchemy) as configured in `config/chains.json`. This is the primary and only method for reading on-chain balances and positions.
 
-- **EVM chains (Alchemy)**: Ethereum, Arbitrum, Base, Avalanche, HyperEVM — uses `alchemy_getTokenBalances` + direct `balanceOf` fallback
-- **Plasma**: Etherscan V2 API `addresstokenbalance` endpoint (Alchemy `alchemy_getTokenBalances` not available)
-- **Katana**: Direct `balanceOf` per registry token (`config/chains.json` → `token_balance_method: "balance_of"`)
-- **Solana**: Alchemy Solana RPC `getTokenAccountsByOwner`
+Balance method per chain is configured in `config/chains.json` → `token_balance_method`:
+- `alchemy` (default): `alchemy_getTokenBalances` + direct `balanceOf` fallback
+- `etherscan_v2`: Etherscan V2 API `addresstokenbalance` endpoint
+- `balance_of`: Direct `balanceOf` per registry token
+- Solana: `getTokenAccountsByOwner` via Alchemy RPC
 
 **Performance**: `src/block_utils.py` provides reusable concurrency utilities:
 - `estimate_blocks()` pre-computes block numbers from a single reference (no per-row RPC)
@@ -98,9 +99,9 @@ ERC-4626 vaults that allocate deposits across multiple Morpho markets. User depo
 
 ---
 
-## Midas (Ethereum, Plasma)
+## Midas
 
-Tokenised fund shares. Each product has a token + a Chainlink-style oracle.
+Tokenised fund shares. Each product has a token + a Chainlink-style oracle. Deployed across multiple chains (Ethereum, Plasma, Monad, Katana — varies per product). Contract addresses: `docs.midas.app/resources/smart-contracts-registry`.
 
 **How to read**:
 - Balance: `balanceOf(wallet)` on the token contract
@@ -112,7 +113,9 @@ Tokenised fund shares. Each product has a token + a Chainlink-style oracle.
 
 **Config**: Token addresses and oracles are in `contracts.json` under `_midas` sections per chain (with `_query_type: "midas_oracle"`). Handler: `midas_oracle` in `HANDLER_REGISTRY`. Adding a new Midas token = add entry to the `_midas` section with address, symbol, decimals, oracle, oracle_chain.
 
-**Issuer fallback (tier 2)**: Midas publishes daily reports as image-based PDFs in public Google Drive folders. See `data_sources.md` (in this folder) for details on mF-ONE reports.
+**Issuer fallback (tier 2)**: Midas publishes daily PDF reports. Issuer NAV URLs are in `config/price_feeds.json` per feed entry (`issuer_nav_url`, `issuer_nav_reports` fields).
+
+**Verification**: Midas Attestation Engine publishes PoR via LlamaRisk API. Per-token verification price = attested total NAV / totalSupply (summed across all deployment chains). Config in `verification.json`.
 
 ---
 

@@ -1,0 +1,34 @@
+{
+  "_doc": "Independent verification sources per Valuation Policy Section 7. Asset-level verifiers cross-check primary oracle prices against issuer attestations or NAV reports. Portfolio-level verifiers compare aggregate totals against independent aggregators.",
+
+  "_api_endpoints": {
+    "llamarisk": "https://dashboard.llamarisk.com/api"
+  },
+
+  "asset_level": {
+    "mHYPER": {
+      "type": "midas_attestation",
+      "proof_id": "0xac9a528065afb4290ab62fb0ee1a9110d48ed834454d2d04ab369b4832bbda7a",
+      "token_decimals": 18,
+      "token_addresses": {
+        "ethereum": "0x9b5528528656DBC094765E2abB79F293c21191B9",
+        "plasma": "0xb31BeA5c2a43f942a3800558B1aa25978da75F8a",
+        "monad": "0xd90F6bFEd23fFDE40106FC4498DD2e9EDB95E4e7",
+        "katana": "0x926a8a63Fa1e1FDBBEb811a0319933B1A0F1EDbb"
+      },
+      "_note": "Midas Hyperithm PoR attestation via LlamaRisk. Multi-chain OFT — totalSupply summed across all deployment chains. Addresses from docs.midas.app/resources/smart-contracts-registry. NAV updated ~2x/week. Verified by LlamaRisk + Canary via zk_tls_notary."
+    }
+  },
+
+  "portfolio_level": {
+    "_doc": "Aggregate portfolio verification sources (Section 7.1). Not yet implemented.",
+    "debank": {
+      "type": "debank",
+      "_note": "EVM-only portfolio aggregator. Requires API key."
+    },
+    "octav": {
+      "type": "octav",
+      "_note": "DeFi portfolio analytics. Requires paid subscription."
+    }
+  }
+}

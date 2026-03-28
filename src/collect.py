@@ -42,8 +42,9 @@ from protocol_queries import (
 from valuation import value_position
 from output import (
     write_positions, write_leverage_detail, write_pt_lots,
-    write_lp_decomposition, write_nav_summary,
+    write_lp_decomposition, write_verification, write_nav_summary,
 )
+from verifiers import run_asset_verifications
 
 
 def main():
@@ -389,6 +390,31 @@ def main():
     print(f"  Valued {len(all_positions)} positions ({t_valuation - t_both:.1f}s)")
 
     # =========================================================================
+    # STEP 4.5: Independent Verification (Section 7.3)
+    # =========================================================================
+    print("\n--- Step 4.5: Asset-Level Verification (Section 7.3) ---")
+
+    verification_results = []
+    try:
+        verification_results = run_asset_verifications(all_positions)
+        if verification_results:
+            for v in verification_results:
+                flag = v.get("divergence_flag", "")
+                sym = v.get("token_symbol", "")
+                div = v.get("divergence_pct", 0)
+                err = v.get("error", "")
+                if err:
+                    print(f"  [{sym}] VERIFICATION ERROR: {err}")
+                elif flag:
+                    print(f"  [{sym}] {flag}")
+                else:
+                    print(f"  [{sym}] OK (divergence: {div:.2f}%)")
+        else:
+            print("  No tokens configured for verification")
+    except Exception as e:
+        print(f"  Verification step failed: {e}")
+
+    # =========================================================================
     # STEP 5: Write Outputs
     # =========================================================================
     print("\n--- Step 5: Write Outputs ---")
@@ -414,6 +440,10 @@ def main():
     if lp_path:
         print(f"  {lp_path}")
 
+    ver_path = write_verification(verification_results, output_dir)
+    if ver_path:
+        print(f"  {ver_path}")
+
     # Build valuation block metadata for the summary
     vb_metadata = {}
     if valuation_blocks:
@@ -425,7 +455,8 @@ def main():
 
     summary_path = write_nav_summary(all_positions, output_dir, run_ts_cet,
                                      valuation_blocks=vb_metadata,
-                                     chain_health=chain_health)
+                                     chain_health=chain_health,
+                                     verification_results=verification_results)
     print(f"  {summary_path}")
 
     # =========================================================================

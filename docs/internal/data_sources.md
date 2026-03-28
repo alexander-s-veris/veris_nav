@@ -4,32 +4,13 @@ Price feeds, oracle contracts, and API endpoints used by the NAV system. For pro
 
 ---
 
-## Known Chainlink Feeds (free on-chain Data Feeds)
+## Chainlink Feeds
 
-| Token | Feed Type | Contract / ENS | Chain |
-|-------|-----------|---------------|-------|
-| USCC NAV per share | NAVLink (SmartData) | `uscc-nav.data.eth` / `0xAfFd...00d9` | Ethereum | *(cross-reference only — SmartData, not standard AggregatorV3. Primary: Pyth)* |
-| USDT/USD | Price Feed | `0x3E7d1eAB13ad0104d2750B8863b489D65364e32D` | Ethereum |
-| USDC/USD | Price Feed | `0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6` | Ethereum |
-| DAI/USD | Price Feed | `0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9` | Ethereum |
-| mF-ONE/USD | Chainlink-style oracle (Midas) | `0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C` | Ethereum |
+All feed addresses are in `config/price_feeds.json` (single source of truth). Do not hardcode addresses here.
 
 Note: USX/USD, SyrupUSDC/USDC, eUSX/USX, RLP/USD etc. appear on Chainlink but are **Data Streams** (paid), NOT free Data Feeds. Do not attempt to query these via contract call.
 
-### ABI for Chainlink AggregatorV3Interface
-```json
-[
-  {"inputs":[],"name":"latestRoundData","outputs":[
-    {"name":"roundId","type":"uint80"},
-    {"name":"answer","type":"int256"},
-    {"name":"startedAt","type":"uint256"},
-    {"name":"updatedAt","type":"uint256"},
-    {"name":"answeredInRound","type":"uint80"}
-  ],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"description","outputs":[{"name":"","type":"string"}],"stateMutability":"view","type":"function"}
-]
-```
+ABI: see `config/abis.json` → `chainlink_aggregator_v3`.
 
 ---
 
@@ -49,16 +30,7 @@ Using Pro API key with `x-cg-pro-api-key` header:
 ```
 GET https://pro-api.coingecko.com/api/v3/simple/price?ids=<coin_id>&vs_currencies=usd
 ```
-Note: Pro plan uses `pro-api.coingecko.com` base URL (not `api.coingecko.com`). Multiple IDs can be batched in one call (comma-separated).
-The NAV spreadsheet already uses CoinGecko via a helper table `tbl_Helper_CoinIds` with these mappings:
-- usd-coin → USDC
-- usdt0 → USDT0
-- resolv-wstusr → wstUSR
-- superstate-uscc → USCC
-- ripple-usd → RLUSD
-- giza → GIZA
-- resolv-rlp → RLP
-- And ~20 more
+Note: Pro plan uses `pro-api.coingecko.com` base URL (not `api.coingecko.com`). Multiple IDs can be batched in one call (comma-separated). Coin ID mappings are in `config/price_feeds.json` (each CoinGecko feed entry has a `coin_id` field).
 
 ---
 
@@ -75,20 +47,18 @@ GET https://api.kraken.com/0/public/Ticker?pair=<pair>
 
 ---
 
-## Midas mF-ONE Daily Reports
+## Verification Sources (Section 7)
 
-Published as image-based PDFs (no extractable text) in a public Google Drive folder. Filename format: `mfone_reporting_public_YYYYMMDD.pdf`. Key field: "Price as of report Date: $X.XXXXXXXX". Reports are daily (business days), taken at 5pm ET snapshot. The PDF requires OCR to extract the price programmatically. Folder: `https://drive.google.com/drive/folders/1NnrtI39fO2XuaNvnnZurvGskTYv_B4i_`. Local copies saved to `docs/reference/midas/mf-one/`.
+Asset-level verification sources cross-check primary oracle prices against independent data. Config in `config/verification.json`.
+
+| Source | API | Used For |
+|--------|-----|----------|
+| LlamaRisk (Midas Attestation Engine) | `GET /api/proof/midas/{proof_id}` → attested total NAV | A2 Midas tokens (mHYPER, mF-ONE, msyrupUSDp). Derives per-token price = total NAV / totalSupply (summed across deployment chains) |
+
+Portfolio-level verification (DeBank, Octav) per Section 7.1 — not yet implemented.
 
 ---
 
 ## RPC Endpoints
 
-- **Ethereum**: Alchemy or Infura (user has Alchemy)
-- **Arbitrum**: Alchemy
-- **Base**: Alchemy
-- **Avalanche**: Public RPC or Alchemy
-- **Plasma**: Etherscan V2 API (chain ID 9745, native token: XPL, explorer: plasmascan.to). Alchemy not available for Plasma.
-- **HyperEVM**: Alchemy (chain ID 999, native token: HYPE)
-- **Solana**: Alchemy (`solana-mainnet.g.alchemy.com/v2/API_KEY`)
-
-Store API keys in a `.env` file (never commit to GitHub).
+Chain RPC URLs, chain IDs, and native token metadata are in `config/chains.json` (single source of truth). API keys in `.env` (never commit to GitHub).
