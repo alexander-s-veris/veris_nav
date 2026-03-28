@@ -12,9 +12,7 @@ Adapter implementations live in src/adapters/ (one file per provider).
 import os
 import json
 from decimal import Decimal
-from datetime import datetime, timezone
 
-import requests
 from web3 import Web3
 
 from block_utils import concurrent_query
@@ -78,19 +76,24 @@ def _cache_key(token_entry: dict) -> str:
 
 # --- Generic feed query dispatcher ---
 
+def _get_w3_for_chain(feed_cfg: dict, w3_eth: Web3 | None) -> Web3:
+    """Resolve the Web3 instance for a feed's chain."""
+    chain = feed_cfg.get("chain", "ethereum")
+    if chain != "ethereum":
+        from evm import get_web3
+        w3 = get_web3(chain)
+    else:
+        w3 = w3_eth
+    if not w3:
+        raise ConnectionError(f"No Web3 for chain {chain}")
+    return w3
+
+
 def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None, expected_freq_hours: float = None) -> dict:
     """Query a single price feed based on its type. Returns result dict."""
     feed_type = feed_cfg["type"]
     if feed_type == "chainlink":
-        chain = feed_cfg.get("chain", "ethereum")
-        if chain != "ethereum":
-            from evm import get_web3
-            w3 = get_web3(chain)
-        else:
-            w3 = w3_eth
-        if not w3:
-            raise ConnectionError(f"No Web3 for chain {chain}")
-        return chainlink_price(feed_cfg["address"], w3, expected_freq_hours)
+        return chainlink_price(feed_cfg["address"], _get_w3_for_chain(feed_cfg, w3_eth), expected_freq_hours)
     elif feed_type == "pyth":
         return pyth_price(feed_cfg["feed_id"], expected_freq_hours)
     elif feed_type == "redstone":
@@ -100,15 +103,7 @@ def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None, expected_freq_hours:
     elif feed_type == "coingecko":
         return coingecko_price(feed_cfg["coin_id"])
     elif feed_type == "dex_twap":
-        chain = feed_cfg.get("chain", "ethereum")
-        if chain != "ethereum":
-            from evm import get_web3
-            w3 = get_web3(chain)
-        else:
-            w3 = w3_eth
-        if not w3:
-            raise ConnectionError(f"No Web3 for chain {chain}")
-        return dex_twap_price(feed_cfg, w3)
+        return dex_twap_price(feed_cfg, _get_w3_for_chain(feed_cfg, w3_eth))
     else:
         raise ValueError(f"Unknown feed type: {feed_type}")
 
