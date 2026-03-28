@@ -338,8 +338,27 @@ def _value_d_side(pos, w3_eth, tokens_registry):
 # =============================================================================
 
 def _value_ef(pos, w3_eth, tokens_registry):
-    """Value a plain token balance (Category E or F)."""
+    """Value a plain token balance (Category E or F).
+
+    For YT tokens: uses yt_price_ratio × underlying_price (Section 6.8).
+    For everything else: standard registry price lookup.
+    """
     balance = pos.get("balance_human", Decimal(0))
+
+    # YT tokens have yt_price_ratio set by the Exponent handler
+    yt_ratio = pos.get("yt_price_ratio")
+    if yt_ratio is not None and yt_ratio > 0:
+        underlying_sym = pos.get("underlying_symbol", "")
+        if underlying_sym:
+            ul_price, ul_source, stale_flag, staleness_hours, notes = _get_token_price_by_symbol(
+                underlying_sym, pos.get("chain", ""), w3_eth, tokens_registry)
+            price = ul_price * yt_ratio
+            pos["price_usd"] = price
+            pos["value_usd"] = balance * price
+            pos["price_source"] = f"yt_formula ({underlying_sym} × {yt_ratio:.6f})"
+            _apply_staleness(pos, stale_flag, staleness_hours, notes)
+            return pos
+
     price, source, stale_flag, staleness_hours, notes = _get_token_price(pos, w3_eth, tokens_registry)
     pos["price_usd"] = price
     pos["value_usd"] = balance * price
