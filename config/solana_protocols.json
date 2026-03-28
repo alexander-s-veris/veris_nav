@@ -2,9 +2,9 @@
   "_doc": "Solana protocol position configs. Adding a new position = add entry here. Code reads from this file, no hardcoded pubkeys.",
 
   "eusx": {
-    "eusx_mint": "3ThdFZQKM6kRyVGLG48kaPg5TRMhYMKY1iCRa9xop1WC",
-    "eusx_mint_authority": "2aHdm37djj4c21ztMRBmmo4my6RtzN5Nn58Y39rpWbRM",
-    "usx_mint": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG"
+    "vault_mint": "3ThdFZQKM6kRyVGLG48kaPg5TRMhYMKY1iCRa9xop1WC",
+    "mint_authority": "2aHdm37djj4c21ztMRBmmo4my6RtzN5Nn58Y39rpWbRM",
+    "underlying_mint": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG"
   },
 
   "kamino": {

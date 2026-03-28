@@ -712,11 +712,11 @@ class TestSolanaProtocolsConfig(unittest.TestCase):
                               f"exponent.{name}.sy: missing {field}")
 
     def test_eusx_config_exists(self):
-        """eUSX mint constants must be in config."""
+        """eUSX vault config must have standard field names."""
         eusx = self.solana.get("eusx", {})
-        self.assertIn("eusx_mint", eusx, "solana_protocols: missing eusx.eusx_mint")
-        self.assertIn("eusx_mint_authority", eusx, "solana_protocols: missing eusx.eusx_mint_authority")
-        self.assertIn("usx_mint", eusx, "solana_protocols: missing eusx.usx_mint")
+        self.assertIn("vault_mint", eusx, "solana_protocols: missing eusx.vault_mint")
+        self.assertIn("mint_authority", eusx, "solana_protocols: missing eusx.mint_authority")
+        self.assertIn("underlying_mint", eusx, "solana_protocols: missing eusx.underlying_mint")
 
 
 # ---------------------------------------------------------------------------

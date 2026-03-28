@@ -166,9 +166,9 @@ def get_solana_vault_exchange_rate(vault_key: str = "eusx") -> Decimal:
 
     Method: total underlying held in vault / total vault token supply.
     Config read from solana_protocols.json[vault_key] which must have:
-      - {vault_key}_mint: the vault token mint address
-      - {vault_key}_mint_authority: the vault's mint authority (holds underlying)
-      - underlying_mint (e.g. usx_mint): the underlying token mint
+      - vault_mint: the vault token mint address
+      - mint_authority: the vault's mint authority (holds underlying)
+      - underlying_mint: the underlying token mint
 
     Currently used for eUSX/USX. Token-agnostic — any vault with the same
     pattern (supply + authority-held underlying) can use this.
@@ -176,24 +176,14 @@ def get_solana_vault_exchange_rate(vault_key: str = "eusx") -> Decimal:
     cfg = _load_solana_cfg()
     vault_cfg = cfg[vault_key]
 
-    # Vault token supply
-    vault_mint = vault_cfg.get(f"{vault_key}_mint")
+    vault_mint = vault_cfg["vault_mint"]
+    mint_authority = vault_cfg["mint_authority"]
+    underlying_mint = vault_cfg["underlying_mint"]
+
     vault_supply = get_token_supply(vault_mint)
 
     if vault_supply == 0:
         raise ValueError(f"{vault_key} supply is zero")
-
-    # Underlying held in vault (token accounts owned by mint authority)
-    mint_authority = vault_cfg.get(f"{vault_key}_mint_authority")
-    # Find the underlying mint key (e.g., "usx_mint" for eusx)
-    underlying_mint = None
-    for key, val in vault_cfg.items():
-        if key.endswith("_mint") and key != f"{vault_key}_mint" and key != f"{vault_key}_mint_authority":
-            underlying_mint = val
-            break
-
-    if not underlying_mint:
-        raise ValueError(f"No underlying mint found in {vault_key} config")
 
     vault_accounts = get_token_accounts_by_owner(mint_authority, underlying_mint)
     total_underlying = Decimal(0)
