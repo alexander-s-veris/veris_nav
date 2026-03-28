@@ -91,7 +91,7 @@ Additional features:
 - **Chain health tracking**: Reports per-chain success/failure in `nav_summary.json`
 - **Snapshot diff tool**: `python src/tools/diff_snapshots.py --latest` catches disappeared/changed positions before submission
 
-See `protocol_sourcing.md` for the "Adding a New Position" quick reference table.
+See `docs/internal/protocol_sourcing.md` for the "Adding a New Position" quick reference table.
 
 ## Project Structure
 
@@ -128,7 +128,14 @@ config/
   abis.json                # Minimal ABIs for all contract interactions
   morpho_markets.json      # Morpho market IDs and position configs
   pt_lots.json             # PT token individual lot details for linear amortisation
-protocol_sourcing.md       # Protocol-by-protocol position reading guide
+docs/
+  internal/                  # Internal reference docs
+    protocol_sourcing.md     # Protocol-by-protocol position reading guide
+    valuation_methodology.md # Category A1-F valuation rules
+    portfolio_positions.md   # Current positions by category
+    ...
+  methodology/               # Methodology deliverables (for Bank Frick / audit)
+  reference/                 # Source documents (Valuation Policy, loan notices)
 ```
 
 ## Configuration Files
@@ -171,4 +178,4 @@ See `CLAUDE.md` for full project context, valuation methodology, and asset class
 
 See `docs/reference/` for the Valuation Policy and NAV workbook.
 
-See `protocol_sourcing.md` for detailed protocol-by-protocol position reading guide.
+See `docs/internal/protocol_sourcing.md` for detailed protocol-by-protocol position reading guide.

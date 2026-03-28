@@ -288,7 +288,8 @@
       },
       "wstusr_usdt0_vault": {
         "address": "0xBc345229C1b52e4c30530C614BB487323BA38Da5",
-        "description": "Fluid wstUSR/USDT0 Vault"
+        "description": "Fluid wstUSR/USDT0 Vault",
+        "_todo": "Same address as Ethereum Fluid vault — verify correct Plasma address via on-chain query"
       }
     }
   },

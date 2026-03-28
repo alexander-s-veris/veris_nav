@@ -7,7 +7,7 @@ used across all collection and pricing scripts.
 
 import os
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
 from web3 import Web3
@@ -22,18 +22,25 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "outputs")
 # --- Formatting ---
 TS_FMT = "%d/%m/%Y %H:%M:%S"
 
-# --- Etherscan V2 ---
+# CET is UTC+1 year-round (no daylight saving adjustment per Valuation Policy)
+CET = timezone(timedelta(hours=1))
+
+
+# Etherscan V2 unified API — one URL serves all chains via chainid param.
+# This is a structural constant (not deployment-specific), so it lives here.
 ETHERSCAN_V2_BASE = "https://api.etherscan.io/v2/api"
 
-# --- Native token symbol per chain ---
-NATIVE_TOKEN = {
-    "ethereum": "ETH",
-    "arbitrum": "ETH",
-    "base": "ETH",
-    "avalanche": "AVAX",
-    "plasma": "XPL",
-    "hyperevm": "HYPE",
-}
+
+def get_native_symbol(chain: str) -> str:
+    """Get native token symbol for a chain from chains.json."""
+    chains = load_chains()
+    return chains.get(chain, {}).get("native_symbol", "ETH")
+
+
+def get_native_decimals(chain: str) -> int:
+    """Get native token decimals for a chain from chains.json."""
+    chains = load_chains()
+    return chains.get(chain, {}).get("native_decimals", 18)
 
 # --- Chainlink AggregatorV3Interface ABI ---
 AGGREGATOR_V3_ABI = [

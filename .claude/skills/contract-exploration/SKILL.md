@@ -95,7 +95,7 @@ If direct probing fails (no standard interface, unknown function signatures), th
 After successful exploration:
 1. Add contracts to `config/contracts.json` with descriptions
 2. Add new ABIs to `config/abis.json` if they introduce new function signatures
-3. Add the protocol to `protocol_sourcing.md` with read instructions
+3. Add the protocol to `docs/internal/protocol_sourcing.md` with read instructions
 4. Add tokens to `config/tokens.json` with pricing config
 
 ## Common pitfalls
@@ -143,7 +143,7 @@ Key patterns:
 - LP and YT positions are PDA accounts, not SPL tokens — invisible to wallet balance scans
 - **Transaction history as token identity fallback**: when struct field analysis is ambiguous about what a token mint is (SY vs PT vs LP), check `getSignaturesForAddress` on the token account and parse the balance changes. Token flows in/out of swaps and LP withdrawals definitively identify each mint (e.g. PT comes out alongside SY from LP pools). This is more reliable than guessing from struct field ordering.
 
-See `protocol_sourcing.md` → "Solana sourcing approach" for the full methodology.
+See `docs/internal/protocol_sourcing.md` → "Solana sourcing approach" for the full methodology.
 
 ## Concurrency for bulk queries
 

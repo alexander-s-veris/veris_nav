@@ -268,10 +268,20 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc="", block_override=Non
 # Orchestrator helper: query all Solana positions
 # =============================================================================
 
+# Solana protocol key -> list of (name, handler_fn, needs_valuation_date)
+SOLANA_HANDLER_REGISTRY = {
+    "kamino":   [("Kamino", query_kamino_obligations, False)],
+    "exponent": [("Exponent LP", query_exponent_lps, False),
+                 ("Exponent YT", query_exponent_yts, False)],
+    "pt_lots":  [("PT lots", query_pt_lots, True)],
+}
+
+
 def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
     """Query all Solana protocol positions for a wallet.
 
-    Includes Kamino obligations, Exponent LPs, Exponent YTs, and PT lots.
+    Config-driven: reads wallet protocol registrations from wallets.json,
+    dispatches to the appropriate handlers via SOLANA_HANDLER_REGISTRY.
 
     Args:
         wallet: Solana wallet address.
@@ -286,6 +296,16 @@ def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
         _slot, block_ts = block_ts_override
     else:
         block_ts = datetime.now(timezone.utc).strftime(TS_FMT)
+
+    # Read wallet protocol registrations
+    wallets_cfg = _load_wallets_cfg()
+    wallet_protocols = set()
+    for w in wallets_cfg.get("solana", []):
+        if w["address"] == wallet:
+            for p_key, enabled in w.get("protocols", {}).items():
+                if enabled:
+                    wallet_protocols.add(p_key)
+            break
 
     rows = []
 
@@ -303,22 +323,15 @@ def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
                     print(f"  [solana] {name} error (after retry): {e}")
         return []
 
-    # Kamino obligations (D)
-    rows.extend(_run_with_retry(
-        "Kamino", lambda: query_kamino_obligations(wallet, block_ts)))
-
-    # Exponent LPs (C)
-    lp_rows = _run_with_retry(
-        "Exponent LP", lambda: query_exponent_lps(wallet, block_ts))
-    rows.extend(lp_rows)
-
-    # Exponent YTs (F)
-    rows.extend(_run_with_retry(
-        "Exponent YT", lambda: query_exponent_yts(wallet, block_ts)))
-
-    # PT lots (B)
-    if valuation_date:
-        rows.extend(_run_with_retry(
-            "PT lots", lambda: query_pt_lots(valuation_date, block_ts)))
+    for protocol_key in wallet_protocols:
+        handlers = SOLANA_HANDLER_REGISTRY.get(protocol_key, [])
+        for name, handler_fn, needs_date in handlers:
+            if needs_date:
+                if valuation_date:
+                    rows.extend(_run_with_retry(
+                        name, lambda fn=handler_fn: fn(valuation_date, block_ts)))
+            else:
+                rows.extend(_run_with_retry(
+                    name, lambda fn=handler_fn: fn(wallet, block_ts)))
 
     return rows

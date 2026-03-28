@@ -8,15 +8,11 @@ per the output schema in plans/output_schema_plan.md.
 import csv
 import json
 import os
-from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
 
 # Increment when the output format changes so downstream consumers can detect.
-SCHEMA_VERSION = "1.1"
-
-# CET is UTC+1 year-round (no daylight saving per Valuation Policy)
-CET = timezone(timedelta(hours=1))
+SCHEMA_VERSION = "1.2"
 
 
 def sanitize_label(text):
@@ -50,6 +46,7 @@ POSITION_COLUMNS = [
     "balance_human", "price_usd", "price_source", "value_usd",
     "block_number", "block_timestamp_utc",
     "staleness_hours", "stale_flag",
+    "depeg_flag", "depeg_deviation_pct",
     "notes", "run_timestamp_cet",
 ]
 
@@ -113,6 +110,8 @@ def write_positions(positions, output_dir, run_ts_cet):
             "block_timestamp_utc": pos.get("block_timestamp_utc", ""),
             "staleness_hours": str(pos.get("staleness_hours", "")),
             "stale_flag": pos.get("stale_flag", ""),
+            "depeg_flag": pos.get("depeg_flag", ""),
+            "depeg_deviation_pct": str(pos.get("depeg_deviation_pct", "")),
             "notes": pos.get("notes", ""),
             "run_timestamp_cet": run_ts_cet,
         }

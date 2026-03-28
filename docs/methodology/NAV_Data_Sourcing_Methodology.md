@@ -46,11 +46,16 @@ This document describes the data sourcing and processing methodology used to pro
 
 **Data source**: Direct RPC call to the protocol's smart contract.
 
-| Token | Exchange Rate Method | Underlying | Pricing |
-|-------|---------------------|------------|---------|
-| eUSX (Solana) | Total USX in vault / total eUSX supply | USX | Pyth |
-| sUSDe (Ethereum) | `convertToAssets()` on sUSDe contract | USDE | Category E |
-| Morpho vault shares | `convertToAssets()` on vault contract | USDC | Category E |
+| Token | Chain | Exchange Rate Method | Underlying | Pricing |
+|-------|-------|---------------------|------------|---------|
+| eUSX | Solana | Total USX in vault / total eUSX supply | USX | Pyth |
+| sUSDe | Ethereum, Plasma | `convertToAssets()` on sUSDe contract | USDe | Category E |
+| Credit Coop Vault | Ethereum | `convertToAssets()` on vault (ERC-4626/7540) | USDC | Par |
+| Morpho vault shares (bbqSUDCreservoir, steakUSDT, CSUSDC) | Ethereum, Base | `convertToAssets()` on vault contract | USDC/USDT | Category E |
+| Euler vault shares (esyrupUSDC) | Arbitrum | `convertToAssets()` on vault (sub-account XOR) | syrupUSDC | Category A2 |
+| Avantis (avUSDC) | Base | `convertToAssets()` on vault contract | USDC | Category E |
+| Aave aTokens (supply-only) | Base, Plasma | `balanceOf()` on aToken (auto-accruing) | Various | Per underlying |
+| Yearn V3 (yvvbUSDC) | Katana | `convertToAssets()` on vault contract | USDC | Category E |
 
 **eUSX exchange rate detail**: The eUSX vault account (USX token account owned by eUSX mint authority) holds the total USX backing. The rate is calculated as:
 
@@ -71,12 +76,15 @@ This document describes the data sourcing and processing methodology used to pro
 2. Issuer-published NAV or price feed
 3. Secondary market price (DEX TWAP - last resort)
 
-| Token | Primary Source | Feed Reference |
-|-------|---------------|----------------|
-| USCC | Chainlink NAVLink | `uscc-nav.data.eth` |
-| mF-ONE | Chainlink (Midas) | `0x8D51DBC8...e68C` |
-| ONyc | Pyth Network | `0xbabbfcc7...0170ab` |
-| syrupUSDC | CoinGecko | `syrup-usdc` |
+| Token | Primary Source | Feed Reference | Fallback |
+|-------|---------------|----------------|----------|
+| USCC | Pyth | Pyth price feed | CoinGecko (`superstate-uscc`) |
+| mF-ONE | Chainlink (Midas oracle) | `0x8D51DBC8...e68C` | Issuer PDF report |
+| msyrupUSDp | Chainlink (Midas oracle) | `0x337d914f...5241` | Issuer report |
+| ONyc | Pyth | Pyth price feed | Issuer weekly NAV |
+| syrupUSDC | Pyth | Pyth price feed | CoinGecko (`syrup-usdc`) |
+| RLP | Pyth | Pyth price feed | CoinGecko (`resolv-rlp`) |
+| mHYPER | Chainlink (Midas oracle) | `0xfC3E47c4...e1A0` (Plasma) | Issuer report |
 
 **Staleness check**: Price is flagged if not updated for more than 2x the expected update interval. If primary source is stale, the next available source is used with a note in the output.
 
@@ -92,12 +100,13 @@ This document describes the data sourcing and processing methodology used to pro
 
 | Position | Rate Source | Cross-reference |
 |----------|-----------|----------------|
-| FalconX / Pareto | Loan agreement (~9.62%) | On-chain tranche price |
-| Credit Coop / Rain | Loan agreement (13.99% + 5%) | Vault `convertToAssets` |
+| FalconX / Pareto (Gauntlet + Direct) | Loan notice (8.325% net = 9.25% gross x 0.90) | On-chain tranche price |
+
+Note: Credit Coop / Rain was **reclassified from A3 to A1** - see Section 3.1. Its `convertToAssets` is authoritative.
 
 **Rate resets**: If the rate changes between Valuation Dates, accrued interest is weighted by days at each rate.
 
-**On-chain tranche price** (e.g. Pareto `convertToAssets`) is used as a retrospective cross-reference only, NOT as the primary valuation source.
+**On-chain tranche price** (e.g. Pareto `tranchePrice`) is used as a retrospective cross-reference only, NOT as the primary valuation source.
 
 ### 3.4 Category B: PT Tokens (Section 6.4)
 
@@ -133,7 +142,8 @@ This document describes the data sourcing and processing methodology used to pro
 
 1. PT component: priced using protocol's current implied rate at Valuation Block (NOT linear amortisation)
 2. Exponent formula:
-    `PT Price = Underlying Price x EXP(-last_ln_implied_rate x Days to Maturity / 365.25)`
+    `PT Price = Underlying Price x EXP(-last_ln_implied_rate x Days to Maturity / 365)`
+    Note: The Valuation Policy text references 365.25. However, the Exponent on-chain smart contract uses exactly 365 days (31,536,000 seconds). We match the on-chain calculation to ensure independently reproducible results.
 3. SY component: priced per underlying token's category (A1 or A2)
 
 | LP Position | Constituents | PT Pricing |
@@ -158,19 +168,22 @@ This document describes the data sourcing and processing methodology used to pro
 1. Collateral balance: read from lending protocol smart contract at Valuation Block (inclusive of accrued supply interest)
 2. Debt balance: read from lending protocol smart contract at Valuation Block (inclusive of accrued borrow interest)
 
-| Position | Collateral | Debt |
-|----------|-----------|------|
-| Kamino USCC/USDC | USCC (A2) | USDC (E) |
-| Morpho syrupUSDC/USDT | syrupUSDC (A2) | USDT (E) |
-| Morpho syrupUSDC/PYUSD | syrupUSDC (A2) | PYUSD (E) |
-| Aave Horizon USCC/RLUSD | USCC (A2) | RLUSD (E) |
+| Position | Protocol | Chain | Collateral | Debt |
+|----------|----------|-------|-----------|------|
+| USCC/USDC | Kamino (Superstate Opening Bell) | Solana | USCC (A2) | USDC (E) |
+| PT-USX+PT-eUSX/USX | Kamino (Solstice) | Solana | PT-USX + PT-eUSX (B) | USX (E) |
+| syrupUSDC/USDT0 | Morpho | Arbitrum | syrupUSDC (A2) | USDT0 (E) |
+| syrupUSDC/AUSD | Morpho | Ethereum | syrupUSDC (A2) | AUSD (E) |
+| syrupUSDC/RLUSD | Morpho | Ethereum | syrupUSDC (A2) | RLUSD (E) |
+| USCC/RLUSD | Aave Horizon | Ethereum | USCC (A2) | RLUSD (E) |
+| sUSDe/USDe | Aave V3 | Plasma | sUSDe (A1) | USDe (E) |
 
 ### 3.7 Category E: Stablecoins and Cash (Section 6.7)
 
 **Methodology**:
 
-1. **USDC-pegged** (USDC, DAI, PYUSD, USDS): Valued at par ($1.00). Chainlink oracle on Ethereum queried for de-peg check.
-2. **Non-USDC-pegged** (USDT, USX, USDG, USDD): Valued at oracle price per source hierarchy:
+1. **USDC-pegged** (USDC, USDS, DAI, PYUSD): Valued at par ($1.00). Chainlink oracle on Ethereum queried for de-peg check.
+2. **Non-USDC-pegged** (USDT, USX, USDG, USDD, AUSD, RLUSD): Valued at oracle price per source hierarchy:
     - Chainlink
     - Pyth
     - CoinGecko
@@ -209,10 +222,9 @@ This document describes the data sourcing and processing methodology used to pro
 | ARB | Kraken | ARBUSD | arbitrum |
 | SOL | Kraken | SOLUSD | solana |
 | AVAX | Kraken | AVAXUSD | avalanche-2 |
-| XPL | Kraken | XPLUSD | plasma |
+| XPL / WXPL | Kraken | XPLUSD | plasma |
 | HYPE | Kraken | HYPEUSD | hyperliquid |
 | GIZA | CoinGecko | - | giza |
-| RLP | CoinGecko | - | resolv-rlp |
 | DAM | CoinGecko | - | reservoir |
 
 **YT Tokens**:

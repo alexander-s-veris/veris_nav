@@ -2,6 +2,8 @@
 
 How to read balances and positions from each protocol encountered in the portfolio. Use this to avoid re-researching protocol mechanics.
 
+For current positions and balances, see `portfolio_positions.md` (in this folder). For contract addresses and market IDs, see the config files referenced below.
+
 ---
 
 ## Adding a New Position (Quick Reference)
@@ -53,13 +55,7 @@ Protocol dispatch is driven by `wallets.json` protocol registrations → `PROTOC
 
 Morpho has two product types. Both use the same core contract per chain.
 
-### Core Contracts
-
-| Chain | Morpho Core Address |
-|-------|---------------------|
-| Ethereum | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` |
-| Arbitrum | `0x6c247b1F6182318877311737BaC0844bAa518F5e` |
-| Base | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (same as Ethereum) |
+**Config**: Core contract addresses per chain are in `contracts.json` under `_morpho` sections.
 
 ### Morpho Markets (Category D — Leveraged Positions)
 
@@ -77,22 +73,9 @@ Isolated lending markets. Each market has a unique `market_id` (bytes32). A posi
 
 **ABI**: `config/abis.json` → `morpho_core` (functions: `position`, `market`)
 
-**Config**: `config/morpho_markets.json` — one entry per market with market_id, loan token, collateral token, wallets. Handler: `morpho_leverage` in `HANDLER_REGISTRY`.
+**Config**: `config/morpho_markets.json` — one entry per market with market_id, loan token, collateral token, wallets. Includes both active and closed markets (closed kept for audit trail). Handler: `morpho_leverage` in `HANDLER_REGISTRY`.
 
 **Classification**: Category D. Net value = collateral value − debt value. Collateral priced per its own token category (A2, A3, etc.), debt (loan token) priced per Category E.
-
-**Known active markets**:
-| Market | Market ID | Collateral | Loan | Chain | Wallets |
-|--------|-----------|------------|------|-------|---------|
-| syrupUSDC/AUSD | `0xab31...0056` | syrupUSDC (A2) | AUSD (E) | Ethereum | 0xa33e |
-| syrupUSDC/RLUSD | `0xc0ae...0394` | syrupUSDC (A2) | RLUSD (E) | Ethereum | 0xa33e |
-| syrupUSDC/USDT0 | `0x571c...2af4` | syrupUSDC (A2) | USDT0 (E) | Arbitrum | 0xa33e |
-
-**Closed markets** (keep in config for audit trail):
-| Market | Closed | Notes |
-|--------|--------|-------|
-| mF-ONE/USDC | 26 Mar 2026 | Collateral moved to wallet |
-| AA_FalconXUSDC/USDC (Veris direct) | 22 Mar 2026 | Veris 0x0c16 withdrew collateral, repaid debt. Gauntlet vault's position in same market remains active. |
 
 ### Morpho Vaults / MetaMorpho (Category A1 — Yield-Bearing)
 
@@ -103,16 +86,9 @@ ERC-4626 vaults that allocate deposits across multiple Morpho markets. User depo
 2. `convertToAssets(shares)` on the vault contract → underlying token amount
 3. Price the underlying per its own category (E for stablecoins)
 
-**Config**: Add vault to `config/contracts.json` under a section with `_query_type: "erc4626"`, and share token to `config/tokens.json` with `"method": "a1_exchange_rate"`. Handler: `erc4626` in `HANDLER_REGISTRY`.
+**Config**: Vaults are in `config/contracts.json` under sections with `_query_type: "erc4626"`. Share tokens in `config/tokens.json` with `"method": "a1_exchange_rate"`. Handler: `erc4626` in `HANDLER_REGISTRY`.
 
 **Classification**: Category A1. Value = convertToAssets(shares) × underlying token price.
-
-**Known vaults**:
-| Vault | Address | Deposit Token | Chain | Wallet |
-|-------|---------|---------------|-------|--------|
-| Steakhouse Reservoir USDC (bbqSUDCreservoir) | `0xBEeFF047C03714965a54b671A37C18beF6b96210` | USDC | Ethereum | 0xa33e |
-| Steakhouse USDT (steakUSDT) | `0xbEef047a543E45807105E51A8BBEFCc5950fcfBa` | USDT | Ethereum | 0xa33e |
-| Clearstar USDC Reactor (CSUSDC) | `0x1D3b1Cd0a0f242d598834b3F2d126dC6bd774657` | USDC | Base | 0x8055 |
 
 ### Adding a new Morpho position
 
@@ -136,14 +112,7 @@ Tokenised fund shares. Each product has a token + a Chainlink-style oracle.
 
 **Config**: Token addresses and oracles are in `contracts.json` under `_midas` sections per chain (with `_query_type: "midas_oracle"`). Handler: `midas_oracle` in `HANDLER_REGISTRY`. Adding a new Midas token = add entry to the `_midas` section with address, symbol, decimals, oracle, oracle_chain.
 
-**Issuer fallback (tier 2)**: Midas publishes daily reports as image-based PDFs in public Google Drive folders. mF-ONE reports: `https://drive.google.com/drive/folders/1NnrtI39fO2XuaNvnnZurvGskTYv_B4i_`. Filename: `mfone_reporting_public_YYYYMMDD.pdf`. Key field: "Price as of report Date: $X.XXXXXXXX". Snapshot at 5pm ET. Reports are image PDFs (no extractable text layer — OCR required for automation). Local copies saved to `docs/reference/midas/mf-one/`.
-
-**Known tokens**:
-| Token | Address | Oracle | Chain |
-|-------|---------|--------|-------|
-| mF-ONE | 0x238a700eD6165261Cf8b2e544ba797BC11e466Ba | 0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C | Ethereum |
-| msyrupUSDp | 0x2fE058CcF29f123f9dd2aEC0418AA66a877d8E50 | 0x337d914ff6622510FC2C63ac59c1D07983895241 | Ethereum |
-| mHYPER | 0xb31BeA5c2a43f942a3800558B1aa25978da75F8a | 0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0 | Plasma |
+**Issuer fallback (tier 2)**: Midas publishes daily reports as image-based PDFs in public Google Drive folders. See `data_sources.md` (in this folder) for details on mF-ONE reports.
 
 ---
 
@@ -180,31 +149,7 @@ When you borrow, a variable debt token is minted. Its `balanceOf` also increases
 
 Aave Horizon is a **separate RWA-only pool** with its own Pool contract and its own aTokens/debt tokens. Do NOT mix up Horizon aTokens with standard V3 aTokens — they are different contracts even for the same underlying asset.
 
-### Known deployments
-
-| Pool | Pool Contract | Chain | Notes |
-|------|---------------|-------|-------|
-| Aave Horizon RWA | `0xAe05Cd22df81871bc7cC2a04BeCfb516bFe332C8` | Ethereum | RWA-only, separate from V3 |
-| Aave V3 | `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5` | Base | Standard V3 |
-| Aave V3 | `0x925a2A7214Ed92428B5b1B090F80b25700095e12` | Plasma | Standard V3 |
-
-### Known aTokens and debt tokens
-
-| Token | Contract | Pool | Chain | Underlying | Type |
-|-------|----------|------|-------|------------|------|
-| aHorRwaUSCC | `0x08b798c40b9AB931356d9aB4235F548325C4cb80` | Horizon | Ethereum | USCC (A2) | Supply |
-| variableDebtHorRwaRLUSD | `0xace8a1c0ec12ae81814377491265b47f4ee5d3dd` | Horizon | Ethereum | RLUSD (E) | Debt |
-| aBassyrupUSDC | `0xD7424238CcbE7b7198Ab3cFE232e0271E22da7bd` | V3 | Base | syrupUSDC (A2) | Supply |
-| aPlaUSDe | `0x7519403E12111ff6b710877Fcd821D0c12CAF43A` | V3 | Plasma | USDe (E) | Supply |
-| aPlasUSDe | `0xc1a318493ff07a68fe438cee60a7ad0d0dba300e` | V3 | Plasma | sUSDe (A1) | Supply |
-
-### Known positions
-
-| Position | Pool | Chain | Wallet | Type | Category |
-|----------|------|-------|--------|------|----------|
-| USCC/RLUSD | Horizon | Ethereum | 0x8055 | Leveraged (supply USCC, borrow RLUSD) | D |
-| sUSDe + USDe supply | V3 | Plasma | 0x6691 | Supply-only (no debt) | A1 |
-| syrupUSDC supply | V3 | Base | 0xa33e | Supply-only (no debt) | A1 |
+**Config**: Pool contracts, aTokens, and debt tokens are in `contracts.json` under `_aave` sections per chain. Each entry specifies the pool variant, underlying token, and type (supply/debt).
 
 ### Adding a new Aave position
 
@@ -248,11 +193,7 @@ Standard ERC-4626:
 
 **Classification**: Category A1. Value = convertToAssets(shares) × underlying token price.
 
-### Known vaults
-
-| Vault | Address | Chain | Wallet | Active sub-account | Sub-account address |
-|-------|---------|-------|--------|--------------------|---------------------|
-| esyrupUSDC-1 | `0xA999f8a38A902f27F278358c4bD20fe1459Ae47C` | Arbitrum | 0xa33e | 1 | `0xa33e...62a3` |
+**Config**: Vaults and active sub-account IDs are in `contracts.json` under `_euler` sections.
 
 ### Adding a new Euler position
 
@@ -271,9 +212,7 @@ ERC-4626 USDC vault.
 
 **Classification**: Category A1.
 
-| Vault | Address | Chain |
-|-------|---------|-------|
-| avUSDC | 0x944766f715b51967E56aFdE5f0Aa76cEaCc9E7f9 | Base |
+**Config**: Vault address in `contracts.json`.
 
 ---
 
@@ -299,15 +238,13 @@ Multi-layered private credit position. Veris has exposure through two paths, bot
 ```
 Pareto issues AA_FalconXUSDC tranche tokens (credit to FalconX)
   ↓
-Two paths of exposure for Veris:
+Two paths of exposure:
 
 Path 1 (indirect): Gauntlet vault holds AA_FalconXUSDC as Morpho collateral
   → borrows USDC against it (leveraged)
   → Veris holds gpAAFalconX shares = pro-rata claim on vault's net exposure
 
-Path 2 (direct): Veris wallet 0x0c16 holds AA_FalconXUSDC directly
-  → Jul-Sep 2025: held in wallet, then moved to Gauntlet
-  → Mar 2026: revived — supplied as Morpho collateral, then withdrawn to wallet
+Path 2 (direct): Wallet holds AA_FalconXUSDC directly
 ```
 
 ### Classification
@@ -317,19 +254,9 @@ Path 2 (direct): Veris wallet 0x0c16 holds AA_FalconXUSDC directly
 Full methodology: `docs/methodology/falconx_accrual_analysis.md`
 Position collection flow: `plans/falconx_position_flow.md`
 
-### Contracts
-
-| Contract                         | Address                                       | Purpose                                                    |
-|----------------------------------|-----------------------------------------------|------------------------------------------------------------|
-| Gauntlet Levered FalconX Vault   | `0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44`  | Custom vault (NOT ERC-4626). gpAAFalconX, 18 dec.          |
-| Gauntlet Price Fee Calculator    | `0x8F3FfA11CD5915f0E869192663b905504A2Ef4a5`  | `convertUnitsToToken()` for post-facto verification        |
-| Pareto Credit Vault              | `0x433d5b175148da32ffe1e1a37a939e1b7e79be4d`  | Proxy (impl: `0x8016...Ccaf`). TP, epoch, pool data.       |
-| AA_FalconXUSDC Tranche           | `0xC26A6Fa2C37b38E549a4a1807543801Db684f99C`  | ERC-20 tranche token, 18 dec. NOT ERC-4626.                |
-| Morpho Market                    | ID: `0xe83d72fa...f36f52`                      | AA_FalconXUSDC/USDC leveraged market                       |
+**Config**: Contract addresses in `contracts.json` under `_gauntlet` and `_pareto` sections. ABI in `config/abis.json` → `pareto_credit_vault`.
 
 ### Pareto Credit Vault — on-chain functions
-
-ABI: `config/abis.json` → `pareto_credit_vault`
 
 | Function                    | Returns              | Description                                                      |
 |-----------------------------|----------------------|------------------------------------------------------------------|
@@ -354,13 +281,8 @@ ABI: `config/abis.json` → `pareto_credit_vault`
 3. `totalSupply()` on Gauntlet vault → for Veris % calculation
 4. `tranchePrice(AA_tranche)` on Pareto vault → current TP
 
-**Veris balances** (queried on change only via Etherscan transfers):
-- `balanceOf(0x0c16)` on Gauntlet vault → gpAAFalconX shares
-- `balanceOf(0x0c16)` on AA_FalconXUSDC → direct holding
-- `position(AA_USDC_market, 0x0c16)` on Morpho → direct Morpho collateral
-
 **Post-facto verification** (at epoch end only):
-- `convertUnitsToToken(vault, USDC, veris_balance)` on PriceFeeCalculator (`0x8F3F...`)
+- `convertUnitsToToken(vault, USDC, veris_balance)` on PriceFeeCalculator
 
 ### Primary valuation — accrual
 
@@ -383,15 +305,7 @@ ERC-4626/7540 vault that deploys capital into two sub-strategies: a Rain credit 
 
 **Reclassified A3 → A1**: The vault's `convertToAssets` is deterministic and authoritative — it reflects collected + uncollected interest from Rain, yield from the liquid strategy, and performance fee deductions. Analogous to sUSDe being A1 despite off-chain underlying yield.
 
-### Contracts
-
-| Contract | Address | Purpose |
-|----------|---------|---------|
-| Veris Credit Vault | `0xb21eAFB126cEf15CB99fe2D23989b58e40097919` | ERC-4626/7540 vault. Primary valuation via `convertToAssets`. |
-| LiquidStrategy | `0x671B5B6F01C5FEe16E6F9De2eb85AC027Dc9fE0e` | Deploys idle capital into Gauntlet USDC Core. `totalAssets()` for balance. |
-| CreditStrategy | `0x433E415b0fA54C570C450DD976E2402e408cB6db` | Line-of-Credit-v2 to Rain. `totalActiveCredit()` for deployed amount. |
-| Rain Credit Line | `0x1e86E49780Dd5FF522B43889A7C196caa0CABd85` | Borrower address for the credit position. |
-| Gauntlet USDC Core | `0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458` | ERC-4626 Morpho vault where liquid strategy deposits. |
+**Config**: All contract addresses in `contracts.json` under `_credit_coop` section.
 
 ### How to read — primary valuation (A1)
 
@@ -410,25 +324,9 @@ For the NAV methodology log, document the breakdown:
 
 Interest on the Rain credit line accrues on-chain and is periodically collected by the vault, which reinvests it into the liquid strategy. The share price (`convertToAssets`) automatically reflects all of this.
 
-### Current terms (as of Mar 2026)
-
-- Rain credit line: $3.75M principal, 14% annual rate, 10% performance fee
-- Gauntlet USDC Core: ~$113K liquid reserve yielding ~4.77%
-- Single wallet: 0xec0b
-
 **Classification**: Category A1. Value = `convertToAssets(shares)` (USDC, at par).
 
 **Implementation**: `src/protocol_queries.py` → `query_creditcoop()` (handler: `credit_coop` in `HANDLER_REGISTRY`). Reads all contract addresses from `contracts.json` `_credit_coop` section. Queries aggregate `convertToAssets` + sub-strategy breakdown (`totalActiveCredit`, `totalAssets` on LiquidStrategy, USDC cash). Breakdown included in position notes for the methodology log.
-
-### Hyperithm USDC Apex (Ethereum, wallet 0xec0b)
-
-MetaMorpho vault. Standard ERC-4626.
-
-| Contract | Address | Description |
-|----------|---------|-------------|
-| Hyperithm USDC Apex | `0x777791c4d6dc2ce140d00d2828a7c93503c67777` | MetaMorpho vault (hyperUSDCa), ~1,152 USDC |
-
-**Classification**: Category A1. Value = `convertToAssets(shares)` (USDC, at par).
 
 ---
 
@@ -482,15 +380,7 @@ ARMA is an autonomous yield agent by Giza. It uses ERC-4337 smart account proxie
 
 **How to read**: Scan the proxy address the same way as any other wallet (token balances via `balanceOf` or Alchemy batch call). The proxy can hold positions across multiple protocols simultaneously — check for aTokens, Morpho vault shares, etc.
 
-**Implementation**: All proxies share the same implementation contract `0x17bac39f916c21ac825aed89607fdba251dce97d` (EIP-1167 clone pattern).
-
-**Config**: Listed in `wallets.json` under `arma_proxies`, each with `parent_wallet` linking back to the controlling EOA.
-
-**Known proxies**:
-| Proxy Address | Chain | Parent Wallet | Holdings |
-|---------------|-------|---------------|----------|
-| 0xa8d4e894f268438d3438d0030f2e36852aeba97d | Base | 0x6691 (Private Deal Positions) | ~$10 USDC |
-| 0xd5086229c2fdea72f8c3292cfafbae7337126c9b | Arbitrum | 0xaca2 (Open Market Positions 3) | ~$0.01 USDC |
+**Config**: Proxies listed in `wallets.json` under `arma_proxies`, each with `parent_wallet` linking back to the controlling EOA.
 
 ---
 
@@ -502,7 +392,7 @@ Isolated lending markets on Solana. Each market has its own reserves (tokens) an
 
 ### Architecture
 
-"Solstice", "Superstate Opening Bell", etc. are just separate lending markets under the same program — not different program types. An obligation is a PDA that holds a user's collateral deposits and borrows within a specific market.
+Markets like "Solstice", "Superstate Opening Bell", etc. are just separate lending markets under the same program — not different program types. An obligation is a PDA that holds a user's collateral deposits and borrows within a specific market.
 
 ### How to read — on-chain (preferred for Valuation Block)
 
@@ -547,28 +437,17 @@ The API refreshes `marketValueSf` before returning (unlike on-chain), so API USD
 
 Reserves are identified by pubkey. The metrics/history endpoint returns `mintAddress` per deposit/borrow, which maps to the actual token.
 
-### Known positions
+**Config**: Obligation pubkeys, market pubkeys, reserve-to-token mappings, and deposit/borrow details are all in `config/solana_protocols.json` under `kamino.obligations`.
 
-| Market | Market Pubkey | Obligation | Collateral | Debt |
-|--------|--------------|------------|------------|------|
-| Superstate Opening Bell | `CF32kn7AY8X1bW7ZkGcHc4X9ZWTxqKGCJk6QwrQkDcdw` | `D2rcayJTqmZvqaoViEyamQh2vw9T1KYwjbySQZSz6fsS` | USCC (reserve `FQnQgB...`, mint `BTRR3s...`, 6 dec) | USDC (reserve `BnYNV7...`, mint `EPjFWd...`, 6 dec) |
-| Solstice | `9Y7uwXgQ68mGqRtZfuFaP4hc4fxeJ7cE9zTtqTxVhfGU` | `HMMc5d9sMrGrAY18wE5yYTPpJNk72nrBrgqz5mtE3yrq` | PT-USX (reserve `BLKW7x...`, mint `3kctCX...`, 6 dec, Cat B) + PT-eUSX (reserve `Ezmztx...`, mint `BNR2Fs...`, 6 dec, Cat B) | USX (reserve `H2pmnD...`, mint `6FrrzD...`, 6 dec) |
-
-**Classification**: Category D. Net value = collateral value − debt value. Collateral priced per its own token category (A2 for USCC, B for PT-USX/PT-eUSX), debt per Category E.
+**Classification**: Category D. Net value = collateral value − debt value. Collateral priced per its own token category, debt per Category E.
 
 ### Farming / Rewards
 
-Kamino farming rewards accrue to obligations via a separate Farms program (`FarmsPZpWu9i7Kky8tPN37rs2TpmMrAZrC7S7vJa91Hr`). Claimable rewards are included in NAV per Category F rules.
+Kamino farming rewards accrue to obligations via a separate Farms program. Claimable rewards are included in NAV per Category F rules.
 
 **How to read**: `GET /farms/users/{wallet}/transactions` returns claim history. For current unclaimed balances, use the klend-sdk `Farms.getAllFarmsForUser()` or query farm user state accounts on-chain.
 
-**Known farms for Veris wallet**:
-
-| Farm | Reward Token | Reward Mint | Status |
-|------|-------------|-------------|--------|
-| `sXqHDSD...` | USX | `6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG` | Active (weekly claims) |
-| `DQGadHq...` | USDG | `2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH` | Active (last claim Jan 2026) |
-| `DEe2NZ5...`, `8hznHD3...` | PYUSD | `2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo` | Inactive since Nov 2025 |
+**Config**: Farm pubkeys and reward token mints are in `config/solana_protocols.json` under `kamino.farms`.
 
 **KMNO season rewards** (claimable from kamino.com/season4): Excluded from NAV — airdrop/points mechanism, not standard farming.
 
@@ -660,23 +539,9 @@ Near-expiry illiquid YTs may be marked to zero per Valuation Policy.
 
 **Implementation**: `src/solana_client.py` → `parse_exponent_market()`, `get_exponent_lp_positions()`, `get_exponent_yt_positions()`
 
-**Production note**: Discovery (`getProgramAccounts`) is slow and rate-limited on Alchemy. For NAV runs, use the known account pubkeys from the table below with `getAccountInfo` only — no discovery step needed. Only re-run discovery when onboarding new positions. No `time.sleep()` needed between Alchemy `getAccountInfo` calls.
+**Production note**: Discovery (`getProgramAccounts`) is slow and rate-limited on Alchemy. For NAV runs, use the known account pubkeys from config with `getAccountInfo` only — no discovery step needed. Only re-run discovery when onboarding new positions. No `time.sleep()` needed between Alchemy `getAccountInfo` calls.
 
-### Known positions
-
-| Market | Market Pubkey | Vault | Position Type | User Account |
-|--------|-------------|-------|---------------|-------------|
-| ONyc-13MAY26 | `8QJRc12BDXHRLghZXFyPtYtAQeRwnZGKMJQa3G2NVQoC` | `J2apQJvz...` | LP (C) | `Bim2Q4nJ...` (lp_balance ~821T raw, 9 dec) |
-| eUSX-01JUN26 | `rBbzpGk3PTX8mvQg95VWJ24EDgvxyDJYrEo9jtauvjP` | `7NviQEEi...` | LP (C) | `A5Cf2QFy...` (lp_balance ~119B raw, 6 dec) |
-| ONyc-13MAY26 | — | `J2apQJvz...` | YT (F) | `FoiWPd6H...` (yt_balance ~726T raw = 725,568 tokens, 9 dec) |
-| eUSX-01JUN26 | — | `7NviQEEi...` | YT (F) | `Bz2FoHme...` (yt_balance ~142B raw = 141,771 tokens, 6 dec) |
-
-### LP mint addresses
-
-| Market | LP Mint | Decimals |
-|--------|---------|----------|
-| ONyc-13MAY26 | `3gqhwFZtkU1dUyNN6taFp8sbnu3E5bmkumfjtoF9P9JD` | 9 |
-| eUSX-01JUN26 | `4GT6g1iKx2TyYCkwt1tERkReQjSUuVE7uh14M5W8v2nn` | 6 |
+**Config**: Market pubkeys, vault pubkeys, LP/YT position accounts, and LP mint addresses are all in `config/solana_protocols.json` under `exponent.markets`.
 
 ---
 

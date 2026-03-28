@@ -222,7 +222,7 @@ A3 positions differ from all others: they require a **supporting workbook** with
 3. Check if data covers the valuation date:
    a. If yes → read the NAV value at the valuation timestamp
    b. If no → append hourly rows from last timestamp to valuation date:
-      - Query on-chain data (Multicall3) per protocol_sourcing.md
+      - Query on-chain data (Multicall3) per docs/internal/protocol_sourcing.md
       - Apply loan notice net rate for interest calculation
       - Detect deposits/withdrawals via Etherscan
       - Write formula-based rows

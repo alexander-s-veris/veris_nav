@@ -18,6 +18,9 @@ load_dotenv()
 
 from evm import TS_FMT
 
+# Standard SPL Token program ID (Solana mainnet)
+SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+
 # --- Config loader for solana_protocols.json ---
 _SOLANA_CFG = None
 

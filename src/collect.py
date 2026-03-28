@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from evm import (
-    CONFIG_DIR, OUTPUT_DIR, TS_FMT,
+    CONFIG_DIR, OUTPUT_DIR, TS_FMT, CET,
     load_chains, get_evm_chains, get_web3, get_block_info,
     find_valuation_block,
 )
@@ -44,8 +44,6 @@ from output import (
     write_positions, write_leverage_detail, write_pt_lots,
     write_lp_decomposition, write_nav_summary,
 )
-
-CET = timezone(timedelta(hours=1))
 
 
 def main():
@@ -148,10 +146,27 @@ def main():
         if error:
             chain_health[chain_name]["errors"].append(error)
 
+    def _to_position(r, protocol="wallet", wallet_override=None, notes=""):
+        """Convert a balance scanner row to a position dict."""
+        pos = {
+            "chain": r["chain"], "protocol": protocol,
+            "wallet": wallet_override or r["wallet"],
+            "position_label": r["token_symbol"], "category": r["category"],
+            "position_type": "token_balance", "token_symbol": r["token_symbol"],
+            "token_contract": r["token_contract"],
+            "balance_human": r["balance"],
+            "block_number": r["block_number"],
+            "block_timestamp_utc": r["block_timestamp_utc"],
+            "_registry_entry": r.get("_registry_entry"),
+        }
+        if notes:
+            pos["notes"] = notes
+        return pos
+
     # =========================================================================
     # STEPS 1+2: Run wallet balances and protocol positions CONCURRENTLY
     # =========================================================================
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 
     wallet_balance_rows = []
     protocol_rows = []
@@ -162,8 +177,7 @@ def main():
         rows = []
         log = []
 
-        # Balance scanner functions, keyed by chain config "token_balance_method".
-        # Default (missing key) = "alchemy".
+        # Balance scanner dispatch, keyed by chain config "token_balance_method"
         def _scan_alchemy(chain_name, chain_cfg):
             chain_rows = []
             try:
@@ -186,13 +200,10 @@ def main():
                     chain_name, chain_cfg["chain_id"], w["address"], registry))
             return chain_rows
 
-        def _scan_noop(chain_name, chain_cfg):
-            return []  # Handled by protocol queries (e.g. Katana)
-
         balance_scanners = {
             "alchemy": _scan_alchemy,
             "etherscan_v2": _scan_etherscan,
-            "balance_of": _scan_noop,
+            "balance_of": lambda cn, cc: [],  # Handled by protocol queries (e.g. Katana)
         }
 
         def scan_evm_balances(chain_name):
@@ -209,18 +220,7 @@ def main():
             if chain_rows:
                 log.append(f"  [{chain_name}] {len(chain_rows)} token balances")
             for r in chain_rows:
-                rows.append({
-                    "chain": r["chain"], "protocol": "wallet", "wallet": r["wallet"],
-                    "position_label": r["token_symbol"], "category": r["category"],
-                    "position_type": "token_balance", "token_symbol": r["token_symbol"],
-                    "token_contract": r["token_contract"],
-                    "balance_raw": str(r.get("balance_raw", "")),
-                    "balance_human": r["balance"],
-                    "decimals": r.get("_registry_entry", {}).get("decimals", 18),
-                    "block_number": r["block_number"],
-                    "block_timestamp_utc": r["block_timestamp_utc"],
-                    "_registry_entry": r.get("_registry_entry"),
-                })
+                rows.append(_to_position(r))
 
         # Solana
         for w in solana_wallets:
@@ -233,18 +233,9 @@ def main():
             _track_chain("solana", balances=len(sol_rows))
             log.append(f"  [solana] {len(sol_rows)} token balances")
             for r in sol_rows:
-                rows.append({
-                    "chain": "solana", "protocol": "wallet", "wallet": r["wallet"],
-                    "position_label": r["token_symbol"], "category": r["category"],
-                    "position_type": "token_balance", "token_symbol": r["token_symbol"],
-                    "token_contract": r["token_contract"],
-                    "balance_human": r["balance"],
-                    "block_number": r["block_number"],
-                    "block_timestamp_utc": r["block_timestamp_utc"],
-                    "_registry_entry": r.get("_registry_entry"),
-                })
+                rows.append(_to_position(r))
 
-        # ARMA proxies
+        # ARMA proxies — scan as regular wallets, annotate with parent
         for proxy in arma_proxies:
             p_chain, p_addr = proxy["chain"], proxy["address"]
             parent_wallet = proxy.get("parent_wallet", p_addr)
@@ -256,19 +247,11 @@ def main():
                     bn, bts = get_block_info(w3)
                 proxy_rows = query_balances_alchemy(w3, p_chain, p_addr, bn, bts, registry)
                 if proxy_rows:
-                    log.append(f"  [{p_chain}] ARMA {p_addr[:8]}... (parent {parent_wallet[:8]}...): {len(proxy_rows)} balances")
+                    log.append(f"  [{p_chain}] ARMA {p_addr[:8]}...: {len(proxy_rows)} balances")
                 for r in proxy_rows:
-                    rows.append({
-                        "chain": p_chain, "protocol": "arma", "wallet": parent_wallet,
-                        "position_label": r["token_symbol"], "category": r["category"],
-                        "position_type": "token_balance", "token_symbol": r["token_symbol"],
-                        "token_contract": r["token_contract"],
-                        "balance_human": r["balance"],
-                        "block_number": r["block_number"],
-                        "block_timestamp_utc": r["block_timestamp_utc"],
-                        "_registry_entry": r.get("_registry_entry"),
-                        "notes": f"ARMA proxy {p_addr[:10]}... on {p_chain}",
-                    })
+                    rows.append(_to_position(
+                        r, protocol="arma", wallet_override=parent_wallet,
+                        notes=f"ARMA proxy {p_addr[:10]}... on {p_chain}"))
             except Exception:
                 pass
 
@@ -284,37 +267,33 @@ def main():
             t_chain = _time.time()
             block_override = valuation_blocks.get(chain_name)
             chain_pos_count = 0
-            for w in evm_wallets:
-                wallet = w["address"]
+
+            # Regular wallets + ARMA proxies on this chain
+            all_evm_wallets = [(w["address"], w["address"]) for w in evm_wallets]
+            for proxy in arma_proxies:
+                if proxy["chain"] == chain_name:
+                    all_evm_wallets.append(
+                        (proxy["address"], proxy.get("parent_wallet", proxy["address"])))
+
+            for scan_addr, report_wallet in all_evm_wallets:
                 chain_rows = query_evm_wallet_positions(
-                    chain_name, wallet, block_override=block_override)
+                    chain_name, scan_addr, block_override=block_override)
                 active = [r for r in chain_rows if r.get("status") != "CLOSED"]
                 chain_pos_count += len(active)
+                is_proxy = scan_addr.lower() != report_wallet.lower()
                 if active:
-                    log.append(f"  [{chain_name}] {wallet[:8]}...: {len(active)} active positions")
+                    label = f"ARMA {scan_addr[:8]}..." if is_proxy else f"{scan_addr[:8]}..."
+                    log.append(f"  [{chain_name}] {label}: {len(active)} active positions")
+                for r in chain_rows:
+                    if is_proxy:
+                        r["wallet"] = report_wallet
+                        r["notes"] = r.get("notes", "") + f" (via ARMA proxy {scan_addr[:10]}...)"
                 rows.extend(chain_rows)
+
             _track_chain(chain_name, positions=chain_pos_count)
             elapsed = _time.time() - t_chain
             if elapsed > 1:
                 log.append(f"  [{chain_name}] ({elapsed:.1f}s)")
-
-        # ARMA proxies
-        for proxy in arma_proxies:
-            p_chain, p_addr = proxy["chain"], proxy["address"]
-            parent_wallet = proxy.get("parent_wallet", p_addr)
-            try:
-                proxy_block_override = valuation_blocks.get(p_chain)
-                proxy_rows = query_evm_wallet_positions(
-                    p_chain, p_addr, block_override=proxy_block_override)
-                active = [r for r in proxy_rows if r.get("status") != "CLOSED"]
-                if active:
-                    log.append(f"  [{p_chain}] ARMA {p_addr[:8]}...: {len(active)} protocol positions")
-                for r in proxy_rows:
-                    r["wallet"] = parent_wallet
-                    r["notes"] = r.get("notes", "") + f" (via ARMA proxy {p_addr[:10]}...)"
-                rows.extend(proxy_rows)
-            except Exception:
-                pass
 
         # Solana
         for w in solana_wallets:
@@ -388,26 +367,9 @@ def main():
     # =========================================================================
     print("\n--- Step 4: Valuation ---")
 
-    from pricing import get_price
-
+    # All positions — wallet balances and protocol positions alike — go through
+    # value_position() for consistent category-specific pricing and depeg handling.
     for pos in all_positions:
-        # Wallet token balances: price via registry entry directly (not category dispatch)
-        if pos.get("protocol") in ("wallet", "arma"):
-            entry = pos.get("_registry_entry")
-            if entry:
-                try:
-                    result = get_price(entry, w3_eth)
-                    pos["price_usd"] = result["price_usd"]
-                    pos["value_usd"] = pos["balance_human"] * result["price_usd"]
-                    pos["price_source"] = result["price_source"]
-                    pos["depeg_flag"] = result.get("depeg_flag", "")
-                except Exception as e:
-                    pos["price_usd"] = Decimal(0)
-                    pos["value_usd"] = Decimal(0)
-                    pos["price_source"] = f"error: {e}"
-            continue
-
-        # Protocol positions: use category-specific valuation
         try:
             value_position(pos, w3_eth, valuation_date, registry)
         except Exception as e:

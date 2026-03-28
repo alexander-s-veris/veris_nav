@@ -1,30 +1,40 @@
 {
   "ethereum": {
     "chain_id": 1,
+    "native_symbol": "ETH",
+    "native_decimals": 18,
     "rpc_url_template": "https://eth-mainnet.g.alchemy.com/v2/{api_key}",
     "explorer": "https://etherscan.io",
     "avg_block_time": 12.0
   },
   "arbitrum": {
     "chain_id": 42161,
+    "native_symbol": "ETH",
+    "native_decimals": 18,
     "rpc_url_template": "https://arb-mainnet.g.alchemy.com/v2/{api_key}",
     "explorer": "https://arbiscan.io",
     "avg_block_time": 0.25
   },
   "base": {
     "chain_id": 8453,
+    "native_symbol": "ETH",
+    "native_decimals": 18,
     "rpc_url_template": "https://base-mainnet.g.alchemy.com/v2/{api_key}",
     "explorer": "https://basescan.org",
     "avg_block_time": 2.0
   },
   "avalanche": {
     "chain_id": 43114,
+    "native_symbol": "AVAX",
+    "native_decimals": 18,
     "rpc_url_template": "https://avax-mainnet.g.alchemy.com/v2/{api_key}",
     "explorer": "https://snowtrace.io",
     "avg_block_time": 2.0
   },
   "plasma": {
     "chain_id": 9745,
+    "native_symbol": "XPL",
+    "native_decimals": 18,
     "rpc_url_template": "https://plasma-mainnet.g.alchemy.com/v2/{api_key}",
     "token_balance_method": "etherscan_v2",
     "explorer": "https://plasmascan.to",
@@ -32,18 +42,24 @@
   },
   "hyperevm": {
     "chain_id": 999,
+    "native_symbol": "HYPE",
+    "native_decimals": 18,
     "rpc_url_template": "https://hyperliquid-mainnet.g.alchemy.com/v2/{api_key}",
     "explorer": null,
     "avg_block_time": 2.0
   },
   "katana": {
     "chain_id": 747474,
+    "native_symbol": "RON",
+    "native_decimals": 18,
     "rpc_env_var": "KATANA_RPC_URL",
     "token_balance_method": "balance_of",
     "explorer": "https://katanascan.com",
     "avg_block_time": 2.0
   },
   "solana": {
+    "native_symbol": "SOL",
+    "native_decimals": 9,
     "rpc_url_template": "https://solana-mainnet.g.alchemy.com/v2/{api_key}",
     "explorer": "https://solscan.io"
   }

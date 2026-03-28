@@ -9,7 +9,7 @@ pricing methodology per Valuation Policy:
   B:  per-lot linear amortisation
   C:  LP decomposition × constituent prices
   D:  collateral value − debt value (each side priced per its category)
-  E:  par ($1.00) or oracle for non-USDC-pegged
+  E:  par ($1.00) with depeg monitoring, or oracle for non-USDC-pegged
   F:  market price (Kraken → CoinGecko)
 """
 
@@ -88,19 +88,105 @@ def _get_pricing_indices(tokens_registry, contracts_cfg=None):
     return _PRICING_INDICES
 
 
-def _apply_staleness(pos, stale_flag, staleness_hours, notes=""):
-    """Set staleness and notes fields on a position dict from price result.
+def _apply_price_result(pos, result):
+    """Apply pricing metadata from a get_price() result dict to a position.
 
-    Only overwrites notes if there is staleness info to report;
-    preserves any existing notes on the position.
+    Propagates staleness fields, depeg fields (Policy Section 9.4 / 12.1),
+    and notes. Preserves existing notes on the position.
     """
-    pos["stale_flag"] = stale_flag or ""
-    pos["staleness_hours"] = staleness_hours
+    pos["stale_flag"] = result.get("stale_flag", "") or ""
+    pos["staleness_hours"] = result.get("staleness_hours")
+
+    # Propagate depeg fields
+    depeg_flag = result.get("depeg_flag", "")
+    if depeg_flag and depeg_flag != "none":
+        pos["depeg_flag"] = depeg_flag
+    depeg_pct = result.get("depeg_deviation_pct")
+    if depeg_pct is not None:
+        pos["depeg_deviation_pct"] = depeg_pct
+
+    notes = result.get("notes", "")
     if notes:
         existing = pos.get("notes", "")
         pos["notes"] = f"{existing}; {notes}" if existing else notes
     return pos
 
+
+# =============================================================================
+# Pricing helpers — return a standardised result dict
+# =============================================================================
+
+def _price_by_entry_or_symbol(pos, w3_eth, tokens_registry):
+    """Get price for a position using its registry entry or token_symbol.
+
+    Returns a pricing result dict with price_usd, price_source, stale_flag,
+    staleness_hours, notes, depeg_flag, depeg_deviation_pct.
+    """
+    chain = pos.get("chain", "")
+    contract = pos.get("token_contract", "").lower()
+
+    if tokens_registry and chain in tokens_registry:
+        entry = tokens_registry[chain].get(contract)
+        if entry:
+            try:
+                return get_price(entry, w3_eth)
+            except Exception:
+                pass
+
+    return _price_by_symbol(
+        pos.get("token_symbol", ""), chain, w3_eth, tokens_registry)
+
+
+def _price_by_symbol(symbol, chain, w3_eth, tokens_registry):
+    """Look up token price by symbol using config-derived indices.
+
+    Routes par-priced stablecoins through pricing.get_price() so depeg
+    checks are applied (Policy Section 9.4).
+
+    Returns a pricing result dict.
+    """
+    indices = _get_pricing_indices(tokens_registry)
+    sym_lower = symbol.lower()
+
+    # 1. aToken/debt token mapping -> recurse with underlying
+    underlying = indices["atoken_map"].get(sym_lower)
+    if underlying:
+        return _price_by_symbol(underlying, chain, w3_eth, tokens_registry)
+
+    # 2. Par-priced stablecoins and all other tokens — route through
+    #    pricing.get_price() which handles depeg checks for E_par tokens
+    entry = indices["symbol_index"].get(sym_lower)
+    if entry:
+        try:
+            return get_price(entry, w3_eth)
+        except Exception:
+            pass
+
+    # 3. Fallback for par symbols without a registry entry (shouldn't happen)
+    if sym_lower in indices["par_symbols"]:
+        return _make_result(Decimal(1), "par")
+
+    # 4. Not found
+    return _make_result(Decimal(0), f"price_not_found_{symbol}",
+                        notes=f"No pricing config found for {symbol}")
+
+
+def _make_result(price, source, notes=""):
+    """Create a minimal pricing result dict."""
+    return {
+        "price_usd": price,
+        "price_source": source,
+        "stale_flag": "",
+        "staleness_hours": None,
+        "notes": notes,
+        "depeg_flag": "none",
+        "depeg_deviation_pct": None,
+    }
+
+
+# =============================================================================
+# Category dispatch
+# =============================================================================
 
 def value_position(pos, w3_eth=None, valuation_date=None, tokens_registry=None):
     """Value a single position dict. Dispatches to category-specific logic.
@@ -136,8 +222,10 @@ def value_position(pos, w3_eth=None, valuation_date=None, tokens_registry=None):
         return _value_a3(pos)
     elif category == "C":
         return _value_c(pos, w3_eth, tokens_registry)
-    elif category in ("E", "F"):
-        return _value_ef(pos, w3_eth, tokens_registry)
+    elif category == "E":
+        return _value_e(pos, w3_eth, tokens_registry)
+    elif category == "F":
+        return _value_f(pos, w3_eth, tokens_registry)
     else:
         pos["price_usd"] = Decimal(0)
         pos["value_usd"] = Decimal(0)
@@ -156,19 +244,23 @@ def _value_a1(pos, w3_eth, tokens_registry):
     We just need the underlying token's price.
     """
     underlying_amount = pos.get("underlying_amount", pos.get("balance_human", Decimal(0)))
-    underlying_sym = pos.get("underlying_symbol", "USDC")
+    underlying_sym = pos.get("underlying_symbol")
+    if not underlying_sym:
+        pos["price_usd"] = Decimal(0)
+        pos["value_usd"] = Decimal(0)
+        pos["price_source"] = "error_no_underlying_symbol"
+        pos["notes"] = "A1 position missing underlying_symbol — check handler config"
+        return pos
 
-    # Price the underlying token via config-driven lookup
-    price, source, stale_flag, staleness_hours, notes = _get_token_price_by_symbol(
-        underlying_sym, pos.get("chain", ""), w3_eth, tokens_registry)
+    result = _price_by_symbol(underlying_sym, pos.get("chain", ""), w3_eth, tokens_registry)
 
     # For A1 vaults, show the underlying amount as balance_human (what you own),
     # not the share count. Share count stays in balance_raw.
     pos["balance_human"] = underlying_amount
-    pos["price_usd"] = price
-    pos["value_usd"] = underlying_amount * price
-    pos["price_source"] = source
-    _apply_staleness(pos, stale_flag, staleness_hours, notes)
+    pos["price_usd"] = result["price_usd"]
+    pos["value_usd"] = underlying_amount * result["price_usd"]
+    pos["price_source"] = result["price_source"]
+    _apply_price_result(pos, result)
     return pos
 
 
@@ -177,12 +269,12 @@ def _value_a1(pos, w3_eth, tokens_registry):
 # =============================================================================
 
 def _value_a2(pos, w3_eth, tokens_registry):
-    price, source, stale_flag, staleness_hours, notes = _get_token_price(pos, w3_eth, tokens_registry)
+    result = _price_by_entry_or_symbol(pos, w3_eth, tokens_registry)
     balance = pos.get("balance_human", Decimal(0))
-    pos["price_usd"] = price
-    pos["value_usd"] = balance * price
-    pos["price_source"] = source
-    _apply_staleness(pos, stale_flag, staleness_hours, notes)
+    pos["price_usd"] = result["price_usd"]
+    pos["value_usd"] = balance * result["price_usd"]
+    pos["price_source"] = result["price_source"]
+    _apply_price_result(pos, result)
     return pos
 
 
@@ -229,14 +321,18 @@ def _value_b(pos, w3_eth, valuation_date, tokens_registry=None):
 
     # Get underlying price via registry (no hardcoded Pyth feed IDs)
     if underlying:
-        underlying_price, _, ul_stale, ul_staleness_h, ul_notes = _get_token_price_by_symbol(
+        result = _price_by_symbol(
             underlying, pos.get("chain", "solana"), w3_eth, tokens_registry)
+        underlying_price = result["price_usd"]
         if underlying_price <= 0:
-            underlying_price = Decimal(1)  # safety fallback
-        # Propagate underlying staleness to the PT position
-        _apply_staleness(pos, ul_stale, ul_staleness_h, ul_notes)
+            underlying_price = Decimal(1)
+            pos["notes"] = (pos.get("notes", "") +
+                            "; WARNING: underlying price lookup failed, using $1.00 fallback").lstrip("; ")
+        _apply_price_result(pos, result)
     else:
         underlying_price = Decimal(1)
+        pos["notes"] = (pos.get("notes", "") +
+                        "; WARNING: no underlying symbol for PT, using $1.00 fallback").lstrip("; ")
 
     val = value_pt_from_config(pt_symbol, valuation_date, underlying_price)
 
@@ -257,13 +353,11 @@ def _value_b(pos, w3_eth, valuation_date, tokens_registry=None):
 def _value_c(pos, w3_eth, tokens_registry):
     """Value an LP constituent (SY or PT component)."""
     balance = pos.get("balance_human", Decimal(0))
-    token_cat = pos.get("token_category", "")
     constituent_type = pos.get("lp_constituent_type", "")
 
     if constituent_type == "PT":
         # PT in LP uses AMM implied rate, NOT linear amortisation
         pt_ratio = pos.get("pt_price_ratio", Decimal(1))
-        # Get underlying price for the SY token
         underlying_price = _get_underlying_price_for_lp(pos, w3_eth, tokens_registry)
         price = pt_ratio * underlying_price
         pos["price_usd"] = price
@@ -271,12 +365,12 @@ def _value_c(pos, w3_eth, tokens_registry):
         pos["price_source"] = f"amm_implied_rate (pt_ratio={pt_ratio:.6f})"
     else:
         # SY constituent — price per its token category
-        price, source, stale_flag, staleness_hours, notes = _get_token_price_by_symbol(
+        result = _price_by_symbol(
             pos.get("token_symbol", ""), pos.get("chain", ""), w3_eth, tokens_registry)
-        pos["price_usd"] = price
-        pos["value_usd"] = balance * price
-        pos["price_source"] = source
-        _apply_staleness(pos, stale_flag, staleness_hours, notes)
+        pos["price_usd"] = result["price_usd"]
+        pos["value_usd"] = balance * result["price_usd"]
+        pos["price_source"] = result["price_source"]
+        _apply_price_result(pos, result)
 
     return pos
 
@@ -285,21 +379,22 @@ def _get_underlying_price_for_lp(pos, w3_eth, tokens_registry):
     """Get the underlying price for an LP position's constituents."""
     sym = pos.get("token_symbol", "")
 
-    # Use the standard symbol-based lookup which reads from config.
     # Strip "PT-" prefix if present to get the underlying token symbol.
     lookup_sym = sym
     if sym.startswith("PT-"):
-        # For PT constituents, find the SY token's underlying
         underlying = pos.get("underlying_symbol", "")
         if underlying:
             lookup_sym = underlying
 
     if lookup_sym:
-        price, source, *_ = _get_token_price_by_symbol(
+        result = _price_by_symbol(
             lookup_sym, pos.get("chain", ""), w3_eth, tokens_registry)
-        if price > 0:
-            return price
+        if result["price_usd"] > 0:
+            return result["price_usd"]
 
+    # Fallback — flag it clearly
+    pos["notes"] = (pos.get("notes", "") +
+                    "; WARNING: LP underlying price lookup failed, using $1.00 fallback").lstrip("; ")
     return Decimal(1)
 
 
@@ -316,32 +411,50 @@ def _value_d_side(pos, w3_eth, tokens_registry):
     # PT tokens as collateral (Kamino Solstice) — don't price here,
     # they'll be valued via the B methodology in collect.py
     if token_cat == "B":
-        # Placeholder — collect.py will handle PT collateral pricing
         pos["price_usd"] = Decimal(0)
         pos["value_usd"] = Decimal(0)
         pos["price_source"] = "pt_collateral_see_B_lots"
         pos["notes"] = "PT collateral priced via Category B lot methodology"
         return pos
 
-    price, source, stale_flag, staleness_hours, notes = _get_token_price_by_symbol(
-        token_sym, pos.get("chain", ""), w3_eth, tokens_registry)
+    result = _price_by_symbol(token_sym, pos.get("chain", ""), w3_eth, tokens_registry)
 
-    pos["price_usd"] = price
-    pos["value_usd"] = balance * price  # balance is negative for debt
-    pos["price_source"] = source
-    _apply_staleness(pos, stale_flag, staleness_hours, notes)
+    pos["price_usd"] = result["price_usd"]
+    pos["value_usd"] = balance * result["price_usd"]  # balance is negative for debt
+    pos["price_source"] = result["price_source"]
+    _apply_price_result(pos, result)
     return pos
 
 
 # =============================================================================
-# E/F: Token balance — use pricing.py
+# E: Stablecoins & Cash — par with depeg monitoring (Section 6.7 / 9.4)
 # =============================================================================
 
-def _value_ef(pos, w3_eth, tokens_registry):
-    """Value a plain token balance (Category E or F).
+def _value_e(pos, w3_eth, tokens_registry):
+    """Value a Category E position (stablecoins, cash).
+
+    Routes through pricing.get_price() which handles par pricing with
+    depeg checks per Policy Section 9.4.
+    """
+    balance = pos.get("balance_human", Decimal(0))
+    result = _price_by_entry_or_symbol(pos, w3_eth, tokens_registry)
+    pos["price_usd"] = result["price_usd"]
+    pos["value_usd"] = balance * result["price_usd"]
+    pos["price_source"] = result["price_source"]
+    _apply_price_result(pos, result)
+    return pos
+
+
+# =============================================================================
+# F: Other / Bespoke — market price, YT formula (Section 6.8)
+# =============================================================================
+
+def _value_f(pos, w3_eth, tokens_registry):
+    """Value a Category F position (governance tokens, YT, rewards).
 
     For YT tokens: uses yt_price_ratio × underlying_price (Section 6.8).
-    For everything else: standard registry price lookup.
+    Near-expiry YTs are flagged for review.
+    For everything else: standard market price lookup.
     """
     balance = pos.get("balance_human", Decimal(0))
 
@@ -350,87 +463,27 @@ def _value_ef(pos, w3_eth, tokens_registry):
     if yt_ratio is not None and yt_ratio > 0:
         underlying_sym = pos.get("underlying_symbol", "")
         if underlying_sym:
-            ul_price, ul_source, stale_flag, staleness_hours, notes = _get_token_price_by_symbol(
+            result = _price_by_symbol(
                 underlying_sym, pos.get("chain", ""), w3_eth, tokens_registry)
-            price = ul_price * yt_ratio
+            price = result["price_usd"] * yt_ratio
             pos["price_usd"] = price
             pos["value_usd"] = balance * price
             pos["price_source"] = f"yt_formula ({underlying_sym} × {yt_ratio:.6f})"
-            _apply_staleness(pos, stale_flag, staleness_hours, notes)
+            _apply_price_result(pos, result)
+
+            # Flag near-expiry YTs for manual review (Policy Section 6.8)
+            days_to_maturity = pos.get("days_to_maturity")
+            if days_to_maturity is not None and days_to_maturity <= 7:
+                existing = pos.get("notes", "")
+                warning = (f"YT near expiry ({days_to_maturity}d remaining). "
+                           "Per Section 6.8, illiquid near-expiry YTs may be marked to zero.")
+                pos["notes"] = f"{existing}; {warning}" if existing else warning
+
             return pos
 
-    price, source, stale_flag, staleness_hours, notes = _get_token_price(pos, w3_eth, tokens_registry)
-    pos["price_usd"] = price
-    pos["value_usd"] = balance * price
-    pos["price_source"] = source
-    _apply_staleness(pos, stale_flag, staleness_hours, notes)
+    result = _price_by_entry_or_symbol(pos, w3_eth, tokens_registry)
+    pos["price_usd"] = result["price_usd"]
+    pos["value_usd"] = balance * result["price_usd"]
+    pos["price_source"] = result["price_source"]
+    _apply_price_result(pos, result)
     return pos
-
-
-# =============================================================================
-# Helpers
-# =============================================================================
-
-def _get_token_price(pos, w3_eth, tokens_registry):
-    """Get price for a position using its registry entry or token_symbol.
-
-    Returns (price_usd, price_source, stale_flag, staleness_hours, notes).
-    """
-    # Try to find in tokens registry
-    chain = pos.get("chain", "")
-    contract = pos.get("token_contract", "").lower()
-
-    if tokens_registry and chain in tokens_registry:
-        entry = tokens_registry[chain].get(contract)
-        if entry:
-            try:
-                result = get_price(entry, w3_eth)
-                return (result["price_usd"], result["price_source"],
-                        result.get("stale_flag", ""),
-                        result.get("staleness_hours"),
-                        result.get("notes", ""))
-            except Exception:
-                pass
-
-    # Fallback: try by symbol
-    return _get_token_price_by_symbol(
-        pos.get("token_symbol", ""), chain, w3_eth, tokens_registry)
-
-
-def _get_token_price_by_symbol(symbol, chain, w3_eth, tokens_registry):
-    """Look up token price by symbol using config-derived indices.
-
-    Lookup order:
-    1. aToken/debt token -> recurse with underlying symbol
-    2. Par-priced stablecoins -> $1.00
-    3. Token registry symbol index -> pricing.get_price()
-    4. Not found -> (Decimal(0), "price_not_found_{symbol}", "", None, "")
-
-    Returns (price_usd, price_source, stale_flag, staleness_hours, notes).
-    """
-    indices = _get_pricing_indices(tokens_registry)
-    sym_lower = symbol.lower()
-
-    # 1. aToken/debt token mapping -> recurse with underlying
-    underlying = indices["atoken_map"].get(sym_lower)
-    if underlying:
-        return _get_token_price_by_symbol(underlying, chain, w3_eth, tokens_registry)
-
-    # 2. Par-priced stablecoins
-    if sym_lower in indices["par_symbols"]:
-        return Decimal(1), "par", "", None, ""
-
-    # 3. Symbol index -> use pricing.get_price()
-    entry = indices["symbol_index"].get(sym_lower)
-    if entry:
-        try:
-            result = get_price(entry, w3_eth)
-            return (result["price_usd"], result["price_source"],
-                    result.get("stale_flag", ""),
-                    result.get("staleness_hours"),
-                    result.get("notes", ""))
-        except Exception:
-            pass
-
-    # 4. Not found
-    return Decimal(0), f"price_not_found_{symbol}", "", None, ""
