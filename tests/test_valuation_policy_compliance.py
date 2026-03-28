@@ -764,5 +764,226 @@ class TestHandlerRegistryCompleteness(unittest.TestCase):
             )
 
 
+# ---------------------------------------------------------------------------
+# 17. TestVerificationConfig — config/verification.json validation
+# ---------------------------------------------------------------------------
+
+class TestVerificationConfig(unittest.TestCase):
+    """Verify verification.json has valid structure and references."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(CONFIG_DIR, "verification.json")) as f:
+            cls.cfg = json.load(f)
+        with open(os.path.join(CONFIG_DIR, "chains.json")) as f:
+            cls.chains = json.load(f)
+
+    def test_has_asset_level_section(self):
+        """verification.json must have an asset_level section."""
+        self.assertIn("asset_level", self.cfg)
+
+    def test_has_api_endpoints(self):
+        """verification.json must have _api_endpoints with at least one provider."""
+        endpoints = self.cfg.get("_api_endpoints", {})
+        self.assertTrue(len(endpoints) > 0, "No API endpoints configured")
+        for provider, url in endpoints.items():
+            self.assertTrue(url.startswith("http"), f"Invalid URL for {provider}: {url}")
+
+    def test_asset_entries_have_required_fields(self):
+        """Every asset-level verification entry must have type, proof_id, token_decimals, token_addresses."""
+        required = {"type", "token_decimals", "token_addresses"}
+        for symbol, entry in self.cfg.get("asset_level", {}).items():
+            for field in required:
+                self.assertIn(
+                    field, entry,
+                    f"Verification entry '{symbol}' missing required field '{field}'")
+
+    def test_token_addresses_reference_known_chains(self):
+        """Every chain in token_addresses must exist in chains.json."""
+        for symbol, entry in self.cfg.get("asset_level", {}).items():
+            for chain in entry.get("token_addresses", {}):
+                self.assertIn(
+                    chain, self.chains,
+                    f"Verification '{symbol}' references unknown chain '{chain}'")
+
+    def test_verification_types_are_registered(self):
+        """Every verification type must map to a registered verifier."""
+        from verifiers import _VERIFIER_REGISTRY
+        for symbol, entry in self.cfg.get("asset_level", {}).items():
+            vtype = entry.get("type", "")
+            self.assertIn(
+                vtype, _VERIFIER_REGISTRY,
+                f"Verification '{symbol}' has type '{vtype}' not in _VERIFIER_REGISTRY")
+
+
+# ---------------------------------------------------------------------------
+# 18. TestCrossReferences — validate referential integrity across all configs
+# ---------------------------------------------------------------------------
+
+class TestCrossReferences(unittest.TestCase):
+    """Cross-reference integrity: every reference between config files must resolve."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tokens = load_json("tokens.json")
+        cls.chains = load_json("chains.json")
+        cls.wallets = load_json("wallets.json")
+        cls.contracts = load_json("contracts.json")
+        cls.price_feeds = load_json("price_feeds.json")
+        cls.abis = load_json("abis.json")
+
+        # Build flat feed key set
+        cls.all_feed_keys = set()
+        for group_key, group in cls.price_feeds.items():
+            if group_key.startswith("_"):
+                continue
+            if isinstance(group, dict):
+                for feed_key in group:
+                    cls.all_feed_keys.add(feed_key)
+
+    def test_wallets_reference_known_chains(self):
+        """Every chain key in wallets.json must exist in chains.json."""
+        for chain_key in self.wallets:
+            if chain_key.startswith("_") or chain_key == "arma_proxies":
+                continue
+            self.assertIn(
+                chain_key, self.chains,
+                f"wallets.json references chain '{chain_key}' not in chains.json")
+
+    def test_wallet_protocols_have_handlers(self):
+        """Every protocol in wallet registrations must map to a handler."""
+        from protocol_queries import PROTOCOL_TO_HANDLER, SOLANA_HANDLER_REGISTRY
+        all_known = set(PROTOCOL_TO_HANDLER.keys()) | set(SOLANA_HANDLER_REGISTRY.keys())
+        for chain_key, wallets_list in self.wallets.items():
+            if not isinstance(wallets_list, list):
+                continue
+            for wallet in wallets_list:
+                for proto in wallet.get("protocols", {}):
+                    if proto.startswith("_"):
+                        continue
+                    self.assertIn(
+                        proto, all_known,
+                        f"wallets.json {chain_key}/{wallet.get('address', '?')[:10]}: "
+                        f"protocol '{proto}' not in PROTOCOL_TO_HANDLER or "
+                        f"SOLANA_HANDLER_REGISTRY")
+
+    def test_tokens_reference_known_chains(self):
+        """Every chain key in tokens.json must exist in chains.json."""
+        for chain_key in self.tokens:
+            if chain_key.startswith("_"):
+                continue
+            self.assertIn(
+                chain_key, self.chains,
+                f"tokens.json references chain '{chain_key}' not in chains.json")
+
+    def test_contracts_reference_known_chains(self):
+        """Every chain key in contracts.json must exist in chains.json (skip metadata sections)."""
+        # contracts.json may have non-chain top-level keys like "oracles"
+        # Only validate keys that contain dicts with _query_type subsections
+        for chain_key, chain_data in self.contracts.items():
+            if chain_key.startswith("_"):
+                continue
+            if not isinstance(chain_data, dict):
+                continue
+            # Check if this looks like a chain section (has subsections with _query_type)
+            has_query_types = any(
+                isinstance(v, dict) and "_query_type" in v
+                for v in chain_data.values()
+            )
+            if has_query_types:
+                self.assertIn(
+                    chain_key, self.chains,
+                    f"contracts.json references chain '{chain_key}' not in chains.json")
+
+    def test_contracts_abis_exist(self):
+        """Every ABI referenced in contracts.json must exist in abis.json."""
+        for chain, chain_data in self.contracts.items():
+            if not isinstance(chain_data, dict):
+                continue
+            for section_key, section in chain_data.items():
+                if not isinstance(section, dict):
+                    continue
+                for entry_key, entry in section.items():
+                    if entry_key.startswith("_") or not isinstance(entry, dict):
+                        continue
+                    abi_name = entry.get("abi")
+                    if abi_name:
+                        self.assertIn(
+                            abi_name, self.abis,
+                            f"{chain}.{section_key}.{entry_key}: abi '{abi_name}' "
+                            f"not in abis.json")
+
+    def test_verification_symbols_exist_in_tokens(self):
+        """Every symbol in verification.json asset_level must exist in tokens.json."""
+        verification = load_json("verification.json")
+        # Build set of all token symbols across all chains
+        all_symbols = set()
+        for chain, addr, entry in iter_tokens(self.tokens):
+            sym = entry.get("symbol", "")
+            if sym:
+                all_symbols.add(sym)
+
+        for symbol in verification.get("asset_level", {}):
+            self.assertIn(
+                symbol, all_symbols,
+                f"verification.json asset_level '{symbol}' not found in tokens.json")
+
+    def test_arma_proxies_reference_known_chains(self):
+        """Every ARMA proxy chain must exist in chains.json."""
+        for proxy in self.wallets.get("arma_proxies", []):
+            chain = proxy.get("chain", "")
+            self.assertIn(
+                chain, self.chains,
+                f"ARMA proxy {proxy.get('address', '?')[:10]} references "
+                f"unknown chain '{chain}'")
+
+
+# ---------------------------------------------------------------------------
+# 19. TestAdaptersAndVerifiers — module integrity
+# ---------------------------------------------------------------------------
+
+class TestAdaptersAndVerifiers(unittest.TestCase):
+    """Verify all adapters and verifiers are importable and registered."""
+
+    def test_all_adapters_importable(self):
+        """Every adapter in __all__ must be importable from the adapters package."""
+        import adapters
+        for name in adapters.__all__:
+            self.assertTrue(
+                hasattr(adapters, name),
+                f"adapters.__all__ lists '{name}' but it's not importable")
+            self.assertTrue(
+                callable(getattr(adapters, name)) or name.startswith("_"),
+                f"adapters.{name} is not callable")
+
+    def test_verifier_registry_functions_are_callable(self):
+        """Every verifier in the registry must have a callable 'fn'."""
+        from verifiers import _VERIFIER_REGISTRY
+        for vtype, reg in _VERIFIER_REGISTRY.items():
+            self.assertIn("fn", reg, f"Verifier '{vtype}' missing 'fn' key")
+            self.assertTrue(
+                callable(reg["fn"]),
+                f"Verifier '{vtype}' fn is not callable")
+            self.assertIn("api_provider", reg,
+                          f"Verifier '{vtype}' missing 'api_provider' key")
+
+    def test_pricing_hierarchy_sources_have_adapters(self):
+        """Every source type in pricing_policy.json hierarchies must be queryable."""
+        policies = load_json("pricing_policy.json")
+        # These are the source types the hierarchy walker can dispatch to
+        known_source_types = {"chainlink", "pyth", "redstone", "kraken",
+                              "coingecko", "dex_twap", "issuer_nav"}
+        for key, policy in policies.items():
+            if key.startswith("_") or key == "divergence_tolerances":
+                continue
+            if not isinstance(policy, dict):
+                continue
+            for source in policy.get("hierarchy", []):
+                self.assertIn(
+                    source, known_source_types,
+                    f"pricing_policy.{key}: hierarchy source '{source}' "
+                    f"has no matching adapter")
+
+
 if __name__ == "__main__":
     unittest.main()

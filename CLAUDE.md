@@ -62,6 +62,7 @@ All code must follow these. No exceptions. Defined in `docs/internal/architectur
 7. **`decimal.Decimal` for all financial calculations.** Never `float` or `math.pow()` for prices/amounts.
 8. **Log every query.** Contract address, function called, block number, result.
 9. **Comments explaining "why".** Non-obvious logic gets a comment explaining the business reason.
+10. **Tests must be updated with every change.** When adding a new config file, feature, handler, adapter, verifier, or any structural change — update the compliance tests (`tests/test_valuation_policy_compliance.py`). Tests validate cross-referential integrity across all config files and code registries. A feature is not complete until its tests pass. Run: `python -m unittest discover -s tests -v`.
 
 ---
 
