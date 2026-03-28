@@ -542,8 +542,10 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     """
     import csv
     contracts = _load_contracts_cfg()
-    gp_section = contracts.get("ethereum", {}).get("_gauntlet_pareto", {})
-    GAUNTLET_VAULT = gp_section.get("gauntlet_vault", {}).get("address", "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44")
+    gp_section = contracts.get(chain, {}).get("_gauntlet_pareto", {})
+    GAUNTLET_VAULT = gp_section.get("gauntlet_vault", {}).get("address")
+    if not GAUNTLET_VAULT:
+        return []
     erc20_abi = _get_abi("erc20")
 
     # Only need veris shares for reporting (balance_human)
@@ -569,7 +571,7 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
         accrual_value = Decimal(0)
 
     return [{
-        "chain": "ethereum", "protocol": "gauntlet_pareto", "wallet": wallet,
+        "chain": chain, "protocol": "gauntlet_pareto", "wallet": wallet,
         "position_label": "Gauntlet FalconX Vault",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "gpAAFalconX",
@@ -719,7 +721,7 @@ def _compute_direct_value(rows):
     """
     running_balance = None
     prev_ts = None
-    rate = Decimal("0.08325")
+    rate = None  # Must come from data (row[4]) — no hardcoded default
 
     for row in rows:
         ts = row[0]
@@ -737,6 +739,8 @@ def _compute_direct_value(rows):
             continue
         delta = (ts - prev_ts).total_seconds()
         period_days = Decimal(str(delta)) / Decimal(86400)
+        if rate is None:
+            raise ValueError("No rate found in Direct Accrual data — rate must come from loan notice")
         if period_days > 0 and rate > 0:
             running_balance += running_balance * rate * period_days / Decimal(365)
         prev_ts = ts
@@ -811,7 +815,9 @@ def query_ethena_cooldowns(w3, chain, wallet, block_number, block_ts):
     ethena_section = contracts.get(chain, {}).get("_ethena", {})
     susde_entry = ethena_section.get("susde", {})
     susde_addr = susde_entry.get("address")
-    usde_addr = susde_entry.get("usde_token", "0x4c9edd5852cd905f086c759e8383e09bff1e68b3")
+    usde_addr = susde_entry.get("usde_token")
+    if not usde_addr:
+        return []
     if not susde_addr:
         return []
 
@@ -912,8 +918,10 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
     Reads the Running Balance from the supporting workbook (Direct Accrual sheet).
     """
     contracts = _load_contracts_cfg()
-    gp_section = contracts.get("ethereum", {}).get("_gauntlet_pareto", {})
-    AA_TRANCHE = gp_section.get("aa_falconxusdc_tranche", {}).get("address", "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C")
+    gp_section = contracts.get(chain, {}).get("_gauntlet_pareto", {})
+    AA_TRANCHE = gp_section.get("aa_falconxusdc_tranche", {}).get("address")
+    if not AA_TRANCHE:
+        return []
     erc20_abi = _get_abi("erc20")
 
     # Check if wallet holds AA_FalconXUSDC
@@ -939,7 +947,7 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
         running_balance = Decimal(0)
 
     return [{
-        "chain": "ethereum", "protocol": "gauntlet_pareto", "wallet": wallet,
+        "chain": chain, "protocol": "gauntlet_pareto", "wallet": wallet,
         "position_label": "FalconX Direct AA_FalconXUSDC",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "AA_FalconXUSDC",
@@ -969,11 +977,11 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
       - Undeployed cash (USDC balanceOf on vault + credit strategy)
     """
     contracts = _load_contracts_cfg()
-    cc_section = contracts.get("ethereum", {}).get("_credit_coop", {})
+    cc_section = contracts.get(chain, {}).get("_credit_coop", {})
     VAULT = cc_section.get("vault", {}).get("address")
     LIQUID_STRATEGY = cc_section.get("liquid_strategy", {}).get("address")
     CREDIT_STRATEGY = cc_section.get("credit_strategy", {}).get("address")
-    USDC = cc_section.get("usdc_token", {}).get("address", "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+    USDC = cc_section.get("usdc_token", {}).get("address")
     if not VAULT:
         return []
 
@@ -992,7 +1000,7 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
     assets_human = _fmt(assets, 6)
 
     rows = [{
-        "chain": "ethereum", "protocol": "credit_coop", "wallet": wallet,
+        "chain": chain, "protocol": "credit_coop", "wallet": wallet,
         "position_label": "Credit Coop Veris Vault",
         "category": "A1", "position_type": "vault_share",
         "token_symbol": "ccVaultUSDC",
