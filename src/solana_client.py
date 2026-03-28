@@ -31,16 +31,31 @@ def _load_solana_cfg():
 
 
 def get_solana_rpc_url() -> str:
-    api_key = os.getenv("ALCHEMY_API_KEY")
-    return f"https://solana-mainnet.g.alchemy.com/v2/{api_key}"
+    """Get Solana RPC URL from chains.json config."""
+    from evm import get_rpc_url
+    try:
+        return get_rpc_url("solana")
+    except Exception:
+        # Fallback if chains.json doesn't have solana or RPC setup fails
+        api_key = os.getenv("ALCHEMY_API_KEY")
+        return f"https://solana-mainnet.g.alchemy.com/v2/{api_key}"
 
 
-def solana_rpc(method: str, params: list) -> dict:
-    """Make a JSON-RPC call to Solana."""
+def solana_rpc(method: str, params: list, url_override: str = None) -> dict:
+    """Make a JSON-RPC call to Solana.
+
+    Args:
+        method: RPC method name.
+        params: RPC parameters.
+        url_override: Optional URL to use instead of the default RPC.
+                      Used for heavy queries (getProgramAccounts) routed
+                      to a public RPC to avoid Alchemy rate limits.
+    """
+    url = url_override or get_solana_rpc_url()
     resp = requests.post(
-        get_solana_rpc_url(),
+        url,
         json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
-        timeout=15,
+        timeout=30 if url_override else 15,
     )
     resp.raise_for_status()
     result = resp.json()
@@ -196,10 +211,7 @@ def get_eusx_exchange_rate() -> Decimal:
 
 
 # --- Kamino Lend ---
-# Program: KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD
-# Obligations store collateral (deposits) and debt (borrows) for leveraged positions.
-
-KAMINO_API_BASE = "https://api.kamino.finance"
+# Program ID read from solana_protocols.json["kamino"]["program_id"]
 
 # Account layout sizes (bytes)
 _ANCHOR_DISCRIMINATOR = 8
@@ -338,16 +350,17 @@ def get_kamino_obligation(obligation_pubkey: str, slot: int | None = None) -> di
 
 
 # --- Exponent Finance ---
-# Program: ExponentnaRg3CQbW6dqQNZKXp7gtZ9DGMp1cwC4HAS7
-# Yield-splitting protocol: SY → PT + YT. Markets are AMM pools (SY vs PT).
+# Program ID read from solana_protocols.json["exponent"]["program_id"]
+# Yield-splitting protocol: SY -> PT + YT. Markets are AMM pools (SY vs PT).
 # LP and YT positions are PDA accounts, not SPL tokens.
 
 def _get_exponent_program_id() -> str:
     return _load_solana_cfg()["exponent"]["program_id"]
 
+# Public RPC for heavy queries (getProgramAccounts) to avoid Alchemy rate limits
 _EXPONENT_PUBLIC_RPC = os.getenv("SOLANA_PUBLIC_RPC_URL", "https://api.mainnet-beta.solana.com")
 
-# Account discriminators (from IDL)
+# Account discriminators (from Exponent IDL — binary struct layout constants)
 _LP_POSITION_DISC = bytes([105, 241, 37, 200, 224, 2, 252, 90])
 _YT_POSITION_DISC = bytes([227, 92, 146, 49, 29, 85, 71, 94])
 _MARKET_TWO_DISC = bytes([212, 4, 132, 126, 169, 121, 121, 20])
@@ -355,23 +368,6 @@ _MARKET_TWO_DISC = bytes([212, 4, 132, 126, 169, 121, 121, 20])
 # MarketFinancials byte offsets within MarketTwo account
 _MF_OFFSET = 364  # offset of expiration_ts in MarketTwo
 _YEAR_SECONDS = 31_536_000  # 365 days exactly (Exponent convention)
-
-
-def _exponent_rpc(method: str, params: list) -> dict:
-    """RPC call using public Solana RPC for heavy queries (getProgramAccounts).
-    Falls back to Alchemy for lighter calls.
-    """
-    url = _EXPONENT_PUBLIC_RPC if method == "getProgramAccounts" else get_solana_rpc_url()
-    resp = requests.post(
-        url,
-        json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    result = resp.json()
-    if "error" in result:
-        raise ValueError(f"Solana RPC error: {result['error']}")
-    return result
 
 
 def parse_exponent_market(raw: bytes) -> dict:
@@ -432,7 +428,7 @@ def get_exponent_lp_positions(wallet: str) -> list[dict]:
     Uses public RPC to avoid Alchemy rate limits on getProgramAccounts.
     Returns list of dicts with market pubkey and lp_balance.
     """
-    resp = _exponent_rpc("getProgramAccounts", [
+    resp = solana_rpc("getProgramAccounts", [
         _get_exponent_program_id(),
         {
             "encoding": "base64",
@@ -441,7 +437,7 @@ def get_exponent_lp_positions(wallet: str) -> list[dict]:
                 {"memcmp": {"offset": 8, "bytes": wallet, "encoding": "base58"}},
             ],
         },
-    ])
+    ], url_override=_EXPONENT_PUBLIC_RPC)
 
     positions = []
     for acc in resp["result"]:
@@ -467,7 +463,7 @@ def get_exponent_yt_positions(wallet: str) -> list[dict]:
     Uses public RPC to avoid Alchemy rate limits.
     Returns list of dicts with vault pubkey and yt_balance.
     """
-    resp = _exponent_rpc("getProgramAccounts", [
+    resp = solana_rpc("getProgramAccounts", [
         _get_exponent_program_id(),
         {
             "encoding": "base64",
@@ -476,7 +472,7 @@ def get_exponent_yt_positions(wallet: str) -> list[dict]:
                 {"memcmp": {"offset": 8, "bytes": wallet, "encoding": "base58"}},
             ],
         },
-    ])
+    ], url_override=_EXPONENT_PUBLIC_RPC)
 
     positions = []
     for acc in resp["result"]:
