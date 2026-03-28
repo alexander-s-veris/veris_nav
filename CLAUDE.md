@@ -593,7 +593,11 @@ veris-nav/
 │   │   ├── import_falconx_xlsx_to_sqlite.py  # One-time xlsx→SQLite migration
 │   │   └── query_pareto_tranche_history.py  # Pareto TP history for cross-reference
 │   ├── collect.py             # Production orchestrator — parallel balance+protocol scanning, valuation, output (~95s)
-│   ├── protocol_queries.py    # Config-driven handler registry: dispatches to protocol-specific query functions
+│   ├── protocol_queries.py    # Thin dispatcher: handler registry, wallet→protocol mapping, orchestrators
+│   ├── handlers/              # Protocol-specific position query handlers (one per protocol)
+│   │   ├── morpho.py, erc4626.py, euler.py, aave.py, midas.py
+│   │   ├── gauntlet.py, creditcoop.py, uniswap.py, ethena.py
+│   │   └── kamino.py, exponent.py, pt_lots.py
 │   ├── valuation.py           # Category-specific valuation with config-driven pricing indices
 │   └── output.py              # NAV snapshot writer (positions.csv/json, leverage_detail, pt_lots, lp_decomposition, nav_summary)
 ├── config/

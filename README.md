@@ -98,7 +98,10 @@ See `protocol_sourcing.md` for the "Adding a New Position" quick reference table
 ```
 src/
   collect.py               # Production orchestrator with --date valuation block pinning
-  protocol_queries.py      # Config-driven handler registry for protocol position queries
+  protocol_queries.py      # Thin dispatcher: handler registry + orchestrators
+  handlers/                # Protocol-specific position query handlers
+    morpho.py, erc4626.py, euler.py, aave.py, midas.py, gauntlet.py
+    creditcoop.py, uniswap.py, ethena.py, kamino.py, exponent.py, pt_lots.py
   valuation.py             # Category-specific valuation with config-driven pricing indices
   pricing.py               # Price adapters (Chainlink, Pyth, Kraken, CoinGecko, par+depeg)
   evm.py                   # Shared EVM utilities (cached Web3, find_valuation_block)
