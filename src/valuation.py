@@ -24,7 +24,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 from evm import CONFIG_DIR
 from pricing import get_price
 from pt_valuation import value_pt_from_config
-# solana_client.get_eusx_exchange_rate moved to adapters/exchange_rate.py
 
 
 # --- Pricing indices (built once from config) ---
@@ -194,18 +193,10 @@ def _value_a2(pos, w3_eth, tokens_registry):
 def _value_a3(pos):
     """Value an A3 position.
 
-    Reads the most recent accrual value from the FalconX supporting workbook
-    (cached CSV). Falls back to on-chain cross-reference if workbook unavailable.
+    Reads the accrual value from the position dict (set by protocol_queries
+    from data/falconx.db). Falls back to on-chain cross-reference.
     """
-    import csv
-    import os
-
-    cache_dir = os.path.join(
-        os.path.dirname(__file__), "..", "cache", "falconx_position")
-
-    protocol = pos.get("protocol", "")
-
-    # A3 positions carry accrual_value from the supporting workbook
+    # A3 positions carry accrual_value from SQLite
     value = pos.get("accrual_value", Decimal(0))
     if value and value > 0:
         pos["price_usd"] = Decimal(1)  # value already in USD
@@ -277,7 +268,7 @@ def _value_c(pos, w3_eth, tokens_registry):
         price = pt_ratio * underlying_price
         pos["price_usd"] = price
         pos["value_usd"] = balance * price
-        pos["price_source"] = f"exponent_amm_rate (pt_ratio={pt_ratio:.6f})"
+        pos["price_source"] = f"amm_implied_rate (pt_ratio={pt_ratio:.6f})"
     else:
         # SY constituent — price per its token category
         price, source, stale_flag, staleness_hours, notes = _get_token_price_by_symbol(
