@@ -1,9 +1,12 @@
 """Morpho Markets handler (Category D)."""
 
+import logging
 from decimal import Decimal
 from web3 import Web3
 
 from handlers import _load_morpho_cfg, _get_abi, _fmt
+
+logger = logging.getLogger(__name__)
 
 
 def query_morpho_markets(w3, chain, wallet, block_number, block_ts):
@@ -34,6 +37,8 @@ def query_morpho_markets(w3, chain, wallet, block_number, block_ts):
         pos = morpho.functions.position(
             market_id, Web3.to_checksum_address(wallet)).call()
         supply_shares, borrow_shares, collateral = pos
+        logger.info("morpho.position(%s, %s) block=%s → supply_shares=%s, borrow_shares=%s, collateral=%s",
+                     morpho_addr, wallet, block_number, supply_shares, borrow_shares, collateral)
 
         # Check if actually closed
         if is_closed and collateral == 0 and borrow_shares == 0:
@@ -47,6 +52,7 @@ def query_morpho_markets(w3, chain, wallet, block_number, block_ts):
 
         # Get market state for shares -> assets conversion
         mkt_state = morpho.functions.market(market_id).call()
+        logger.info("morpho.market(%s) block=%s → state=%s", mkt["market_id"], block_number, mkt_state)
         total_borrow_assets, total_borrow_shares = mkt_state[2], mkt_state[3]
         borrow_assets = (
             borrow_shares * total_borrow_assets // total_borrow_shares

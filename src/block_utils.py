@@ -63,38 +63,48 @@ def estimate_blocks(
     ]
 
 
-def refine_block(w3, estimated_block: int, target_ts: int, tolerance: int = 15,
+def refine_block(w3, estimated_block: int, target_ts: int, tolerance: int = 30,
                  chain: str = "ethereum") -> int:
-    """Refine a single block estimate to be within tolerance of target timestamp.
+    """Refine a block estimate via binary search to be within tolerance of target.
 
+    Binary search converges in O(log n) iterations instead of linear adjustment.
     Only needed when exact block alignment matters (e.g. Valuation Block).
-    For hourly monitoring data, the raw estimate is sufficient.
 
     Args:
         w3: Web3 instance.
         estimated_block: Initial estimate.
         target_ts: Target unix timestamp.
-        tolerance: Acceptable seconds of deviation.
-        chain: Chain name (for block time in adjustment calculation).
+        tolerance: Acceptable seconds of deviation (default 30s).
+        chain: Chain name (for block time in range calculation).
 
     Returns:
-        Refined block number.
+        Refined block number (closest to but not exceeding target_ts).
     """
     block_time = _get_avg_block_time(chain)
     latest = w3.eth.block_number
-    est = max(1, min(estimated_block, latest))
 
-    for _ in range(10):
-        bd = w3.eth.get_block(est)
-        diff = target_ts - bd["timestamp"]
-        if abs(diff) <= tolerance:
-            return est
-        adj = round(diff / block_time)
-        if adj == 0:
-            adj = 1 if diff > 0 else -1
-        est = max(1, min(est + adj, latest))
+    # Set initial binary search bounds around the estimate
+    range_blocks = max(100, int(tolerance * 4 / block_time))
+    low = max(1, estimated_block - range_blocks)
+    high = min(estimated_block + range_blocks, latest)
+    best = max(1, min(estimated_block, latest))
 
-    return est
+    for _ in range(12):
+        if low > high:
+            break
+        mid = (low + high) // 2
+        bd = w3.eth.get_block(mid)
+        mid_ts = bd["timestamp"]
+
+        if mid_ts <= target_ts:
+            best = mid
+            if target_ts - mid_ts <= tolerance:
+                return best
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    return best
 
 
 # --- Concurrent RPC queries (Option 4) ---

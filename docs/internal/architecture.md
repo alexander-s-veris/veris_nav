@@ -136,6 +136,41 @@ Step 6: Summary
 
 ---
 
+## RPC Optimization (Multicall3 + Concurrency)
+
+The system minimizes RPC calls and wall-clock time through three strategies:
+
+### Multicall3 Batching (`src/multicall.py`)
+
+Multicall3 aggregates multiple `eth_call` operations into a single RPC call via the standard `aggregate3()` contract (deployed at `0xcA11bde05977b3631167028862bE2a173976CA11` on all major EVM chains). The address is configured per chain in `chains.json` under the `multicall3` key.
+
+Used in:
+- **Balance fallback** (`collect_balances.py`): Registry tokens not found by Alchemy's `alchemy_getTokenBalances` are batch-queried via one multicall per wallet per chain instead of sequential `balanceOf` calls.
+- **Chainlink price pre-fetch** (`pricing.py`): All Chainlink feeds are batch-queried per chain (2 sub-calls per feed: `decimals()` + `latestRoundData()`) before individual pricing runs.
+
+Fallback: Chains without `multicall3` in config gracefully degrade to individual `eth_call` per item.
+
+### Concurrent Execution
+
+| Level | Where | Parallelism |
+|-------|-------|-------------|
+| Steps 1+2 | `collect.py` | Balance scanning + protocol queries run as 2 concurrent threads |
+| Chains (Step 1) | `collect.py` | All EVM chains scanned in parallel via `concurrent_query()` |
+| Wallets (Step 2) | `collect.py` | All wallets on each chain queried in parallel |
+| Handlers | `protocol_queries.py` | Protocol handlers for a single wallet-chain pair run concurrently |
+| Pricing | `pricing.py` | CoinGecko batch, Chainlink batch, then remaining tokens via `concurrent_query()` |
+
+### Block Refinement
+
+- **EVM** (`block_utils.py:refine_block`): Binary search with 30s tolerance, ~12 iterations max. Converges in O(log n) instead of linear adjustment.
+- **Solana** (`solana_client.py:find_valuation_slot`): Binary search over 20K slot range, 12 iterations, 3 offset tries per iteration for skipped slots.
+
+### Euler Sub-Account Scan
+
+Euler V2 uses XOR-based sub-accounts. The scan range is limited to sub-accounts 0–31 (covers all known positions) instead of 0–255 to reduce worst-case RPC calls from 256 to 32 per vault.
+
+---
+
 ## Robustness Features
 
 - **Config validation**: `_validate_config()` checks required fields in contracts.json, morpho_markets.json, and solana_protocols.json before making RPC calls. Called lazily on first query.
@@ -167,3 +202,4 @@ Step 6: Summary
 | New pricing tier | `pricing_policy.json` (add to hierarchy) | None |
 | New protocol type | `handlers/new_protocol.py` + registry entry in `protocol_queries.py` | Handler function |
 | New price adapter | `src/adapters/new_adapter.py` + import in `pricing.py` | Adapter function |
+| New EVM chain with Multicall3 | `chains.json` (add `multicall3` address) | None |

@@ -363,5 +363,13 @@
       "description": "PENDLE/ETH Uniswap V3 0.3% pool, 30min TWAP. Requires ETH price for USD conversion.",
       "_note": "Returns PENDLE/ETH ratio — multiply by ETH/USD for final price."
     }
+  },
+
+  "_api_endpoints": {
+    "_description": "Base URLs for REST API price adapters. Adapters read from here instead of hardcoding URLs.",
+    "pyth_hermes": "https://hermes.pyth.network/v2/updates/price/latest",
+    "redstone": "https://api.redstone.finance/prices",
+    "kraken": "https://api.kraken.com/0/public/Ticker",
+    "coingecko": "https://pro-api.coingecko.com/api/v3"
   }
 }

@@ -1,5 +1,6 @@
 """Euler V2 Vaults handler (Category A1, sub-account scan)."""
 
+import logging
 from decimal import Decimal
 from web3 import Web3
 
@@ -7,6 +8,8 @@ from handlers import (
     _load_contracts_cfg, _get_abi, _fmt,
     _get_display_name, _get_underlying_symbol,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
@@ -36,7 +39,8 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
         # Scan known sub-accounts (from config description) or all 256
         # For speed, scan sub-accounts 0 and 1 first (most common), then others
         found = False
-        for sub_id in [0, 1] + list(range(2, 256)):
+        # Sub-accounts 0-31 cover all known Euler positions; scanning 256 wastes RPCs
+        for sub_id in [0, 1] + list(range(2, 32)):
             sub_addr = Web3.to_checksum_address(hex(wallet_int ^ sub_id))
             try:
                 shares = vault.functions.balanceOf(sub_addr).call()
@@ -46,6 +50,8 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
             if shares > 0:
                 assets = vault.functions.convertToAssets(shares).call()
                 share_dec = vault.functions.decimals().call()
+                logger.info("euler.balanceOf(%s, sub=%s/id=%d) block=%s → shares=%s, assets=%s",
+                             vault_addr, sub_addr, sub_id, block_number, shares, assets)
                 try:
                     asset_addr = vault.functions.asset().call()
                     u_contract = w3.eth.contract(

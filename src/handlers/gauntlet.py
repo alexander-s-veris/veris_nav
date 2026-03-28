@@ -1,5 +1,6 @@
 """Gauntlet / FalconX handlers (Category A3 cross-reference)."""
 
+import logging
 import os
 import sqlite3
 from decimal import Decimal
@@ -7,6 +8,8 @@ from decimal import Decimal
 from web3 import Web3
 
 from handlers import _load_contracts_cfg, _get_abi, _fmt
+
+logger = logging.getLogger(__name__)
 
 
 def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
@@ -23,18 +26,21 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
       Net = Collateral (USD) - Borrow
       Veris share = Net x Veris %
     """
-    import csv
     contracts = _load_contracts_cfg()
     gp_section = contracts.get(chain, {}).get("_gauntlet_pareto", {})
-    GAUNTLET_VAULT = gp_section.get("gauntlet_vault", {}).get("address")
+    vault_cfg = gp_section.get("gauntlet_vault", {})
+    GAUNTLET_VAULT = vault_cfg.get("address")
     if not GAUNTLET_VAULT:
         return []
+    vault_decimals = vault_cfg.get("decimals", 18)
     erc20_abi = _get_abi("erc20")
 
     # Only need veris shares for reporting (balance_human)
     vault = w3.eth.contract(address=Web3.to_checksum_address(GAUNTLET_VAULT), abi=erc20_abi)
     veris_shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
     total_supply = vault.functions.totalSupply().call()
+    logger.info("gauntlet.balanceOf(%s, %s) block=%s → shares=%s, totalSupply=%s",
+                 GAUNTLET_VAULT, wallet, block_number, veris_shares, total_supply)
     if veris_shares == 0:
         return []
 
@@ -60,8 +66,8 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
         "token_symbol": "gpAAFalconX",
         "token_contract": GAUNTLET_VAULT,
         "balance_raw": str(veris_shares),
-        "balance_human": _fmt(veris_shares, 18),
-        "decimals": 18,
+        "balance_human": _fmt(veris_shares, vault_decimals),
+        "decimals": vault_decimals,
         "veris_share_pct": share_pct * 100,
         "accrual_value": accrual_value,
         "block_number": block_number, "block_timestamp_utc": block_ts,
@@ -237,19 +243,22 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
     """
     contracts = _load_contracts_cfg()
     gp_section = contracts.get(chain, {}).get("_gauntlet_pareto", {})
-    AA_TRANCHE = gp_section.get("aa_falconxusdc_tranche", {}).get("address")
+    tranche_cfg = gp_section.get("aa_falconxusdc_tranche", {})
+    AA_TRANCHE = tranche_cfg.get("address")
     if not AA_TRANCHE:
         return []
+    tranche_decimals = tranche_cfg.get("decimals", 18)
     erc20_abi = _get_abi("erc20")
 
     # Check if wallet holds AA_FalconXUSDC
     token = w3.eth.contract(
         address=Web3.to_checksum_address(AA_TRANCHE), abi=erc20_abi)
     balance = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+    logger.info("falconx_direct.balanceOf(%s, %s) block=%s → %s", AA_TRANCHE, wallet, block_number, balance)
     if balance == 0:
         return []
 
-    balance_human = _fmt(balance, 18)
+    balance_human = _fmt(balance, tranche_decimals)
 
     # Read accrual value from SQLite (primary) or xlsx (fallback)
     running_balance = _read_falconx_sqlite("direct_accrual", "running_balance")
@@ -272,7 +281,7 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
         "token_contract": AA_TRANCHE,
         "balance_raw": str(balance),
         "balance_human": balance_human,
-        "decimals": 18,
+        "decimals": tranche_decimals,
         "accrual_value": running_balance,
         "price_source": "a3_workbook_accrual",
         "block_number": block_number, "block_timestamp_utc": block_ts,

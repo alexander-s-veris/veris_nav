@@ -1,11 +1,15 @@
 """Pyth Network Hermes REST API price adapter."""
 
+import logging
 from decimal import Decimal
 from datetime import datetime, timezone
 
 import requests
 
 from evm import TS_FMT
+from adapters import _load_api_endpoints
+
+logger = logging.getLogger(__name__)
 
 
 def pyth_price(feed_id: str, expected_freq_hours: float = None) -> dict:
@@ -13,7 +17,7 @@ def pyth_price(feed_id: str, expected_freq_hours: float = None) -> dict:
 
     If expected_freq_hours is provided, checks staleness (>2x expected = stale).
     """
-    url = "https://hermes.pyth.network/v2/updates/price/latest"
+    url = _load_api_endpoints()["pyth_hermes"]
     resp = requests.get(url, params={"ids[]": feed_id}, timeout=10)
     resp.raise_for_status()
     data = resp.json()
@@ -42,6 +46,8 @@ def pyth_price(feed_id: str, expected_freq_hours: float = None) -> dict:
                 f"STALE ({age_hours:.0f}h old, expected every "
                 f"{expected_freq_hours}h, threshold {2 * expected_freq_hours}h)"
             )
+
+    logger.info("pyth.price(feed=%s) → price=%s, updated=%s", feed_id[:16], price, oracle_updated_at)
 
     return {
         "price_usd": price,

@@ -1,13 +1,18 @@
 """Kraken public ticker API price adapter."""
 
+import logging
 from decimal import Decimal
 
 import requests
 
+from adapters import _load_api_endpoints
+
+logger = logging.getLogger(__name__)
+
 
 def kraken_price(pair: str) -> dict:
     """Query Kraken public ticker API."""
-    url = "https://api.kraken.com/0/public/Ticker"
+    url = _load_api_endpoints()["kraken"]
     resp = requests.get(url, params={"pair": pair}, timeout=10)
     resp.raise_for_status()
     data = resp.json()
@@ -19,6 +24,8 @@ def kraken_price(pair: str) -> dict:
     result_key = list(data["result"].keys())[0]
     # 'c' = last trade close price [price, lot_volume]
     last_price = Decimal(data["result"][result_key]["c"][0])
+
+    logger.info("kraken.ticker(%s) → price=%s", pair, last_price)
 
     return {
         "price_usd": last_price,

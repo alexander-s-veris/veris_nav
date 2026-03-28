@@ -1,8 +1,11 @@
 """Curve LP token pricing via get_virtual_price()."""
 
+import logging
 from decimal import Decimal
 
 from web3 import Web3
+
+logger = logging.getLogger(__name__)
 
 
 def curve_lp_price(token_entry: dict, w3_eth: Web3 | None) -> dict:
@@ -25,6 +28,9 @@ def curve_lp_price(token_entry: dict, w3_eth: Web3 | None) -> dict:
             address=Web3.to_checksum_address(pool_addr), abi=abi)
         vp = pool.functions.get_virtual_price().call()
         price = Decimal(str(vp)) / Decimal(10**18)
+
+        logger.info("curve.get_virtual_price(%s) → %s (price=%s)", pool_addr[:10], vp, price)
+
         return {
             "price_usd": price,
             "price_source": "curve_virtual_price",

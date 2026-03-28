@@ -275,9 +275,17 @@ def main():
                     all_evm_wallets.append(
                         (proxy["address"], proxy.get("parent_wallet", proxy["address"])))
 
-            for scan_addr, report_wallet in all_evm_wallets:
-                chain_rows = query_evm_wallet_positions(
+            # Parallelize wallet queries within each chain
+            def _query_wallet(wallet_pair):
+                scan_addr, report_wallet = wallet_pair
+                return query_evm_wallet_positions(
                     chain_name, scan_addr, block_override=block_override)
+
+            wallet_results = concurrent_query(
+                _query_wallet, all_evm_wallets,
+                max_workers=min(6, len(all_evm_wallets)))
+
+            for (scan_addr, report_wallet), chain_rows in zip(all_evm_wallets, wallet_results):
                 active = [r for r in chain_rows if r.get("status") != "CLOSED"]
                 chain_pos_count += len(active)
                 is_proxy = scan_addr.lower() != report_wallet.lower()

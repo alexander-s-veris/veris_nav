@@ -8,12 +8,15 @@ Supports two patterns:
 2. Custom exchange rate function (e.g., eUSX vault ratio)
 """
 
+import logging
 from decimal import Decimal
 from datetime import datetime, timezone
 
 from web3 import Web3
 
 from evm import TS_FMT
+
+logger = logging.getLogger(__name__)
 
 
 def a1_exchange_rate_price(token_entry: dict, w3_eth: Web3 | None = None,
@@ -73,6 +76,9 @@ def a1_exchange_rate_price(token_entry: dict, w3_eth: Web3 | None = None,
         # Query exchange rate: assets per 1 full share
         one_share = 10 ** decimals_shares
         assets = getattr(vault.functions, function_name)(one_share).call()
+
+        logger.info("a1_exchange_rate.%s(%s, 1e%d) → %s",
+                     function_name, contract_addr[:10], decimals_shares, assets)
 
         # Determine underlying decimals
         if decimals_underlying is None:
@@ -137,6 +143,8 @@ def _solana_vault_ratio_price(pricing: dict, symbol: str, price_underlying_fn=No
 
     try:
         exchange_rate = get_solana_vault_exchange_rate(vault_key)
+
+        logger.info("a1_vault_ratio(%s) → rate=%s", vault_key, exchange_rate)
 
         # Price underlying via Pyth feed if configured
         if underlying_feed:

@@ -109,17 +109,22 @@ def query_balances_alchemy(w3: Web3, chain: str, wallet: str,
             wallet, chain, contract_addr, token_entry, human_balance,
             block_number, block_ts))
 
-    # Fallback: direct balanceOf for registry tokens not found by Alchemy
-    erc20_abi = _get_erc20_abi()
-    for contract_addr, token_entry in chain_registry.items():
-        if contract_addr == "native" or contract_addr in found_contracts:
-            continue
-        if not isinstance(token_entry, dict):
-            continue
-        try:
-            contract = w3.eth.contract(
-                address=Web3.to_checksum_address(contract_addr), abi=erc20_abi)
-            raw_balance = contract.functions.balanceOf(checksum_wallet).call()
+    # Fallback: batch balanceOf via Multicall3 for registry tokens not found by Alchemy
+    from multicall import multicall, encode_balance_of, decode_uint256
+
+    remaining = [
+        (addr, entry) for addr, entry in chain_registry.items()
+        if addr != "native" and addr not in found_contracts and isinstance(entry, dict)
+    ]
+
+    if remaining:
+        calls = [(addr, encode_balance_of(checksum_wallet)) for addr, _ in remaining]
+        results = multicall(w3, chain, calls, block_identifier=block_number)
+
+        for (contract_addr, token_entry), (success, return_data) in zip(remaining, results):
+            if not success or len(return_data) < 32:
+                continue
+            raw_balance = decode_uint256(return_data)
             if raw_balance == 0:
                 continue
             decimals = token_entry.get("decimals", 18)
@@ -127,8 +132,6 @@ def query_balances_alchemy(w3: Web3, chain: str, wallet: str,
             rows.append(_build_row(
                 wallet, chain, contract_addr, token_entry, human_balance,
                 block_number, block_ts))
-        except Exception:
-            pass  # Contract may not exist on this chain
 
     return rows
 
@@ -191,7 +194,7 @@ def query_balances_etherscan(chain: str, chain_id: int, wallet: str,
             resp = requests.get(etherscan_base, params={
                 "chainid": chain_id, "module": "account",
                 "action": "addresstokenbalance",
-                "address": wallet, "page": page, "offset": 100, "apikey": api_key,
+                "address": wallet, "page": page, "offset": 10000, "apikey": api_key,
             }, timeout=10)
             data = resp.json()
         except Exception:
@@ -216,7 +219,7 @@ def query_balances_etherscan(chain: str, chain_id: int, wallet: str,
                 wallet, chain, contract_addr, token_entry, human_balance,
                 block_number, block_ts))
 
-        if len(data["result"]) < 100:
+        if len(data["result"]) < 10000:
             break
         page += 1
 

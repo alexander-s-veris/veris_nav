@@ -1,22 +1,26 @@
 """CoinGecko price adapter (Pro API with key, public fallback)."""
 
+import logging
 import os
 from decimal import Decimal
 
 import requests
 
-COINGECKO_BASE = "https://pro-api.coingecko.com/api/v3"
+from adapters import _load_api_endpoints
+
+logger = logging.getLogger(__name__)
 
 
 def coingecko_price(coin_id: str) -> dict:
     """Query CoinGecko simple price API (paid Demo plan with API key)."""
+    base_url = _load_api_endpoints()["coingecko"]
     api_key = os.getenv("COINGECKO_API_KEY")
     headers = {}
     if api_key:
         headers["x-cg-pro-api-key"] = api_key
 
     resp = requests.get(
-        f"{COINGECKO_BASE}/simple/price",
+        f"{base_url}/simple/price",
         params={"ids": coin_id, "vs_currencies": "usd"},
         headers=headers,
         timeout=10,
@@ -28,6 +32,8 @@ def coingecko_price(coin_id: str) -> dict:
         raise ValueError(f"CoinGecko: no price for {coin_id}")
 
     price = Decimal(str(data[coin_id]["usd"]))
+
+    logger.info("coingecko.price(%s) → %s", coin_id, price)
 
     return {
         "price_usd": price,
@@ -53,6 +59,7 @@ def batch_coingecko_prices(cg_ids: list[str]) -> dict[str, dict]:
     if not cg_ids:
         return {}
 
+    base_url = _load_api_endpoints()["coingecko"]
     api_key = os.getenv("COINGECKO_API_KEY")
     headers = {}
     if api_key:
@@ -60,14 +67,15 @@ def batch_coingecko_prices(cg_ids: list[str]) -> dict[str, dict]:
 
     try:
         resp = requests.get(
-            f"{COINGECKO_BASE}/simple/price",
+            f"{base_url}/simple/price",
             params={"ids": ",".join(cg_ids), "vs_currencies": "usd"},
             headers=headers,
             timeout=15,
         )
         resp.raise_for_status()
         data = resp.json()
-    except Exception:
+    except Exception as e:
+        logger.warning("coingecko batch request failed for %d IDs: %s", len(cg_ids), e)
         return {}
 
     results = {}
@@ -83,5 +91,7 @@ def batch_coingecko_prices(cg_ids: list[str]) -> dict[str, dict]:
                 "stale_flag": "",
                 "notes": "",
             }
+
+    logger.info("coingecko.batch(%d ids) → %d prices", len(cg_ids), len(results))
 
     return results

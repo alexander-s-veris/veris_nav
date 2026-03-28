@@ -23,6 +23,7 @@ from adapters import (
     kraken_price, coingecko_price, batch_coingecko_prices,
     dex_twap_price, a1_exchange_rate_price, curve_lp_price,
 )
+from adapters.chainlink import chainlink_prices_batch
 
 # --- Price cache ---
 _price_cache: dict[str, dict] = {}
@@ -291,6 +292,73 @@ def _batch_coingecko(tokens: dict[str, dict]) -> dict[str, dict]:
     return results
 
 
+def _batch_chainlink_prefetch(tokens: dict[str, dict], w3_eth: Web3 | None):
+    """Pre-fetch all Chainlink prices via Multicall3 and populate cache.
+
+    Groups Chainlink feeds by chain, batches each group, and stores results
+    in _price_cache so individual get_price() calls hit the cache.
+    """
+    feeds_registry = _load_feeds_registry()
+
+    # Collect all Chainlink feeds referenced by tokens, grouped by chain
+    chain_feeds: dict[str, list[dict]] = {}  # chain -> list of feed configs
+    feed_to_tokens: dict[str, list[dict]] = {}  # feed_key -> list of token entries
+
+    for symbol, entry in tokens.items():
+        pricing = entry.get("pricing", {})
+        if not isinstance(pricing, dict):
+            continue
+        token_feeds = pricing.get("feeds", {})
+        if not isinstance(token_feeds, dict):
+            continue
+        expected_freq = pricing.get("expected_update_freq_hours")
+
+        for source_type, feed_key in token_feeds.items():
+            feed_cfg = feeds_registry.get(feed_key, {})
+            if feed_cfg.get("type") != "chainlink":
+                continue
+            chain = feed_cfg.get("chain", "ethereum")
+            feed_info = {
+                "key": feed_key,
+                "address": feed_cfg["address"],
+                "expected_freq_hours": expected_freq,
+            }
+            if chain not in chain_feeds:
+                chain_feeds[chain] = []
+            # Deduplicate by feed_key
+            if not any(f["key"] == feed_key for f in chain_feeds[chain]):
+                chain_feeds[chain].append(feed_info)
+
+            if feed_key not in feed_to_tokens:
+                feed_to_tokens[feed_key] = []
+            feed_to_tokens[feed_key].append(entry)
+
+    # Batch-fetch per chain
+    for chain, feeds in chain_feeds.items():
+        if not feeds:
+            continue
+        try:
+            if chain == "ethereum":
+                w3 = w3_eth
+            else:
+                from evm import get_web3
+                w3 = get_web3(chain)
+
+            if not w3:
+                continue
+
+            batch_results = chainlink_prices_batch(feeds, w3, chain)
+
+            # Populate cache for all tokens that reference these feeds
+            for feed_key, price_result in batch_results.items():
+                for token_entry in feed_to_tokens.get(feed_key, []):
+                    cache_k = _cache_key(token_entry)
+                    if cache_k not in _price_cache:
+                        _price_cache[cache_k] = price_result
+        except Exception:
+            pass  # Individual pricing will handle failures
+
+
 def get_prices_concurrent(
     unique_tokens: dict[str, dict],
     w3_eth: Web3 | None = None,
@@ -316,6 +384,9 @@ def get_prices_concurrent(
         results.update(cg_results)
         for symbol, result in cg_results.items():
             _price_cache[_cache_key(cg_tokens[symbol])] = result
+
+    # Step 1b: Batch Chainlink feeds via Multicall3 (pre-populate cache)
+    _batch_chainlink_prefetch(unique_tokens, w3_eth)
 
     # Step 2: Price non-CoinGecko tokens concurrently
     remaining = [(s, e) for s, e in non_cg_tokens.items() if s not in results]

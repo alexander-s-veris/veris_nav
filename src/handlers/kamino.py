@@ -1,9 +1,12 @@
 """Kamino Obligations handler (Category D, Solana)."""
 
+import logging
 from decimal import Decimal
 
 from handlers import _load_solana_cfg
 from solana_client import get_kamino_obligation
+
+logger = logging.getLogger(__name__)
 
 
 def query_kamino_obligations(wallet, block_ts):
@@ -18,6 +21,8 @@ def query_kamino_obligations(wallet, block_ts):
     rows = []
     for ob_cfg in obligations:
         ob = get_kamino_obligation(ob_cfg["obligation_pubkey"])
+        logger.info("kamino.getAccountInfo(%s) → %d deposits, %d borrows",
+                     ob_cfg["obligation_pubkey"], len(ob["deposits"]), len(ob["borrows"]))
 
         # Match deposits to config by reserve pubkey
         for i, deposit in enumerate(ob["deposits"]):
@@ -58,7 +63,8 @@ def query_kamino_obligations(wallet, block_ts):
                 "category": "D", "position_type": "debt",
                 "token_symbol": bor_cfg["symbol"],
                 "token_category": bor_cfg["category"],
-                "balance_raw": str(borrow["borrowed_amount_sf"]),
+                # Use borrowed_amount (not _sf) for consistency with the human-readable calculation
+                "balance_raw": str(borrow["borrowed_amount"]),
                 "balance_human": -amount,  # negative for debt
                 "decimals": bor_cfg["decimals"],
                 "block_number": str(ob.get("last_update_slot", "latest")),

@@ -60,7 +60,7 @@ python src/falconx/update_falconx_optimized.py
 
 ## Current Status
 
-**Production NAV collection** (`src/collect.py`) is operational. Queries all protocol positions + wallet balances across 7 EVM chains + Solana, values per category methodology, and outputs to `outputs/nav_YYYYMMDD/`. Runs in ~95 seconds. 107 positions, ~$26M net.
+**Production NAV collection** (`src/collect.py`) is operational. Queries all protocol positions + wallet balances across 7 EVM chains + Solana, values per category methodology, and outputs to `outputs/nav_YYYYMMDD/`. ~108 positions, ~$26M net. RPC calls optimized via Multicall3 batching and concurrent execution.
 
 **All protocol positions are registered:**
 
@@ -87,7 +87,7 @@ The system uses a **config-driven handler registry** pattern. Adding a new posit
 
 Additional features:
 - **Oracle staleness checking**: A2 tokens flag stale prices (>2x expected update frequency) and fall through to next source in hierarchy
-- **Valuation Policy compliance tests**: 31 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
+- **Valuation Policy compliance tests**: 46 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
 - **Chain health tracking**: Reports per-chain success/failure in `nav_summary.json`
 - **Snapshot diff tool**: `python src/tools/diff_snapshots.py --latest` catches disappeared/changed positions before submission
 
@@ -98,14 +98,18 @@ See `docs/internal/protocol_sourcing.md` for the "Adding a New Position" quick r
 ```
 src/
   collect.py               # Production orchestrator with --date valuation block pinning
-  protocol_queries.py      # Thin dispatcher: handler registry + orchestrators
-  handlers/                # Protocol-specific position query handlers
+  protocol_queries.py      # Thin dispatcher: handler registry, concurrent handler dispatch
+  handlers/                # Protocol-specific position query handlers (one per protocol)
     morpho.py, erc4626.py, euler.py, aave.py, midas.py, gauntlet.py
     creditcoop.py, uniswap.py, ethena.py, kamino.py, exponent.py, pt_lots.py
+  adapters/                # Price feed adapters (one per oracle/API provider)
+    chainlink.py, pyth.py, redstone.py, kraken.py, coingecko.py
+    dex_twap.py, exchange_rate.py, curve_lp.py
   valuation.py             # Category-specific valuation with config-driven pricing indices
-  pricing.py               # Price adapters (Chainlink, Pyth, Kraken, CoinGecko, par+depeg)
+  pricing.py               # Price dispatcher (hierarchy walker, Chainlink batch, CoinGecko batch)
+  multicall.py             # Multicall3 batching utility (aggregate3 + calldata helpers)
   evm.py                   # Shared EVM utilities (cached Web3, find_valuation_block)
-  block_utils.py           # Block estimation + concurrent RPC utilities
+  block_utils.py           # Block estimation (binary search), concurrent RPC utilities
   solana_client.py         # Solana RPC helpers (balances, eUSX rate, find_valuation_slot)
   pt_valuation.py          # PT token lot-based valuation (Category B linear amortisation)
   collect_balances.py      # Standalone wallet balance scanner (~45s)
@@ -140,12 +144,12 @@ docs/
 
 ## Configuration Files
 
-- `config/chains.json` — RPC endpoints per chain, including `token_balance_method` (default=Alchemy, `etherscan_v2` for Plasma, `balance_of` for Katana)
+- `config/chains.json` — RPC endpoints per chain, `token_balance_method` (default=Alchemy, `etherscan_v2` for Plasma, `balance_of` for Katana), `multicall3` addresses
 - `config/wallets.json` — Wallet addresses per chain with per-wallet protocol registrations. Used by the handler dispatch to determine which protocols to query for each wallet.
 - `config/tokens.json` — Token registry per chain with category (A1-F) and pricing config (method, feed IDs, fallback sources). Pricing indices are built from this at init.
 - `config/contracts.json` — Protocol contracts grouped by chain and protocol, with `_query_type` fields that map to handlers in `HANDLER_REGISTRY`
 - `config/solana_protocols.json` — Solana protocol position configs (Kamino obligations with reserve mappings, Exponent markets with SY/PT/YT details)
-- `config/abis.json` — Minimal ABIs for all contract interactions (ERC-20, ERC-4626, Morpho, Chainlink, Aave, Pareto, Ethena)
+- `config/abis.json` — Minimal ABIs for all contract interactions (ERC-20, ERC-4626, Morpho, Chainlink, Aave, Pareto, Ethena, CreditCoop strategies, Uniswap V4)
 - `config/morpho_markets.json` — Morpho leveraged position market IDs with collateral/loan token details
 - `config/pt_lots.json` — PT token individual lot details for linear amortisation
 

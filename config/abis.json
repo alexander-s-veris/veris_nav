@@ -254,5 +254,36 @@
       "outputs": [{"name": "", "type": "uint256"}],
       "stateMutability": "view", "type": "function"
     }
+  ],
+
+  "credit_coop_credit_strategy": [
+    {
+      "inputs": [], "name": "totalActiveCredit",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    }
+  ],
+
+  "credit_coop_liquid_strategy": [
+    {
+      "inputs": [], "name": "totalAssets",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view", "type": "function"
+    }
+  ],
+
+  "uniswap_v4_pm": [
+    {
+      "inputs": [{"name": "tokenId", "type": "uint256"}],
+      "name": "ownerOf",
+      "outputs": [{"name": "", "type": "address"}],
+      "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [{"name": "tokenId", "type": "uint256"}],
+      "name": "getPositionLiquidity",
+      "outputs": [{"name": "", "type": "uint128"}],
+      "stateMutability": "view", "type": "function"
+    }
   ]
 }

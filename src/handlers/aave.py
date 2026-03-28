@@ -1,9 +1,12 @@
 """Aave handler (Category D or A1)."""
 
+import logging
 from decimal import Decimal
 from web3 import Web3
 
 from handlers import _load_contracts_cfg, _get_abi, _fmt, _get_display_name
+
+logger = logging.getLogger(__name__)
 
 
 def query_aave_positions(w3, chain, wallet, block_number, block_ts):
@@ -39,16 +42,20 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
             address=Web3.to_checksum_address(aentry["address"]), abi=erc20_abi)
         try:
             bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+            logger.info("aave.balanceOf(%s, %s) block=%s → %s", aentry["address"], wallet, block_number, bal)
         except Exception:
             continue
         if bal == 0:
             continue
 
-        # Determine decimals from description or try on-chain
-        try:
-            decimals = token.functions.decimals().call()
-        except Exception:
-            decimals = 6  # default
+        # Decimals from config (required) or on-chain fallback
+        decimals = aentry.get("decimals")
+        if decimals is None:
+            try:
+                decimals = token.functions.decimals().call()
+                logger.info("aave.decimals(%s) → %s (on-chain)", aentry["address"], decimals)
+            except Exception:
+                raise ValueError(f"No decimals in config or on-chain for aToken {akey} at {aentry['address']}")
 
         bal_human = _fmt(bal, decimals)
 
@@ -71,15 +78,20 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
             address=Web3.to_checksum_address(dentry["address"]), abi=erc20_abi)
         try:
             bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+            logger.info("aave.balanceOf(%s, %s) block=%s → %s", dentry["address"], wallet, block_number, bal)
         except Exception:
             continue
         if bal == 0:
             continue
 
-        try:
-            decimals = token.functions.decimals().call()
-        except Exception:
-            decimals = 18
+        # Decimals from config (required) or on-chain fallback
+        decimals = dentry.get("decimals")
+        if decimals is None:
+            try:
+                decimals = token.functions.decimals().call()
+                logger.info("aave.decimals(%s) → %s (on-chain)", dentry["address"], decimals)
+            except Exception:
+                raise ValueError(f"No decimals in config or on-chain for debt token {dkey} at {dentry['address']}")
 
         bal_human = _fmt(bal, decimals)
 

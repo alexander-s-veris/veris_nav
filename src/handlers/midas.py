@@ -1,9 +1,12 @@
 """Midas handler (Category A2 -- tokenised fund shares with oracle)."""
 
+import logging
 from decimal import Decimal
 from web3 import Web3
 
 from handlers import _load_contracts_cfg, _get_abi, _fmt
+
+logger = logging.getLogger(__name__)
 
 
 def query_midas_positions(w3, chain, wallet, block_number, block_ts):
@@ -25,17 +28,23 @@ def query_midas_positions(w3, chain, wallet, block_number, block_ts):
         if "address" not in entry or "oracle" not in entry:
             continue  # Skip oracle-only entries (like mhyper_oracle)
 
+        if "decimals" not in entry:
+            raise ValueError(f"Midas entry '{entry_key}' missing required 'decimals' field in contracts.json")
+        if "oracle_chain" not in entry:
+            raise ValueError(f"Midas entry '{entry_key}' missing required 'oracle_chain' field in contracts.json")
+
         token = w3.eth.contract(
             address=Web3.to_checksum_address(entry["address"]), abi=erc20_abi)
         try:
             bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+            logger.info("midas.balanceOf(%s, %s) block=%s → %s", entry["address"], wallet, block_number, bal)
         except Exception:
             continue
 
         if bal == 0:
             continue
 
-        bal_human = _fmt(bal, entry.get("decimals", 18))
+        bal_human = _fmt(bal, entry["decimals"])
 
         rows.append({
             "chain": chain, "protocol": "midas", "wallet": wallet,
@@ -45,9 +54,9 @@ def query_midas_positions(w3, chain, wallet, block_number, block_ts):
             "token_contract": entry["address"],
             "balance_raw": str(bal),
             "balance_human": bal_human,
-            "decimals": entry.get("decimals", 18),
+            "decimals": entry["decimals"],
             "oracle_address": entry["oracle"],
-            "oracle_chain": entry.get("oracle_chain", "ethereum"),
+            "oracle_chain": entry["oracle_chain"],
             "block_number": block_number, "block_timestamp_utc": block_ts,
         })
 

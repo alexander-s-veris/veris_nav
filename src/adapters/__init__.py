@@ -4,6 +4,25 @@ Each adapter queries a single price source and returns a standardized result dic
 One file per oracle provider / pricing method.
 """
 
+import json
+import os
+
+from evm import CONFIG_DIR
+
+# Lazy-loaded API endpoints from price_feeds.json
+_API_ENDPOINTS_CACHE = None
+
+
+def _load_api_endpoints():
+    """Load REST API base URLs from price_feeds.json _api_endpoints section."""
+    global _API_ENDPOINTS_CACHE
+    if _API_ENDPOINTS_CACHE is None:
+        with open(os.path.join(CONFIG_DIR, "price_feeds.json")) as f:
+            cfg = json.load(f)
+        _API_ENDPOINTS_CACHE = cfg.get("_api_endpoints", {})
+    return _API_ENDPOINTS_CACHE
+
+
 from adapters.chainlink import chainlink_price
 from adapters.pyth import pyth_price
 from adapters.redstone import redstone_price
@@ -23,4 +42,5 @@ __all__ = [
     "dex_twap_price",
     "a1_exchange_rate_price",
     "curve_lp_price",
+    "_load_api_endpoints",
 ]

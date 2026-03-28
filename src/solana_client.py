@@ -21,6 +21,9 @@ from evm import TS_FMT
 # Standard SPL Token program ID (Solana mainnet)
 SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 
+# Rate limit delay between Solana RPC calls (seconds)
+SOLANA_RPC_RATE_LIMIT_SECONDS = 0.3
+
 # --- Config loader for solana_protocols.json ---
 _SOLANA_CFG = None
 
@@ -117,20 +120,20 @@ def find_valuation_slot(target_ts: int) -> tuple[int, str]:
     est_slot = int(current_slot - diff_seconds * slots_per_second)
     est_slot = max(1, est_slot)
 
-    # Binary search refinement (20 iterations for ~1M slot range)
+    # Binary search refinement (12 iterations converges for 20K slot range)
     low = est_slot - 10000
     high = est_slot + 10000
     best_slot = est_slot
     best_ts = None
 
-    for _ in range(20):
+    for _ in range(12):
         if low > high:
             break
         mid = (low + high) // 2
         mid_time = None
 
         # Try mid and nearby slots (some slots may be skipped)
-        for offset in range(5):
+        for offset in range(3):
             try:
                 resp = solana_rpc("getBlockTime", [mid + offset])
                 mid_time = resp["result"]

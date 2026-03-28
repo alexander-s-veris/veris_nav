@@ -1,17 +1,21 @@
 """PT Lots handler (Category B, Solana)."""
 
 import json
+import logging
 import os
 
 from evm import CONFIG_DIR
 
+logger = logging.getLogger(__name__)
 
-def query_pt_lots(valuation_date, block_ts):
+
+def query_pt_lots(wallet, block_ts):
     """Query PT token positions valued via lot-based linear amortisation.
 
-    Reads lots from config/pt_lots.json, values using pt_valuation.value_pt_from_config().
-    Returns one row per lot.
+    Reads lots from config/pt_lots.json. Returns one row per PT symbol.
+    Wallet is passed by the orchestrator from wallets.json config.
     """
+    logger.info("Loading PT lots config from pt_lots.json for wallet=%s", wallet)
     with open(os.path.join(CONFIG_DIR, "pt_lots.json")) as f:
         pt_cfg = json.load(f)
 
@@ -22,11 +26,13 @@ def query_pt_lots(valuation_date, block_ts):
         if "lots_discovered" not in cfg:
             continue
 
-        # For now, use placeholder price -- collect.py will price after
+        logger.info("PT lot: %s — %d lots, %s total tokens",
+                     pt_symbol, cfg.get("total_lots", 0), cfg.get("total_tokens", 0))
+
         rows.append({
             "chain": cfg.get("chain", "solana"),
             "protocol": cfg.get("protocol", "exponent"),
-            "wallet": "ASQ4kYjSYGUYbbYtsaLhUeJS6RtrN4Uwp4XbF4gDifvr",
+            "wallet": wallet,
             "position_label": f"PT {pt_symbol} (lot-based)",
             "category": "B", "position_type": "pt_lot_aggregate",
             "token_symbol": pt_symbol,

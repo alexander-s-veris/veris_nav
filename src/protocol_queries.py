@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from evm import CONFIG_DIR, get_web3, get_block_info, TS_FMT
+from block_utils import concurrent_query
 
 # Import all handler functions from handlers package
 from handlers import (
@@ -241,7 +242,8 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc="", block_override=Non
         print(f"  [{chain}] SKIP -- {e}")
         return []
 
-    rows = []
+    # Build list of handlers to run
+    handler_tasks = []
     for protocol_key in protocols:
         handler_key = PROTOCOL_TO_HANDLER.get(protocol_key)
         if not handler_key:
@@ -249,17 +251,31 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc="", block_override=Non
         handler = HANDLER_REGISTRY.get(handler_key)
         if not handler:
             continue
-        # Single retry with backoff for resilience
+        handler_tasks.append((protocol_key, handler))
+
+    if not handler_tasks:
+        return []
+
+    # Run handlers concurrently within this wallet-chain pair
+    def _run_handler(task):
+        p_key, handler_fn = task
         for attempt in range(2):
             try:
-                handler_rows = handler(w3, chain, wallet, block_number, block_ts)
-                rows.extend(handler_rows)
-                break
+                return handler_fn(w3, chain, wallet, block_number, block_ts)
             except Exception as e:
                 if attempt == 0:
-                    time.sleep(2)  # brief backoff before retry
+                    time.sleep(2)
                 else:
-                    print(f"  [{chain}] {protocol_key} error (after retry): {e}")
+                    print(f"  [{chain}] {p_key} error (after retry): {e}")
+        return []
+
+    handler_results = concurrent_query(
+        _run_handler, handler_tasks,
+        max_workers=min(6, len(handler_tasks)))
+
+    rows = []
+    for result_rows in handler_results:
+        rows.extend(result_rows)
 
     return rows
 
@@ -273,7 +289,7 @@ SOLANA_HANDLER_REGISTRY = {
     "kamino":   [("Kamino", query_kamino_obligations, False)],
     "exponent": [("Exponent LP", query_exponent_lps, False),
                  ("Exponent YT", query_exponent_yts, False)],
-    "pt_lots":  [("PT lots", query_pt_lots, True)],
+    "pt_lots":  [("PT lots", query_pt_lots, False)],
 }
 
 

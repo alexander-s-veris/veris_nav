@@ -1,5 +1,6 @@
 """Exponent LP and YT handlers (Solana -- Category C and F)."""
 
+import logging
 import math
 import time
 from decimal import Decimal
@@ -7,8 +8,10 @@ from decimal import Decimal
 from handlers import _load_solana_cfg
 from solana_client import (
     solana_rpc, get_exponent_lp_positions, get_exponent_yt_positions,
-    get_exponent_market, decompose_exponent_lp,
+    get_exponent_market, decompose_exponent_lp, SOLANA_RPC_RATE_LIMIT_SECONDS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def query_exponent_lps(wallet, block_ts):
@@ -35,9 +38,10 @@ def query_exponent_lps(wallet, block_ts):
         sy = mcfg["sy"]
         pt = mcfg["pt"]
 
-        time.sleep(0.3)
+        time.sleep(SOLANA_RPC_RATE_LIMIT_SECONDS)
         market = get_exponent_market(mcfg["market_pubkey"])
-        time.sleep(0.3)
+        logger.info("exponent.getMarket(%s) → lp_mint=%s", mcfg["market_pubkey"], market["lp_mint"])
+        time.sleep(SOLANA_RPC_RATE_LIMIT_SECONDS)
         lp_supply_resp = solana_rpc("getTokenSupply", [market["lp_mint"]])
         lp_supply = int(lp_supply_resp["result"]["value"]["amount"])
 
@@ -112,8 +116,9 @@ def query_exponent_yts(wallet, block_ts):
         yt_human = Decimal(yt["yt_balance"]) / Decimal(10 ** yt_cfg["decimals"])
 
         # Get PT price ratio from market for YT pricing
-        time.sleep(0.3)
+        time.sleep(SOLANA_RPC_RATE_LIMIT_SECONDS)
         market = get_exponent_market(mcfg["market_pubkey"])
+        logger.info("exponent.getMarket(%s) for YT pricing", mcfg["market_pubkey"])
         sec_remaining = market["expiration_ts"] - int(time.time())
         if sec_remaining > 0 and market["last_ln_implied_rate"] > 0:
             exchange_rate = math.exp(

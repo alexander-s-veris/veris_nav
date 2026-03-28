@@ -1,11 +1,15 @@
 """Redstone Finance REST API price adapter."""
 
+import logging
 from decimal import Decimal
 from datetime import datetime, timezone
 
 import requests
 
 from evm import TS_FMT
+from adapters import _load_api_endpoints
+
+logger = logging.getLogger(__name__)
 
 
 def redstone_price(symbol: str) -> dict:
@@ -13,7 +17,7 @@ def redstone_price(symbol: str) -> dict:
 
     Free, no API key needed. Tier 3 in A2 hierarchy (after Chainlink, Pyth).
     """
-    url = "https://api.redstone.finance/prices"
+    url = _load_api_endpoints()["redstone"]
     resp = requests.get(url, params={"symbols": symbol, "provider": "redstone"}, timeout=10)
     resp.raise_for_status()
     data = resp.json()
@@ -33,6 +37,8 @@ def redstone_price(symbol: str) -> dict:
         oracle_updated_at = updated_utc.strftime(TS_FMT)
         age_hours = (datetime.now(timezone.utc) - updated_utc).total_seconds() / 3600
         staleness_hours = round(age_hours, 1)
+
+    logger.info("redstone.price(%s) → price=%s, updated=%s", symbol, price, oracle_updated_at)
 
     return {
         "price_usd": price,

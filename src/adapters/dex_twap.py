@@ -1,12 +1,14 @@
 """DEX TWAP price adapters (Uniswap V3 + Curve)."""
 
-import math
+import logging
 from decimal import Decimal
 from datetime import datetime, timezone
 
 from web3 import Web3
 
 from evm import TS_FMT
+
+logger = logging.getLogger(__name__)
 
 # Uniswap V3 observe ABI
 _UNI_V3_OBSERVE_ABI = [
@@ -79,12 +81,16 @@ def _uniswap_v3_twap(feed_cfg: dict, w3: Web3) -> dict:
     avg_tick = tick_diff // twap_seconds
 
     # Tick to price: price = 1.0001^tick, adjusted for decimals
-    price_raw = Decimal(str(math.pow(1.0001, avg_tick)))
+    # Use Decimal exponentiation to avoid float precision loss
+    price_raw = Decimal("1.0001") ** avg_tick
     decimal_adjustment = Decimal(10 ** (decimals_0 - decimals_1))
     price = price_raw * decimal_adjustment
 
     if invert:
         price = Decimal(1) / price if price > 0 else Decimal(0)
+
+    logger.info("dex_twap.uniswap_v3(%s, %ds) → avg_tick=%d, price=%s",
+                 pool_addr[:10], twap_seconds, avg_tick, price)
 
     return {
         "price_usd": price,
@@ -118,6 +124,8 @@ def _curve_spot_price(feed_cfg: dict, w3: Web3) -> dict:
 
     if invert:
         price = Decimal(1) / price if price > 0 else Decimal(0)
+
+    logger.info("dex_twap.curve(%s, %d→%d) → price=%s", pool_addr[:10], i, j, price)
 
     return {
         "price_usd": price,

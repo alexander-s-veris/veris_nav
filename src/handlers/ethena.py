@@ -1,9 +1,12 @@
 """Ethena sUSDe Cooldowns handler (pending unstakes)."""
 
+import logging
 from datetime import datetime, timezone
 from web3 import Web3
 
-from handlers import _load_contracts_cfg, _fmt
+from handlers import _load_contracts_cfg, _get_abi, _fmt
+
+logger = logging.getLogger(__name__)
 
 
 def query_ethena_cooldowns(w3, chain, wallet, block_number, block_ts):
@@ -20,17 +23,14 @@ def query_ethena_cooldowns(w3, chain, wallet, block_number, block_ts):
     if not susde_addr:
         return []
 
-    cooldown_abi = [{"inputs": [{"name": "account", "type": "address"}],
-                     "name": "cooldowns",
-                     "outputs": [{"name": "cooldownEnd", "type": "uint104"},
-                                 {"name": "underlyingAmount", "type": "uint152"}],
-                     "stateMutability": "view", "type": "function"}]
-
-    susde = w3.eth.contract(address=Web3.to_checksum_address(susde_addr), abi=cooldown_abi)
+    # ABI defined in config/abis.json as "ethena_cooldown"
+    susde = w3.eth.contract(address=Web3.to_checksum_address(susde_addr), abi=_get_abi("ethena_cooldown"))
 
     try:
         result = susde.functions.cooldowns(Web3.to_checksum_address(wallet)).call()
         cooldown_end, underlying = result
+        logger.info("ethena.cooldowns(%s, %s) block=%s → end=%s, amount=%s",
+                     susde_addr, wallet, block_number, cooldown_end, underlying)
     except Exception:
         return []
 

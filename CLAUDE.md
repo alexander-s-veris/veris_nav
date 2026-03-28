@@ -86,10 +86,11 @@ veris-nav/
 ├── requirements.txt           # Python dependencies
 ├── src/
 │   ├── evm.py                 # Shared EVM utilities, constants (CET, TS_FMT), cached Web3
-│   ├── block_utils.py         # Block estimation + concurrent RPC
+│   ├── block_utils.py         # Block estimation (binary search), concurrent RPC utilities
 │   ├── solana_client.py       # Solana RPC helpers (balances, eUSX rate, find_valuation_slot)
-│   ├── pricing.py             # Price dispatcher (hierarchy walker, depeg checks, adapters)
-│   ├── collect_balances.py    # Balance scanner library (query functions only, no standalone main)
+│   ├── multicall.py           # Multicall3 batching utility (aggregate3, calldata helpers, fallback)
+│   ├── pricing.py             # Price dispatcher (hierarchy walker, depeg checks, Chainlink batch)
+│   ├── collect_balances.py    # Balance scanner library (Multicall3 fallback for balanceOf batching)
 │   ├── tools/                 # Standalone utilities (run separately)
 │   │   ├── diff_snapshots.py      # Snapshot diff tool — compares two NAV snapshots
 │   │   ├── cache_xlsx.py          # Cache xlsx sheets as CSVs for fast access
@@ -99,8 +100,8 @@ veris-nav/
 │   │   ├── update_falconx_optimized.py  # Hourly accrual data updater (writes to SQLite)
 │   │   ├── import_falconx_xlsx_to_sqlite.py  # One-time xlsx→SQLite migration
 │   │   └── query_pareto_tranche_history.py  # Pareto TP history for cross-reference
-│   ├── collect.py             # Production orchestrator — parallel balance+protocol scanning, valuation, output (~95s)
-│   ├── protocol_queries.py    # Thin dispatcher: handler registry, wallet→protocol mapping, orchestrators
+│   ├── collect.py             # Production orchestrator — concurrent balance+protocol scanning, valuation, output
+│   ├── protocol_queries.py    # Thin dispatcher: handler registry, concurrent handler dispatch per wallet-chain
 │   ├── handlers/              # Protocol-specific position query handlers (one per protocol)
 │   │   ├── morpho.py, erc4626.py, euler.py, aave.py, midas.py
 │   │   ├── gauntlet.py, creditcoop.py, uniswap.py, ethena.py
@@ -108,14 +109,14 @@ veris-nav/
 │   ├── valuation.py           # Category-specific valuation with config-driven pricing indices
 │   └── output.py              # NAV snapshot writer (positions.csv/json, leverage_detail, pt_lots, lp_decomposition, nav_summary)
 ├── config/
-│   ├── chains.json            # Chain configs — RPC URLs, chain IDs, explorers
+│   ├── chains.json            # Chain configs — RPC URLs, chain IDs, explorers, Multicall3 addresses
 │   ├── wallets.json           # Wallet addresses per chain with protocol registrations
 │   ├── tokens.json            # Token registry — whitelist per chain with pricing config
 │   ├── contracts.json         # Protocol contracts with _query_type fields for handler dispatch
 │   ├── solana_protocols.json  # Solana protocol configs (Kamino obligations, Exponent markets)
 │   ├── abis.json              # Minimal ABIs for all contract interactions
 │   ├── morpho_markets.json    # Morpho market IDs and position configs
-│   ├── price_feeds.json       # Registry of all available price feeds
+│   ├── price_feeds.json       # Registry of all available price feeds + _api_endpoints
 │   ├── pricing_policy.json    # Per-category pricing hierarchy rules
 │   └── pt_lots.json           # PT token individual lot details
 ├── plans/                     # Implementation plans

@@ -61,6 +61,7 @@
     },
     "_credit_coop": {
       "_query_type": "credit_coop",
+      "underlying_decimals": 6,
       "vault": {
         "address": "0xb21eAFB126cEf15CB99fe2D23989b58e40097919",
         "abi": "credit_coop_vault",
@@ -161,6 +162,8 @@
       "v4_position_manager": {
         "address": "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
         "nft_ids": [142965],
+        "pool_label": "Uniswap V4 USDC/DUSD",
+        "pool_fee": "0.01%",
         "description": "Uniswap V4 Position Manager -- NFT #142965 held by 0xa33e"
       }
     }

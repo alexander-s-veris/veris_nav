@@ -69,8 +69,12 @@ def _get_display_name(entry, vault_addr, fallback=""):
     return entry.get("display_name", fallback)
 
 
-def _get_underlying_symbol(entry, vault_addr, fallback="USDC"):
-    """Get underlying token symbol from config entry."""
+def _get_underlying_symbol(entry, vault_addr, fallback=""):
+    """Get underlying token symbol from config entry.
+
+    Fallback should be passed explicitly by the caller when a default is known,
+    rather than assuming USDC globally.
+    """
     return entry.get("underlying_symbol", fallback)
 
 

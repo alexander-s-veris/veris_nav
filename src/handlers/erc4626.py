@@ -1,5 +1,6 @@
 """ERC-4626 Vaults handler (Category A1)."""
 
+import logging
 from decimal import Decimal
 from web3 import Web3
 
@@ -7,6 +8,8 @@ from handlers import (
     _load_contracts_cfg, _get_abi, _fmt,
     _get_display_name, _get_underlying_symbol,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
@@ -40,6 +43,7 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
 
         try:
             shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+            logger.info("erc4626.balanceOf(%s, %s) block=%s → %s", vault_addr, wallet, block_number, shares)
         except Exception:
             continue
 
@@ -49,6 +53,8 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
         try:
             assets = vault.functions.convertToAssets(shares).call()
             share_decimals = vault.functions.decimals().call()
+            logger.info("erc4626.convertToAssets(%s, shares=%s) block=%s → assets=%s, decimals=%s",
+                         vault_addr, shares, block_number, assets, share_decimals)
             # Underlying may have different decimals (e.g. vault=18dec, USDC=6dec)
             try:
                 asset_addr = vault.functions.asset().call()
