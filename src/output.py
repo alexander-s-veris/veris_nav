@@ -8,6 +8,7 @@ per the output schema in plans/output_schema_plan.md.
 import csv
 import json
 import os
+from datetime import datetime
 from decimal import Decimal
 
 
