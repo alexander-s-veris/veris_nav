@@ -41,7 +41,7 @@
   },
   "F": {
     "method": "market_hierarchy",
-    "hierarchy": ["kraken", "redstone", "coingecko", "defillama"],
+    "hierarchy": ["kraken", "coingecko", "defillama"],
     "description": "Governance tokens, rewards, other (Section 6.8). Kraken is tier 1 per Final Terms."
   },
 
