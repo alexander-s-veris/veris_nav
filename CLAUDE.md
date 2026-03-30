@@ -14,6 +14,12 @@ Do NOT rely on memory alone — always re-read.
 
 ---
 
+## Hard Rules
+
+- **Never run `git add`, `git commit`, or `git push` without first completing the Pre-Commit Checklist below.** No exceptions. If Alex asks you to commit, run the checklist first and report results, then commit. If you catch yourself about to commit without running it, stop and run it.
+
+---
+
 ## Mandatory Workflow: Before Any Implementation
 
 1. **Check dependencies.** Read all config and src files the change touches or could affect. Check `architecture.md` "Adding New Components" table.
