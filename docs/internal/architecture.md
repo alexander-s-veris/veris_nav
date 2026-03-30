@@ -126,7 +126,10 @@ Independent verification is a separate concern from pricing. While adapters prov
 **Verifier interface**: Each verifier module exports a `verify(config, primary_price, api_base)` function returning a result dict with `verified_price_usd`, `divergence_pct`, `source`, and `details`.
 
 **Current verifiers**:
-- `midas_attestation` -- Queries LlamaRisk API for attested total fund NAV, divides by on-chain totalSupply() to derive per-token price. Covers all Midas tokens (mHYPER, mF-ONE, msyrupUSDp).
+- `midas_attestation` -- Queries LlamaRisk API for attested total fund NAV, divides by on-chain totalSupply() to derive per-token price. Covers mHYPER.
+- `midas_pdf_report` -- Downloads issuer PDF reports from Google Drive (via service account), OCRs the image-based PDF (Tesseract), parses Total assets / Issued tokens to derive per-token price. Covers msyrupUSDp and mF-ONE. Reports saved locally for audit trail. Staleness flagged if report date exceeds configured max age.
+- `superstate_nav_api` -- Queries Superstate REST API (`/v1/funds/{id}/nav-daily`) for the latest daily NAV per share. Covers USCC. No auth required.
+- `onre_onchain_nav` -- Reads ONyc NAV from OnRe Offer PDA on Solana. Computes price from APR-based discrete step vectors. Config in `solana_protocols.json`.
 
 **Flow**: Runs after valuation (Step 4.5 in collect.py). Results written to `verification.csv` and included in `nav_summary.json`.
 

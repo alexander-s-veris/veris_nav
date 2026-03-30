@@ -47,7 +47,13 @@ def _load_divergence_tolerances() -> dict:
 
 
 def _get_api_base(provider: str) -> str:
-    """Get API base URL for a verification provider."""
+    """Get API base URL for a verification provider.
+
+    Returns empty string for providers that don't use an external API
+    (e.g. on-chain verifiers that read directly from RPC).
+    """
+    if provider == "none":
+        return ""
     cfg = _load_verification_cfg()
     endpoints = cfg.get("_api_endpoints", {})
     url = endpoints.get(provider, "")
@@ -68,11 +74,26 @@ def _get_api_base(provider: str) -> str:
 #   3. Add entries in config/verification.json
 
 from verifiers.midas_attestation import verify as _verify_midas
+from verifiers.midas_pdf_report import verify as _verify_midas_pdf
+from verifiers.superstate_api import verify as _verify_superstate
+from verifiers.onre_onchain import verify as _verify_onre
 
 _VERIFIER_REGISTRY = {
     "midas_attestation": {
         "fn": _verify_midas,
         "api_provider": "llamarisk",
+    },
+    "midas_pdf_report": {
+        "fn": _verify_midas_pdf,
+        "api_provider": "gdrive",
+    },
+    "superstate_nav_api": {
+        "fn": _verify_superstate,
+        "api_provider": "superstate",
+    },
+    "onre_onchain_nav": {
+        "fn": _verify_onre,
+        "api_provider": "none",
     },
 }
 

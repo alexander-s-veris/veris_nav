@@ -787,16 +787,28 @@ class TestVerificationConfig(unittest.TestCase):
         endpoints = self.cfg.get("_api_endpoints", {})
         self.assertTrue(len(endpoints) > 0, "No API endpoints configured")
         for provider, url in endpoints.items():
-            self.assertTrue(url.startswith("http"), f"Invalid URL for {provider}: {url}")
+            # URLs are HTTP endpoints; gdrive uses a local file path
+            if provider == "gdrive":
+                self.assertTrue(url.endswith(".json"), f"Invalid path for {provider}: {url}")
+            else:
+                self.assertTrue(url.startswith("http"), f"Invalid URL for {provider}: {url}")
 
     def test_asset_entries_have_required_fields(self):
-        """Every asset-level verification entry must have type, proof_id, token_decimals, token_addresses."""
-        required = {"type", "token_decimals", "token_addresses"}
+        """Every asset-level verification entry must have required fields per type."""
+        # Required fields differ by verification type
+        required_by_type = {
+            "midas_attestation": {"type", "token_decimals", "token_addresses"},
+            "midas_pdf_report": {"type", "gdrive_folder_id", "filename_pattern", "local_report_path"},
+            "superstate_nav_api": {"type", "fund_id"},
+            "onre_onchain_nav": {"type"},
+        }
         for symbol, entry in self.cfg.get("asset_level", {}).items():
+            vtype = entry.get("type", "")
+            required = required_by_type.get(vtype, {"type"})
             for field in required:
                 self.assertIn(
                     field, entry,
-                    f"Verification entry '{symbol}' missing required field '{field}'")
+                    f"Verification entry '{symbol}' (type={vtype}) missing required field '{field}'")
 
     def test_token_addresses_reference_known_chains(self):
         """Every chain in token_addresses must exist in chains.json."""

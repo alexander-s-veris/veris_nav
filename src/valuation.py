@@ -245,6 +245,14 @@ def _value_a1(pos, w3_eth, tokens_registry):
     """
     underlying_amount = pos.get("underlying_amount", pos.get("balance_human", Decimal(0)))
     underlying_sym = pos.get("underlying_symbol")
+
+    # Look up underlying from tokens.json if not set by a handler
+    if not underlying_sym and tokens_registry:
+        chain = pos.get("chain", "")
+        contract = pos.get("token_contract", "").lower()
+        entry = (tokens_registry.get(chain, {}).get(contract) or {})
+        underlying_sym = entry.get("pricing", {}).get("underlying")
+
     if not underlying_sym:
         pos["price_usd"] = Decimal(0)
         pos["value_usd"] = Decimal(0)
@@ -383,6 +391,18 @@ def _get_underlying_price_for_lp(pos, w3_eth, tokens_registry):
     lookup_sym = sym
     if sym.startswith("PT-"):
         underlying = pos.get("underlying_symbol", "")
+        # Look up underlying from tokens.json if not set by handler
+        if not underlying and tokens_registry:
+            chain = pos.get("chain", "")
+            contract = pos.get("token_contract", "").lower()
+            entry = (tokens_registry.get(chain, {}).get(contract) or {})
+            underlying = entry.get("pricing", {}).get("underlying")
+            # Also try symbol index for Solana tokens (keyed by lowered mint)
+            if not underlying:
+                indices = _get_pricing_indices(tokens_registry)
+                pt_entry = indices["symbol_index"].get(sym.lower())
+                if pt_entry:
+                    underlying = pt_entry.get("pricing", {}).get("underlying")
         if underlying:
             lookup_sym = underlying
 

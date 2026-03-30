@@ -32,11 +32,18 @@ Do NOT rely on memory alone — always re-read. Do this silently — never annou
 
 ## Mandatory Workflow: Before Any Implementation
 
-Before writing or modifying ANY code:
+⚠️ KNOWN FAILURE PATTERN: You have repeatedly skipped this workflow when the task "feels simple" — then produced code with hardcoded values, missed dependencies, or architecture violations that required full rewrites. There are no simple tasks in this codebase. Every change touches config, handlers, adapters, or valuation logic that you WILL get wrong without the review step. Treat every task as complex.
 
-1. **Check dependencies.** Read all `config/` and `src/` files the change touches or could affect. Check for duplications with existing code. Check architecture.md "Adding New Components" table for the correct pattern.
+Before writing or modifying ANY code, you MUST complete all four steps below AND print the output. If you have not printed a dependency list and a plan summary, you are not allowed to write code.
+
+1. **Check dependencies — and print what you found.** Read all `config/` and `src/` files the change touches or could affect. Check for duplications with existing code. Check architecture.md "Adding New Components" table for the correct pattern. Then print:
+   - FILES READ: [list every file you opened]
+   - EXISTING PATTERNS FOUND: [relevant code/config you'll integrate with]
+   - POTENTIAL CONFLICTS: [anything that could break]
+   If this list is empty or vague, you skipped the review.
 2. **Check the Valuation Policy** if the change affects pricing, valuation, or verification. Verify implementation matches `docs/reference/valuation_policy_v1.0.md`.
 3. **After writing, review the diff** against the architecture principles below. Keep code short, clean, and minimal — no over-engineering, no speculative abstractions.
+4. **Summarise your plan and STOP.** Before writing any code, output a brief implementation plan: what you'll change, in which files, and how it integrates with existing patterns. Then wait for approval. Do NOT proceed to implementation until the user confirms. The only exception is if the user has explicitly said "go ahead without checking" for this specific task.
 
 ---
 
@@ -63,6 +70,16 @@ All code must follow these. No exceptions. Defined in `docs/internal/architectur
 8. **Log every query.** Contract address, function called, block number, result.
 9. **Comments explaining "why".** Non-obvious logic gets a comment explaining the business reason.
 10. **Tests must be updated with every change.** When adding a new config file, feature, handler, adapter, verifier, or any structural change — update the compliance tests (`tests/test_valuation_policy_compliance.py`). Tests validate cross-referential integrity across all config files and code registries. A feature is not complete until its tests pass. Run: `python -m unittest discover -s tests -v`.
+
+---
+
+## Discipline Rules
+
+These exist because of repeated failures where Claude followed none of the above despite knowing the rules.
+
+1. **Never write code in the same message as reading files.** The review step and the implementation step must be separate messages. Read first, summarise, get approval, then implement.
+2. **If you catch yourself thinking "this is a small change, I can skip the review" — that is the signal to do the full review.** Small-seeming changes in this codebase have the highest rate of hidden dependencies.
+3. **If you produce code that violates Architecture Principles, the code will be rejected and you will redo the full workflow from step 1.** This is not a threat — it is what actually happens every time.
 
 ---
 

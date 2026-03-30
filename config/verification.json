@@ -2,7 +2,13 @@
   "_doc": "Independent verification sources per Valuation Policy Section 7. Asset-level verifiers cross-check primary oracle prices against issuer attestations or NAV reports. Portfolio-level verifiers compare aggregate totals against independent aggregators.",
 
   "_api_endpoints": {
-    "llamarisk": "https://dashboard.llamarisk.com/api"
+    "llamarisk": "https://dashboard.llamarisk.com/api",
+    "gdrive": "secrets/gcloud-service-account.json",
+    "superstate": "https://api.superstate.com"
+  },
+
+  "_tools": {
+    "tesseract_cmd": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
   },
 
   "asset_level": {
@@ -17,6 +23,35 @@
         "katana": "0x926a8a63Fa1e1FDBBEb811a0319933B1A0F1EDbb"
       },
       "_note": "Midas Hyperithm PoR attestation via LlamaRisk. Multi-chain OFT — totalSupply summed across all deployment chains. Addresses from docs.midas.app/resources/smart-contracts-registry. NAV updated ~2x/week. Verified by LlamaRisk + Canary via zk_tls_notary."
+    },
+    "msyrupUSDp": {
+      "type": "midas_pdf_report",
+      "gdrive_folder_id": "1NAPVo8sQYG6ggnjlM6ldi1zfPnvyRc7f",
+      "filename_pattern": "msyrupUSDp_reporting_public_{date}.pdf",
+      "local_report_path": "docs/reference/midas/msyrupusdp",
+      "expected_report_freq_days": 4,
+      "max_report_age_days": 10,
+      "_note": "Midas msyrupUSDp weekly PDF reports on Google Drive. Reports published every 3-4 days. OCR extraction of Total assets / Issued tokens to derive per-token price."
+    },
+    "mF-ONE": {
+      "type": "midas_pdf_report",
+      "gdrive_folder_id": "122vggonAVEp0Q5Y66-R41c6UIZW4mFIY",
+      "filename_pattern": "mfone_reporting_public_{date}.pdf",
+      "local_report_path": "docs/reference/midas/mf-one",
+      "expected_report_freq_days": 2,
+      "max_report_age_days": 7,
+      "_note": "Midas mF-ONE daily PDF reports on Google Drive. Reports published daily. OCR extraction of Total assets / Issued tokens to derive per-token price."
+    },
+    "ONyc": {
+      "type": "onre_onchain_nav",
+      "max_vector_age_days": 30,
+      "_note": "OnRe on-chain NAV from Offer PDA on Solana. Computes price from APR-based step vectors. Config in solana_protocols.json."
+    },
+    "USCC": {
+      "type": "superstate_nav_api",
+      "fund_id": 2,
+      "max_nav_age_days": 3,
+      "_note": "Superstate Crypto Carry Fund. Daily NAV/S via REST API. Verification cross-check against Chainlink NAVLink oracle price."
     }
   },
 

@@ -529,3 +529,150 @@ def decompose_exponent_lp(
         "last_ln_implied_rate": market["last_ln_implied_rate"],
         "lp_share": lp_balance / lp_total_supply if lp_total_supply > 0 else 0,
     }
+
+
+# --- OnRe Finance (ONyc) ---
+# NAV computed from Offer PDA with APR-based discrete step pricing.
+# Config read from solana_protocols.json["onre"].
+
+# Offer account layout (zero_copy, repr(C), after 8-byte Anchor discriminator):
+#   token_in_mint:  Pubkey (32 bytes)
+#   token_out_mint: Pubkey (32 bytes)
+#   vectors:        [OfferVector; 10] (10 × 40 bytes = 400 bytes)
+#     Each OfferVector:
+#       start_time:         u64 (8 bytes)
+#       base_time:          u64 (8 bytes)
+#       base_price:         u64 (8 bytes) — scale=9
+#       apr:                u64 (8 bytes) — scale=6 (1_000_000 = 1%)
+#       price_fix_duration: u64 (8 bytes)
+#   fee_basis_points: u16 (2 bytes)
+#   bump:             u8  (1 byte)
+#   needs_approval:   u8  (1 byte)
+#   allow_permissionless: u8 (1 byte)
+#   reserved:         [u8; 131]
+
+_OFFER_VECTOR_SIZE = 40  # 5 × u64
+_MAX_VECTORS = 10
+_OFFER_VECTORS_OFFSET = 8 + 32 + 32  # discriminator + 2 pubkeys
+
+
+def _derive_onre_offer_pda() -> str:
+    """Derive the Offer PDA for the USDC→ONyc pair from config."""
+    from solders.pubkey import Pubkey as SoldersPubkey
+
+    cfg = _load_solana_cfg()["onre"]
+    program_id = SoldersPubkey.from_string(cfg["program_id"])
+    usdc_mint = SoldersPubkey.from_string(cfg["usdc_mint"])
+    onyc_mint = SoldersPubkey.from_string(cfg["onyc_mint"])
+
+    pda, _bump = SoldersPubkey.find_program_address(
+        [cfg["offer_seed"].encode(), bytes(usdc_mint), bytes(onyc_mint)],
+        program_id,
+    )
+    return str(pda)
+
+
+def parse_onre_offer(raw: bytes) -> dict:
+    """Parse an OnRe Offer account to extract pricing vectors.
+
+    Returns dict with token mints, active vectors, and fee config.
+    """
+    offset = 8  # skip Anchor discriminator
+    token_in = _bytes_to_b58(raw[offset:offset + 32]); offset += 32
+    token_out = _bytes_to_b58(raw[offset:offset + 32]); offset += 32
+
+    vectors = []
+    for i in range(_MAX_VECTORS):
+        v_offset = offset + i * _OFFER_VECTOR_SIZE
+        start_time = struct.unpack_from("<Q", raw, v_offset)[0]
+        base_time = struct.unpack_from("<Q", raw, v_offset + 8)[0]
+        base_price = struct.unpack_from("<Q", raw, v_offset + 16)[0]
+        apr = struct.unpack_from("<Q", raw, v_offset + 24)[0]
+        price_fix_duration = struct.unpack_from("<Q", raw, v_offset + 32)[0]
+
+        if start_time == 0:
+            continue  # empty vector slot
+
+        vectors.append({
+            "start_time": start_time,
+            "base_time": base_time,
+            "base_price": base_price,
+            "apr": apr,
+            "price_fix_duration": price_fix_duration,
+        })
+
+    return {
+        "token_in": token_in,
+        "token_out": token_out,
+        "vectors": vectors,
+    }
+
+
+def get_onre_nav(slot: int | None = None) -> dict:
+    """Compute ONyc NAV from the on-chain Offer account.
+
+    Reads the Offer PDA, finds the active pricing vector, and computes
+    the current price using the APR-based discrete step formula.
+
+    Returns dict with price (Decimal, scale=9 converted to human),
+    active vector details, and offer PDA.
+    """
+    import time as _time
+
+    cfg = _load_solana_cfg()["onre"]
+    price_decimals = cfg["price_decimals"]
+    apr_scale = cfg["apr_scale"]
+    seconds_in_year = cfg["seconds_in_year"]
+
+    offer_pda = _derive_onre_offer_pda()
+
+    params = [offer_pda, {"encoding": "base64"}]
+    if slot is not None:
+        params[1]["minContextSlot"] = slot
+
+    resp = solana_rpc("getAccountInfo", params)
+    value = resp["result"]["value"]
+    if value is None:
+        raise ValueError(f"OnRe Offer PDA not found: {offer_pda}")
+
+    raw = base64.b64decode(value["data"][0])
+    offer = parse_onre_offer(raw)
+
+    if not offer["vectors"]:
+        raise ValueError("OnRe Offer has no active pricing vectors")
+
+    # Find active vector: latest start_time <= current_time
+    current_time = int(_time.time())
+    active = None
+    for v in sorted(offer["vectors"], key=lambda x: x["start_time"], reverse=True):
+        if v["start_time"] <= current_time:
+            active = v
+            break
+
+    if active is None:
+        raise ValueError("No active pricing vector in OnRe Offer")
+
+    # Compute price using discrete step formula:
+    #   step = floor((now - base_time) / price_fix_duration)
+    #   effective_elapsed = (step + 1) * price_fix_duration
+    #   price = base_price * (1 + apr * effective_elapsed / SECONDS_IN_YEAR) / APR_SCALE
+    elapsed = current_time - active["base_time"]
+    step = elapsed // active["price_fix_duration"]
+    step_end_time = (step + 1) * active["price_fix_duration"]
+
+    # Fixed-point: factor = (APR_SCALE * SECONDS_IN_YEAR + apr * step_end_time) / (APR_SCALE * SECONDS_IN_YEAR)
+    factor_den = apr_scale * seconds_in_year
+    factor_num = factor_den + active["apr"] * step_end_time
+    price_raw = active["base_price"] * factor_num // factor_den
+
+    price = Decimal(price_raw) / Decimal(10 ** price_decimals)
+
+    return {
+        "offer_pda": offer_pda,
+        "price": price,
+        "price_raw": price_raw,
+        "active_vector": active,
+        "current_time": current_time,
+        "step": step,
+        "step_end_time": step_end_time,
+    }

@@ -45,6 +45,12 @@
       "address": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
       "chain": "plasma",
       "description": "mHYPER/USD Midas Chainlink-style oracle on Plasma. NAV updated 1-2x/week (~168h)."
+    },
+    "chainlink_uscc_nav": {
+      "type": "chainlink",
+      "address": "0xAfFd8F5578E8590665de561bdE9E7BAdb99300d9",
+      "chain": "ethereum",
+      "description": "USCC/USD Chainlink NAVLink oracle. Daily NAV/S from Superstate via Chainlink. ENS: uscc-nav.data.eth."
     }
   },
 

@@ -56,5 +56,17 @@
         "yt": {"symbol": "YT-eUSX-01JUN26", "underlying": "eUSX", "decimals": 6}
       }
     ]
+  },
+
+  "onre": {
+    "program_id": "onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe",
+    "offer_seed": "offer",
+    "onyc_mint": "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5",
+    "usdc_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "price_decimals": 9,
+    "apr_scale": 1000000,
+    "seconds_in_year": 31536000,
+    "max_vectors": 10,
+    "_note": "OnRe reinsurance. NAV computed from Offer PDA (USDC->ONyc). Offer uses APR-based discrete step pricing. Price scale=9 (1_000_000_000 = 1.0), APR scale=6 (1_000_000 = 1%)."
   }
 }

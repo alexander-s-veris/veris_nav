@@ -72,6 +72,7 @@ def query_exponent_lps(wallet, block_ts):
             "category": "C", "position_type": "lp_constituent",
             "token_symbol": pt["symbol"],
             "token_category": "C",  # PT in LP uses AMM rate, not lot amortisation
+            "underlying_symbol": sy["symbol"],  # SY token is the underlying for PT pricing
             "balance_human": pt_amount,
             "decimals": pt["decimals"],
             "lp_constituent_type": "PT",

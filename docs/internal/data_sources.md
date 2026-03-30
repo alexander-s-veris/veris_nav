@@ -53,7 +53,10 @@ Asset-level verification sources cross-check primary oracle prices against indep
 
 | Source | API | Used For |
 |--------|-----|----------|
-| LlamaRisk (Midas Attestation Engine) | `GET /api/proof/midas/{proof_id}` → attested total NAV | A2 Midas tokens (mHYPER, mF-ONE, msyrupUSDp). Derives per-token price = total NAV / totalSupply (summed across deployment chains) |
+| LlamaRisk (Midas Attestation Engine) | `GET /api/proof/midas/{proof_id}` → attested total NAV | A2 mHYPER. Derives per-token price = total NAV / totalSupply (summed across deployment chains) |
+| Midas PDF Reports (Google Drive) | Google Drive API v3 (service account) → PDF download → OCR | A2 msyrupUSDp, mF-ONE. Reports with Total assets / Issued tokens. Saved to `docs/reference/midas/` for audit trail |
+| Superstate NAV API | `GET /v1/funds/{id}/nav-daily` → daily NAV/S, AUM, outstanding shares | A2 USCC. No auth required. API docs: `api.superstate.com/swagger-ui/` |
+| OnRe On-Chain NAV | Solana RPC `getAccountInfo` on Offer PDA → APR-based step pricing | A2 ONyc. Verification cross-check against Pyth primary. Config in `solana_protocols.json` |
 
 Portfolio-level verification (DeBank, Octav) per Section 7.1 — not yet implemented.
 
