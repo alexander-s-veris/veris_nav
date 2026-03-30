@@ -359,6 +359,16 @@ class TestEMethodology(unittest.TestCase):
                 f"feed (chainlink or pyth) in pricing.feeds"
             )
 
+    def test_all_e_tokens_have_depeg_monitoring(self):
+        """Every E token must have at least one feed for de-peg monitoring (Section 9.4)."""
+        for chain, sym, entry in self._get_e_tokens():
+            feeds = entry.get("pricing", {}).get("feeds", {})
+            self.assertTrue(
+                len(feeds) > 0,
+                f"{chain}.{sym}: E token has zero pricing feeds — "
+                f"no de-peg monitoring possible (Section 9.4)"
+            )
+
     def test_e_oracle_has_at_least_one_feed(self):
         """E_oracle tokens must have at least one oracle feed in pricing.feeds."""
         for chain, sym, entry in self._get_e_tokens():

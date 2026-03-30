@@ -1,6 +1,5 @@
 {
   "_description": "Registry of all unique price feeds used across tokens.json. One entry per unique feed, grouped by type. Referenced by tokens via their pricing config.",
-
   "chainlink": {
     "chainlink_usdt_usd": {
       "type": "chainlink",
@@ -53,7 +52,6 @@
       "description": "USCC/USD Chainlink NAVLink oracle. Daily NAV/S from Superstate via Chainlink. ENS: uscc-nav.data.eth."
     }
   },
-
   "pyth": {
     "pyth_usdt_usd": {
       "type": "pyth",
@@ -106,7 +104,6 @@
       "description": "RLUSD/USD Pyth price feed. Depeg monitoring for par-priced RLUSD on Ethereum and Solana. Also used for Aave Horizon RLUSD debt token."
     }
   },
-
   "redstone": {
     "redstone_usdt": {
       "type": "redstone",
@@ -132,49 +129,8 @@
       "type": "redstone",
       "symbol": "USDe",
       "description": "USDe Redstone price feed. Fallback for USDe on Ethereum and Plasma."
-    },
-    "redstone_susde": {
-      "type": "redstone",
-      "symbol": "sUSDe",
-      "description": "sUSDe Redstone price feed. Fallback for sUSDe on Ethereum and Plasma."
-    },
-    "redstone_eth": {
-      "type": "redstone",
-      "symbol": "ETH",
-      "description": "ETH Redstone price feed. Fallback for native ETH on Ethereum, Arbitrum, and Base."
-    },
-    "redstone_arb": {
-      "type": "redstone",
-      "symbol": "ARB",
-      "description": "ARB Redstone price feed. Fallback for ARB governance token on Arbitrum."
-    },
-    "redstone_pendle": {
-      "type": "redstone",
-      "symbol": "PENDLE",
-      "description": "PENDLE Redstone price feed. Fallback for PENDLE governance token on Ethereum."
-    },
-    "redstone_sol": {
-      "type": "redstone",
-      "symbol": "SOL",
-      "description": "SOL Redstone price feed. Fallback for native SOL on Solana."
-    },
-    "redstone_avax": {
-      "type": "redstone",
-      "symbol": "AVAX",
-      "description": "AVAX Redstone price feed. Fallback for native AVAX on Avalanche."
-    },
-    "redstone_hype": {
-      "type": "redstone",
-      "symbol": "HYPE",
-      "description": "HYPE Redstone price feed. Fallback for native HYPE on HyperEVM."
-    },
-    "redstone_xpl": {
-      "type": "redstone",
-      "symbol": "XPL",
-      "description": "XPL Redstone price feed. Fallback for native XPL and WXPL on Plasma."
     }
   },
-
   "kraken": {
     "kraken_eth_usd": {
       "type": "kraken",
@@ -217,7 +173,6 @@
       "description": "XPL/USD Kraken ticker. Primary for native XPL and WXPL on Plasma."
     }
   },
-
   "coingecko": {
     "coingecko_ethereum": {
       "type": "coingecko",
@@ -284,11 +239,6 @@
       "coin_id": "ethena-usde",
       "description": "Ethena USDe. Fallback for USDe (E) on Ethereum and Plasma. Also for Aave Plasma USDe aToken."
     },
-    "coingecko_ethena_staked_usde": {
-      "type": "coingecko",
-      "coin_id": "ethena-staked-usde",
-      "description": "Ethena Staked USDe (sUSDe). Fallback for sUSDe (A1) on Ethereum and Plasma."
-    },
     "coingecko_usdd": {
       "type": "coingecko",
       "coin_id": "usdd",
@@ -318,39 +268,166 @@
       "type": "coingecko",
       "coin_id": "usdg",
       "description": "USDG. Primary for USDG (E) on Solana (received as Kamino farming rewards)."
+    },
+    "coingecko_vbusdc": {
+      "type": "coingecko",
+      "coin_id": "vaultbridge-bridged-usdc-katana",
+      "description": "vbUSDC (Vault Bridge USDC on Katana). De-peg monitoring only — no Chainlink/Pyth on Katana."
     }
   },
-
   "defillama": {
-    "_doc": "DefiLlama aggregated prices — last resort fallback. Combines DEX + CEX sources across all chains. Replaces per-pool DEX TWAP. API: coins.llama.fi/prices/current/{chain}:{address}. No auth required.",
-
-    "defillama_eth": {"type": "defillama", "chain": "coingecko", "address": "ethereum", "description": "ETH via DefiLlama (coingecko ID for native token)."},
-    "defillama_sol": {"type": "defillama", "chain": "coingecko", "address": "solana", "description": "SOL via DefiLlama."},
-    "defillama_avax": {"type": "defillama", "chain": "coingecko", "address": "avalanche-2", "description": "AVAX via DefiLlama."},
-    "defillama_hype": {"type": "defillama", "chain": "coingecko", "address": "hyperliquid", "description": "HYPE via DefiLlama."},
-
-    "defillama_usdc": {"type": "defillama", "chain": "ethereum", "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "description": "USDC via DefiLlama."},
-    "defillama_usdt": {"type": "defillama", "chain": "ethereum", "address": "0xdac17f958d2ee523a2206206994597c13d831ec7", "description": "USDT via DefiLlama."},
-    "defillama_dai": {"type": "defillama", "chain": "ethereum", "address": "0x6b175474e89094c44da98b954eedeac495271d0f", "description": "DAI via DefiLlama."},
-    "defillama_pyusd": {"type": "defillama", "chain": "ethereum", "address": "0x6c3ea9036406852006290770bedfcaba0e23a0e8", "description": "PYUSD via DefiLlama."},
-    "defillama_usde": {"type": "defillama", "chain": "ethereum", "address": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3", "description": "USDe via DefiLlama."},
-    "defillama_usdd": {"type": "defillama", "chain": "ethereum", "address": "0x4f8e5de400de08b164e7421b3ee387f461becd1a", "description": "USDD via DefiLlama."},
-    "defillama_ausd": {"type": "defillama", "chain": "ethereum", "address": "0x00000000efe302beaa2b3e6e1b18d08d69a9012a", "description": "AUSD (Agora) via DefiLlama."},
-    "defillama_rlusd": {"type": "defillama", "chain": "ethereum", "address": "0x8292bb45bf1ee4d140127049757c2e0ff06317ed", "description": "RLUSD via DefiLlama."},
-    "defillama_usx": {"type": "defillama", "chain": "solana", "address": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG", "description": "USX via DefiLlama (Solana)."},
-    "defillama_usdg": {"type": "defillama", "chain": "solana", "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH", "description": "USDG via DefiLlama (Solana)."},
-
-    "defillama_morpho": {"type": "defillama", "chain": "ethereum", "address": "0x58d97b57bb95320f9a05dc918aef65434969c2b2", "description": "MORPHO via DefiLlama."},
-    "defillama_pendle": {"type": "defillama", "chain": "ethereum", "address": "0x808507121b80c02388fad14726482e061b8da827", "description": "PENDLE via DefiLlama."},
-    "defillama_arb": {"type": "defillama", "chain": "arbitrum", "address": "0x912ce59144191c1204e64559fe8253a0e49e6548", "description": "ARB via DefiLlama."},
-    "defillama_giza": {"type": "defillama", "chain": "base", "address": "0x590830dfdf9a3f68afcdde2694773debdf267774", "description": "GIZA via DefiLlama."},
-
-    "defillama_uscc": {"type": "defillama", "chain": "ethereum", "address": "0x14d60e7fdc0d71d8611742720e4c50e7a974020c", "description": "USCC (Superstate) via DefiLlama."},
-    "defillama_syrupusdc": {"type": "defillama", "chain": "ethereum", "address": "0x80ac24aa929eaf5013f6436cda2a7ba190f5cc0b", "description": "syrupUSDC (Maple) via DefiLlama."},
-    "defillama_rlp": {"type": "defillama", "chain": "ethereum", "address": "0x4956b52ae2ff65d74ca2d61207523288e4528f96", "description": "RLP (Resolv) via DefiLlama."},
-    "defillama_onyc": {"type": "defillama", "chain": "solana", "address": "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5", "description": "ONyc (OnRe) via DefiLlama (Solana)."}
+    "_doc": "DefiLlama aggregated prices \u00e2\u20ac\u201d last resort fallback. Combines DEX + CEX sources across all chains. Replaces per-pool DEX TWAP. API: coins.llama.fi/prices/current/{chain}:{address}. No auth required.",
+    "defillama_eth": {
+      "type": "defillama",
+      "chain": "coingecko",
+      "address": "ethereum",
+      "description": "ETH via DefiLlama (coingecko ID for native token)."
+    },
+    "defillama_sol": {
+      "type": "defillama",
+      "chain": "coingecko",
+      "address": "solana",
+      "description": "SOL via DefiLlama."
+    },
+    "defillama_avax": {
+      "type": "defillama",
+      "chain": "coingecko",
+      "address": "avalanche-2",
+      "description": "AVAX via DefiLlama."
+    },
+    "defillama_hype": {
+      "type": "defillama",
+      "chain": "coingecko",
+      "address": "hyperliquid",
+      "description": "HYPE via DefiLlama."
+    },
+    "defillama_usdc": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "description": "USDC via DefiLlama."
+    },
+    "defillama_usdt": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "description": "USDT via DefiLlama."
+    },
+    "defillama_dai": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x6b175474e89094c44da98b954eedeac495271d0f",
+      "description": "DAI via DefiLlama."
+    },
+    "defillama_pyusd": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x6c3ea9036406852006290770bedfcaba0e23a0e8",
+      "description": "PYUSD via DefiLlama."
+    },
+    "defillama_usde": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
+      "description": "USDe via DefiLlama."
+    },
+    "defillama_usdd": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x4f8e5de400de08b164e7421b3ee387f461becd1a",
+      "description": "USDD via DefiLlama."
+    },
+    "defillama_ausd": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x00000000efe302beaa2b3e6e1b18d08d69a9012a",
+      "description": "AUSD (Agora) via DefiLlama."
+    },
+    "defillama_rlusd": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x8292bb45bf1ee4d140127049757c2e0ff06317ed",
+      "description": "RLUSD via DefiLlama."
+    },
+    "defillama_usx": {
+      "type": "defillama",
+      "chain": "solana",
+      "address": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG",
+      "description": "USX via DefiLlama (Solana)."
+    },
+    "defillama_usdg": {
+      "type": "defillama",
+      "chain": "solana",
+      "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+      "description": "USDG via DefiLlama (Solana)."
+    },
+    "defillama_morpho": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x58d97b57bb95320f9a05dc918aef65434969c2b2",
+      "description": "MORPHO via DefiLlama."
+    },
+    "defillama_pendle": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x808507121b80c02388fad14726482e061b8da827",
+      "description": "PENDLE via DefiLlama."
+    },
+    "defillama_arb": {
+      "type": "defillama",
+      "chain": "arbitrum",
+      "address": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+      "description": "ARB via DefiLlama."
+    },
+    "defillama_giza": {
+      "type": "defillama",
+      "chain": "base",
+      "address": "0x590830dfdf9a3f68afcdde2694773debdf267774",
+      "description": "GIZA via DefiLlama."
+    },
+    "defillama_dam": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x0fedba9178b70e8b54e2af08ebffcf28a1e5a43b",
+      "description": "DAM (Reservoir) via DefiLlama."
+    },
+    "defillama_xpl": {
+      "type": "defillama",
+      "chain": "coingecko",
+      "address": "plasma",
+      "description": "XPL via DefiLlama (coingecko ID for native token)."
+    },
+    "defillama_wxpl": {
+      "type": "defillama",
+      "chain": "plasma",
+      "address": "0x6100e367285b01f48d07953803a2d8dca5d19873",
+      "description": "WXPL (wrapped XPL) via DefiLlama on Plasma."
+    },
+    "defillama_uscc": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x14d60e7fdc0d71d8611742720e4c50e7a974020c",
+      "description": "USCC (Superstate) via DefiLlama."
+    },
+    "defillama_syrupusdc": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x80ac24aa929eaf5013f6436cda2a7ba190f5cc0b",
+      "description": "syrupUSDC (Maple) via DefiLlama."
+    },
+    "defillama_rlp": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x4956b52ae2ff65d74ca2d61207523288e4528f96",
+      "description": "RLP (Resolv) via DefiLlama."
+    },
+    "defillama_onyc": {
+      "type": "defillama",
+      "chain": "solana",
+      "address": "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5",
+      "description": "ONyc (OnRe) via DefiLlama (Solana)."
+    }
   },
-
   "_api_endpoints": {
     "_description": "Base URLs for REST API price adapters. Adapters read from here instead of hardcoding URLs.",
     "pyth_hermes": "https://hermes.pyth.network/v2/updates/price/latest",
