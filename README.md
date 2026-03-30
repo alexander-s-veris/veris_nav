@@ -97,49 +97,52 @@ See `docs/internal/protocol_sourcing.md` for the "Adding a New Position" quick r
 
 ```
 src/
-  collect.py               # Production orchestrator with --date valuation block pinning
-  protocol_queries.py      # Thin dispatcher: handler registry, concurrent handler dispatch
-  handlers/                # Protocol-specific position query handlers (one per protocol)
-    morpho.py, erc4626.py, euler.py, aave.py, midas.py, gauntlet.py
-    creditcoop.py, uniswap.py, ethena.py, kamino.py, exponent.py, pt_lots.py
-  adapters/                # Price feed adapters (one per oracle/API provider)
-    chainlink.py, pyth.py, redstone.py, kraken.py, coingecko.py
-    dex_twap.py, exchange_rate.py, curve_lp.py
-  valuation.py             # Category-specific valuation with config-driven pricing indices
-  pricing.py               # Price dispatcher (hierarchy walker, Chainlink batch, CoinGecko batch)
-  multicall.py             # Multicall3 batching utility (aggregate3 + calldata helpers)
-  evm.py                   # Shared EVM utilities (cached Web3, find_valuation_block)
-  block_utils.py           # Block estimation (binary search), concurrent RPC utilities
-  solana_client.py         # Solana RPC helpers (balances, eUSX rate, find_valuation_slot)
-  pt_valuation.py          # PT token lot-based valuation (Category B linear amortisation)
-  collect_balances.py      # Standalone wallet balance scanner (~45s)
-  output.py                # NAV snapshot writer (positions, leverage detail, PT lots, LP decomposition, summary)
-  tools/                   # Standalone utilities (run separately)
-    diff_snapshots.py        # Snapshot diff tool — compares NAV snapshots
-    cache_xlsx.py            # Cache xlsx sheets as CSVs
-    extract_powerquery.py    # Extract Power Query M code from Excel
-    generate_methodology_pdf.py  # Generate methodology PDF
-  falconx/                 # FalconX/Pareto A3 position scripts
-    update_falconx_optimized.py  # Hourly accrual updater (writes to SQLite)
-    import_falconx_xlsx_to_sqlite.py  # One-time xlsx→SQLite migration
-    query_pareto_tranche_history.py  # Pareto tranche price history
+  collect.py                # Production orchestrator (--date pinning)
+  protocol_queries.py       # Handler registry, concurrent dispatch
+  handlers/                 # Protocol-specific position readers
+    morpho.py, erc4626.py, euler.py, aave.py, midas.py
+    gauntlet.py, creditcoop.py, uniswap.py, ethena.py
+    kamino.py, exponent.py, pt_lots.py
+  adapters/                 # Price feed adapters (per provider)
+    chainlink.py, pyth.py, redstone.py, kraken.py
+    coingecko.py, dex_twap.py, exchange_rate.py
+    curve_lp.py
+  verifiers/                # Independent verification (Sec 7)
+    midas_attestation.py
+  valuation.py              # Category-specific valuation (A1-F)
+  pricing.py                # Hierarchy walker, batch fetching
+  multicall.py              # Multicall3 batching (aggregate3)
+  evm.py                    # Shared EVM utils (Web3, blocks)
+  block_utils.py            # Block estimation, concurrent RPC
+  solana_client.py          # Solana RPC (Kamino, Exponent)
+  pt_valuation.py           # PT lot-based amortisation (Cat B)
+  collect_balances.py       # Wallet balance scanner library
+  output.py                 # Snapshot writer (CSV/JSON/summary)
+  tools/                    # Standalone utilities
+    diff_snapshots.py       # Compare NAV snapshots
+    cache_xlsx.py           # Cache xlsx sheets as CSVs
+    extract_powerquery.py   # Extract Power Query M code
+    generate_methodology_pdf.py
+  falconx/                  # FalconX/Pareto A3 accrual scripts
+    update_falconx_optimized.py
+    import_falconx_xlsx_to_sqlite.py
+    query_pareto_tranche_history.py
 config/
-  chains.json              # Chain configs (RPC URLs, chain IDs, explorers)
-  wallets.json             # Wallet addresses per chain with protocol registrations
-  tokens.json              # Token registry (whitelist per chain with pricing config)
-  contracts.json           # Protocol contracts with _query_type for handler dispatch
-  solana_protocols.json    # Solana protocol configs (Kamino obligations, Exponent markets)
-  abis.json                # Minimal ABIs for all contract interactions
-  morpho_markets.json      # Morpho market IDs and position configs
-  pt_lots.json             # PT token individual lot details for linear amortisation
+  chains.json               # RPC URLs, chain IDs, explorers
+  wallets.json              # Wallets + protocol registrations
+  tokens.json               # Token registry + pricing config
+  contracts.json            # Protocol contracts (_query_type)
+  solana_protocols.json     # Kamino, Exponent configs
+  abis.json                 # Minimal ABIs for all interactions
+  morpho_markets.json       # Morpho market IDs + positions
+  pt_lots.json              # PT lot details for amortisation
+  price_feeds.json          # Feed definitions (58 entries)
+  pricing_policy.json       # Per-category hierarchy rules
+  verification.json         # Verification sources (Sec 7)
 docs/
-  internal/                  # Internal reference docs
-    protocol_sourcing.md     # Protocol-by-protocol position reading guide
-    valuation_methodology.md # Category A1-F valuation rules
-    portfolio_positions.md   # Current positions by category
-    ...
-  methodology/               # Methodology deliverables (for Bank Frick / audit)
-  reference/                 # Source documents (Valuation Policy, loan notices)
+  internal/                 # Internal reference docs
+  methodology/              # Deliverables (Bank Frick / audit)
+  reference/                # Valuation Policy, loan notices
 ```
 
 ## Configuration Files
