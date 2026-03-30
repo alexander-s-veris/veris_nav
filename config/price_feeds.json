@@ -50,6 +50,12 @@
       "address": "0xAfFd8F5578E8590665de561bdE9E7BAdb99300d9",
       "chain": "ethereum",
       "description": "USCC/USD Chainlink NAVLink oracle. Daily NAV/S from Superstate via Chainlink. ENS: uscc-nav.data.eth."
+    },
+    "resolv_rlp_nav": {
+      "type": "chainlink",
+      "address": "0xAdb2c15Fde49D1A4294740aCb650de94184E66b2",
+      "chain": "ethereum",
+      "description": "RLP/USD Resolv AggregatorV3Interface. Issuer-published fundamental NAV, updated daily. Implements standard latestRoundData()."
     }
   },
   "pyth": {
@@ -219,21 +225,6 @@
       "coin_id": "plasma",
       "description": "Plasma (XPL). Fallback for native XPL and WXPL on Plasma."
     },
-    "coingecko_resolv_rlp": {
-      "type": "coingecko",
-      "coin_id": "resolv-rlp",
-      "description": "Resolv Liquidity Provider Token (RLP). Fallback for RLP (A2) on Ethereum."
-    },
-    "coingecko_superstate_uscc": {
-      "type": "coingecko",
-      "coin_id": "superstate-uscc",
-      "description": "Superstate Crypto Carry Fund (USCC). Fallback for USCC (A2) on Ethereum and Solana."
-    },
-    "coingecko_syrupusdc": {
-      "type": "coingecko",
-      "coin_id": "syrupusdc",
-      "description": "Syrup USDC (syrupUSDC). Fallback for syrupUSDC (A2) on Ethereum, Arbitrum, Base, and Solana."
-    },
     "coingecko_ethena_usde": {
       "type": "coingecko",
       "coin_id": "ethena-usde",
@@ -272,7 +263,7 @@
     "coingecko_vbusdc": {
       "type": "coingecko",
       "coin_id": "vaultbridge-bridged-usdc-katana",
-      "description": "vbUSDC (Vault Bridge USDC on Katana). De-peg monitoring only — no Chainlink/Pyth on Katana."
+      "description": "vbUSDC (Vault Bridge USDC on Katana). De-peg monitoring only \u00e2\u20ac\u201d no Chainlink/Pyth on Katana."
     }
   },
   "defillama": {
@@ -428,6 +419,53 @@
       "description": "ONyc (OnRe) via DefiLlama (Solana)."
     }
   },
+
+  "issuer_nav": {
+    "_doc": "Issuer-published NAV feeds — tier 2 in A2 hierarchy per Section 6.2. Used as pricing fallback when oracle feeds are stale/unavailable. Same sources also serve as verification (Section 7.3).",
+
+    "issuer_nav_uscc": {
+      "type": "issuer_nav",
+      "issuer_type": "superstate_api",
+      "api_base": "https://api.superstate.com",
+      "fund_id": 2,
+      "description": "USCC NAV via Superstate REST API. Daily NAV/S."
+    },
+    "issuer_nav_onyc": {
+      "type": "issuer_nav",
+      "issuer_type": "onre_onchain",
+      "description": "ONyc NAV from OnRe Offer PDA on Solana. APR-based step pricing."
+    },
+    "issuer_nav_mfone": {
+      "type": "issuer_nav",
+      "issuer_type": "midas_pdf",
+      "gdrive_folder_id": "122vggonAVEp0Q5Y66-R41c6UIZW4mFIY",
+      "filename_pattern": "mfone_reporting_public_{date}.pdf",
+      "local_report_path": "docs/reference/midas/mf-one",
+      "description": "mF-ONE NAV from Midas daily PDF reports on Google Drive."
+    },
+    "issuer_nav_msyrupusdp": {
+      "type": "issuer_nav",
+      "issuer_type": "midas_pdf",
+      "gdrive_folder_id": "1NAPVo8sQYG6ggnjlM6ldi1zfPnvyRc7f",
+      "filename_pattern": "msyrupUSDp_reporting_public_{date}.pdf",
+      "local_report_path": "docs/reference/midas/msyrupusdp",
+      "description": "msyrupUSDp NAV from Midas weekly PDF reports on Google Drive."
+    },
+    "issuer_nav_mhyper": {
+      "type": "issuer_nav",
+      "issuer_type": "midas_attestation",
+      "proof_id": "0xac9a528065afb4290ab62fb0ee1a9110d48ed834454d2d04ab369b4832bbda7a",
+      "token_decimals": 18,
+      "token_addresses": {
+        "ethereum": "0x9b5528528656DBC094765E2abB79F293c21191B9",
+        "plasma": "0xb31BeA5c2a43f942a3800558B1aa25978da75F8a",
+        "monad": "0xd90F6bFEd23fFDE40106FC4498DD2e9EDB95E4e7",
+        "katana": "0x926a8a63Fa1e1FDBBEb811a0319933B1A0F1EDbb"
+      },
+      "description": "mHYPER NAV from Midas attestation via LlamaRisk API."
+    }
+  },
+
   "_api_endpoints": {
     "_description": "Base URLs for REST API price adapters. Adapters read from here instead of hardcoding URLs.",
     "pyth_hermes": "https://hermes.pyth.network/v2/updates/price/latest",

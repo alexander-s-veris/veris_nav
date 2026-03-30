@@ -31,6 +31,7 @@ from adapters.coingecko import coingecko_price, batch_coingecko_prices
 from adapters.defillama import defillama_price, batch_defillama_prices
 from adapters.exchange_rate import a1_exchange_rate_price
 from adapters.curve_lp import curve_lp_price
+from adapters.issuer_nav import issuer_nav_price
 
 __all__ = [
     "chainlink_price",
@@ -41,6 +42,7 @@ __all__ = [
     "batch_coingecko_prices",
     "defillama_price",
     "batch_defillama_prices",
+    "issuer_nav_price",
     "a1_exchange_rate_price",
     "curve_lp_price",
     "_load_api_endpoints",

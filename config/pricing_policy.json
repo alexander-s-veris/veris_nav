@@ -7,7 +7,7 @@
   },
   "A2": {
     "method": "oracle_hierarchy",
-    "hierarchy": ["chainlink", "pyth", "redstone", "issuer_nav", "coingecko", "defillama"],
+    "hierarchy": ["chainlink", "pyth", "redstone", "issuer_nav", "defillama"],
     "staleness_multiplier": 2.0,
     "description": "Off-chain yield-bearing tokens. Oracle hierarchy per Section 6.2. Stale if >2x expected update frequency."
   },
