@@ -41,7 +41,7 @@ Position balances and values are in the latest NAV snapshot (`outputs/`). This d
 - Fiat at Bank Frick valued at face value.
 
 ## F Positions (Other)
-- **Governance tokens**: MORPHO, PENDLE, ARB, KMNO, GIZA. Priced via Kraken → CoinGecko → DEX TWAP hierarchy.
+- **Governance tokens**: MORPHO, PENDLE, ARB, KMNO, GIZA. Priced via Kraken → CoinGecko → DefiLlama hierarchy.
 - **YT tokens**: YT-ONyc, YT-eUSX. Priced via `underlying × (1 − PT ratio)`. Near-expiry marked to zero.
 - **Kamino farming rewards**: Included if claimable at Valuation Block. KMNO season rewards excluded.
 - All whitelisted tokens with balance >$0 included in valuation.

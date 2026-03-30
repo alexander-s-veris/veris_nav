@@ -21,7 +21,7 @@ from block_utils import concurrent_query
 from adapters import (
     chainlink_price, pyth_price, redstone_price,
     kraken_price, coingecko_price, batch_coingecko_prices,
-    dex_twap_price, a1_exchange_rate_price, curve_lp_price,
+    defillama_price, a1_exchange_rate_price, curve_lp_price,
 )
 from adapters.chainlink import chainlink_prices_batch
 
@@ -103,8 +103,8 @@ def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None, expected_freq_hours:
         return kraken_price(feed_cfg["pair"])
     elif feed_type == "coingecko":
         return coingecko_price(feed_cfg["coin_id"])
-    elif feed_type == "dex_twap":
-        return dex_twap_price(feed_cfg, _get_w3_for_chain(feed_cfg, w3_eth))
+    elif feed_type == "defillama":
+        return defillama_price(feed_cfg, expected_freq_hours)
     else:
         raise ValueError(f"Unknown feed type: {feed_type}")
 

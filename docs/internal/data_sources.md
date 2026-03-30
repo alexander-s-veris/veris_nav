@@ -62,6 +62,20 @@ Portfolio-level verification (DeBank, Octav) per Section 7.1 — not yet impleme
 
 ---
 
+## DefiLlama
+
+Last-resort aggregated price source. Combines DEX and CEX data across all chains. Replaces per-pool DEX TWAP.
+
+```
+GET https://coins.llama.fi/prices/current/{chain}:{address}
+```
+
+Supports batch queries (comma-separated). No API key needed. Response includes `price`, `timestamp`, `confidence`, `symbol`. Chain prefixes: `ethereum`, `solana`, `arbitrum`, `base`, `avalanche`, `coingecko` (for native tokens by CoinGecko ID).
+
+Feed definitions in `config/price_feeds.json` under `defillama` section.
+
+---
+
 ## RPC Endpoints
 
 Chain RPC URLs, chain IDs, and native token metadata are in `config/chains.json` (single source of truth). API keys in `.env` (never commit to GitHub).

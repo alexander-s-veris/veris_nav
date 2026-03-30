@@ -106,7 +106,7 @@ src/
     kamino.py, exponent.py, pt_lots.py
   adapters/                 # Price feed adapters (per provider)
     chainlink.py, pyth.py, redstone.py, kraken.py
-    coingecko.py, dex_twap.py, exchange_rate.py
+    coingecko.py, defillama.py, exchange_rate.py
     curve_lp.py
   verifiers/                # Independent verification (Sec 7)
     midas_attestation.py, midas_pdf_report.py

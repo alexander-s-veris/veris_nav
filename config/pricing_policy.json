@@ -7,7 +7,7 @@
   },
   "A2": {
     "method": "oracle_hierarchy",
-    "hierarchy": ["chainlink", "pyth", "redstone", "issuer_nav", "coingecko", "dex_twap"],
+    "hierarchy": ["chainlink", "pyth", "redstone", "issuer_nav", "coingecko", "defillama"],
     "staleness_multiplier": 2.0,
     "description": "Off-chain yield-bearing tokens. Oracle hierarchy per Section 6.2. Stale if >2x expected update frequency."
   },
@@ -29,19 +29,19 @@
   },
   "E_par": {
     "method": "par",
-    "depeg_hierarchy": ["chainlink", "pyth", "redstone"],
+    "depeg_hierarchy": ["chainlink", "pyth", "redstone", "defillama"],
     "depeg_threshold_minor_pct": 0.5,
     "depeg_threshold_material_pct": 2.0,
     "description": "USDC-pegged stablecoins (USDC, DAI, PYUSD, USDS, AUSD, RLUSD). Valued at par ($1.00). Depeg check per Section 9.4."
   },
   "E_oracle": {
     "method": "oracle_hierarchy",
-    "hierarchy": ["chainlink", "pyth", "redstone", "coingecko"],
+    "hierarchy": ["chainlink", "pyth", "redstone", "coingecko", "defillama"],
     "description": "Non-USDC-pegged stablecoins (USDT, USDe, USDD, USX). Oracle-priced per Section 6.7."
   },
   "F": {
     "method": "market_hierarchy",
-    "hierarchy": ["kraken", "redstone", "coingecko", "dex_twap"],
+    "hierarchy": ["kraken", "redstone", "coingecko", "defillama"],
     "description": "Governance tokens, rewards, other (Section 6.8). Kraken is tier 1 per Final Terms."
   },
 

@@ -984,7 +984,7 @@ class TestAdaptersAndVerifiers(unittest.TestCase):
         policies = load_json("pricing_policy.json")
         # These are the source types the hierarchy walker can dispatch to
         known_source_types = {"chainlink", "pyth", "redstone", "kraken",
-                              "coingecko", "dex_twap", "issuer_nav"}
+                              "coingecko", "defillama", "issuer_nav"}
         for key, policy in policies.items():
             if key.startswith("_") or key == "divergence_tolerances":
                 continue

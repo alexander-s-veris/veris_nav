@@ -321,42 +321,34 @@
     }
   },
 
-  "dex_twap": {
-    "_doc": "DEX TWAP feeds — last resort per Section 6.2. Uniswap V3 uses observe() for tick-based TWAP. Curve uses get_dy() for spot rate.",
+  "defillama": {
+    "_doc": "DefiLlama aggregated prices — last resort fallback. Combines DEX + CEX sources across all chains. Replaces per-pool DEX TWAP. API: coins.llama.fi/prices/current/{chain}:{address}. No auth required.",
 
-    "dex_twap_usdt_usdc_uni_v3": {
-      "type": "dex_twap",
-      "dex_type": "uniswap_v3",
-      "pool_address": "0x3416cF6C708Da44DB2624D63ea0AAef7113527C6",
-      "chain": "ethereum",
-      "twap_seconds": 1800,
-      "decimals_0": 6,
-      "decimals_1": 6,
-      "invert": false,
-      "description": "USDT/USDC Uniswap V3 0.01% pool, 30min TWAP. token0=USDT, token1=USDC."
-    },
-    "dex_twap_eth_usdc_uni_v3": {
-      "type": "dex_twap",
-      "dex_type": "uniswap_v3",
-      "pool_address": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
-      "chain": "ethereum",
-      "twap_seconds": 1800,
-      "decimals_0": 6,
-      "decimals_1": 18,
-      "invert": true,
-      "description": "USDC/ETH Uniswap V3 0.05% pool, 30min TWAP. token0=USDC, token1=ETH. Inverted to get ETH/USD."
-    },
-    "dex_twap_dai_usdc_uni_v3": {
-      "type": "dex_twap",
-      "dex_type": "uniswap_v3",
-      "pool_address": "0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168",
-      "chain": "ethereum",
-      "twap_seconds": 1800,
-      "decimals_0": 18,
-      "decimals_1": 6,
-      "invert": false,
-      "description": "DAI/USDC Uniswap V3 0.01% pool, 30min TWAP. token0=DAI, token1=USDC."
-    }
+    "defillama_eth": {"type": "defillama", "chain": "coingecko", "address": "ethereum", "description": "ETH via DefiLlama (coingecko ID for native token)."},
+    "defillama_sol": {"type": "defillama", "chain": "coingecko", "address": "solana", "description": "SOL via DefiLlama."},
+    "defillama_avax": {"type": "defillama", "chain": "coingecko", "address": "avalanche-2", "description": "AVAX via DefiLlama."},
+    "defillama_hype": {"type": "defillama", "chain": "coingecko", "address": "hyperliquid", "description": "HYPE via DefiLlama."},
+
+    "defillama_usdc": {"type": "defillama", "chain": "ethereum", "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "description": "USDC via DefiLlama."},
+    "defillama_usdt": {"type": "defillama", "chain": "ethereum", "address": "0xdac17f958d2ee523a2206206994597c13d831ec7", "description": "USDT via DefiLlama."},
+    "defillama_dai": {"type": "defillama", "chain": "ethereum", "address": "0x6b175474e89094c44da98b954eedeac495271d0f", "description": "DAI via DefiLlama."},
+    "defillama_pyusd": {"type": "defillama", "chain": "ethereum", "address": "0x6c3ea9036406852006290770bedfcaba0e23a0e8", "description": "PYUSD via DefiLlama."},
+    "defillama_usde": {"type": "defillama", "chain": "ethereum", "address": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3", "description": "USDe via DefiLlama."},
+    "defillama_usdd": {"type": "defillama", "chain": "ethereum", "address": "0x4f8e5de400de08b164e7421b3ee387f461becd1a", "description": "USDD via DefiLlama."},
+    "defillama_ausd": {"type": "defillama", "chain": "ethereum", "address": "0x00000000efe302beaa2b3e6e1b18d08d69a9012a", "description": "AUSD (Agora) via DefiLlama."},
+    "defillama_rlusd": {"type": "defillama", "chain": "ethereum", "address": "0x8292bb45bf1ee4d140127049757c2e0ff06317ed", "description": "RLUSD via DefiLlama."},
+    "defillama_usx": {"type": "defillama", "chain": "solana", "address": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG", "description": "USX via DefiLlama (Solana)."},
+    "defillama_usdg": {"type": "defillama", "chain": "solana", "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH", "description": "USDG via DefiLlama (Solana)."},
+
+    "defillama_morpho": {"type": "defillama", "chain": "ethereum", "address": "0x58d97b57bb95320f9a05dc918aef65434969c2b2", "description": "MORPHO via DefiLlama."},
+    "defillama_pendle": {"type": "defillama", "chain": "ethereum", "address": "0x808507121b80c02388fad14726482e061b8da827", "description": "PENDLE via DefiLlama."},
+    "defillama_arb": {"type": "defillama", "chain": "arbitrum", "address": "0x912ce59144191c1204e64559fe8253a0e49e6548", "description": "ARB via DefiLlama."},
+    "defillama_giza": {"type": "defillama", "chain": "base", "address": "0x590830dfdf9a3f68afcdde2694773debdf267774", "description": "GIZA via DefiLlama."},
+
+    "defillama_uscc": {"type": "defillama", "chain": "ethereum", "address": "0x14d60e7fdc0d71d8611742720e4c50e7a974020c", "description": "USCC (Superstate) via DefiLlama."},
+    "defillama_syrupusdc": {"type": "defillama", "chain": "ethereum", "address": "0x80ac24aa929eaf5013f6436cda2a7ba190f5cc0b", "description": "syrupUSDC (Maple) via DefiLlama."},
+    "defillama_rlp": {"type": "defillama", "chain": "ethereum", "address": "0x4956b52ae2ff65d74ca2d61207523288e4528f96", "description": "RLP (Resolv) via DefiLlama."},
+    "defillama_onyc": {"type": "defillama", "chain": "solana", "address": "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5", "description": "ONyc (OnRe) via DefiLlama (Solana)."}
   },
 
   "_api_endpoints": {
