@@ -376,11 +376,11 @@ class TestEMethodology(unittest.TestCase):
             if pricing.get("policy") != "E_oracle":
                 continue
             feeds = pricing.get("feeds", {})
-            has_oracle = any(k in feeds for k in ("chainlink", "pyth", "coingecko"))
+            has_oracle = any(k in feeds for k in ("chainlink", "pyth", "redstone", "defillama"))
             self.assertTrue(
                 has_oracle,
-                f"{chain}.{sym}: E_oracle token must have at least one oracle feed "
-                f"(chainlink, pyth, or coingecko) in pricing.feeds"
+                f"{chain}.{sym}: E_oracle token must have at least one pricing feed "
+                f"(chainlink, pyth, redstone, or defillama) in pricing.feeds"
             )
 
 

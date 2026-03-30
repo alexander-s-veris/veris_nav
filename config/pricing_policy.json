@@ -36,7 +36,7 @@
   },
   "E_oracle": {
     "method": "oracle_hierarchy",
-    "hierarchy": ["chainlink", "pyth", "redstone", "coingecko", "defillama"],
+    "hierarchy": ["chainlink", "pyth", "redstone", "defillama"],
     "description": "Non-USDC-pegged stablecoins (USDT, USDe, USDD, USX). Oracle-priced per Section 6.7."
   },
   "F": {

@@ -88,7 +88,7 @@ The system uses a **config-driven handler registry** pattern. Adding a new posit
 Additional features:
 - **Oracle staleness checking**: A2 tokens flag stale prices (>2x expected update frequency) and fall through to next source in hierarchy
 - **Independent verification (Section 7.3)**: 5 tokens verified — mHYPER (LlamaRisk attestation), msyrupUSDp + mF-ONE (Midas PDF reports via Google Drive OCR), USCC (Superstate REST API), ONyc (OnRe on-chain NAV)
-- **Valuation Policy compliance tests**: 61 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
+- **Valuation Policy compliance tests**: 62 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
 - **Chain health tracking**: Reports per-chain success/failure in `nav_summary.json`
 - **Snapshot diff tool**: `python src/tools/diff_snapshots.py --latest` catches disappeared/changed positions before submission
 
@@ -169,7 +169,7 @@ docs/
 | C | LP positions (Curve, Uniswap, Exponent) | Decompose into constituents |
 | D | Leveraged positions (Morpho, Aave, Kamino, Fluid) | Net = Collateral - Debt |
 | E | Stablecoins and cash | Par ($1.00) for USDC-pegged; oracle for non-USDC-pegged |
-| F | Governance tokens, rewards, other | Kraken/CoinGecko/DEX TWAP |
+| F | Governance tokens, rewards, other | Kraken/CoinGecko/DefiLlama |
 
 ## Output Format
 

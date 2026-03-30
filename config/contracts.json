@@ -331,7 +331,7 @@
         "description": "DAI/USD Price Feed"
       },
       "uscc_nav": {
-        "address": "0xAfFd00d9",
+        "address": "0xAfFd8F5578E8590665de561bdE9E7BAdb99300d9",
         "chain": "ethereum",
         "abi": "chainlink_aggregator_v3",
         "description": "USCC NAV per share (NAVLink)",

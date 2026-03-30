@@ -20,7 +20,7 @@ Per Valuation Policy v1.0. Pricing is **category-driven, not a single waterfall*
   3. Secondary market price (DefiLlama aggregated — last resort)
 - **Cross-reference**: Where both oracle and issuer NAV exist, cross-reference. Investigate if divergence exceeds tolerance (Appendix B of policy)
 - **Staleness**: Flag if not updated for >2× the expected update interval. If primary is stale, use next available source and note in NAV report
-- **Examples**: USCC (Chainlink NAVLink), mF-ONE (Midas oracle), syrupUSDC (CoinGecko), BUIDL, ONyc (issuer API)
+- **Examples**: USCC (Chainlink NAVLink), mF-ONE (Midas oracle), syrupUSDC (Pyth), ONyc (Pyth + OnRe issuer NAV), RLP (Resolv AggregatorV3Interface)
 
 ### A2 Expected Update Frequencies
 The Investment Manager must maintain a record of the expected update frequency for each A2 token (based on issuer's published schedule or observed historical cadence). This is needed for the staleness check — flag if >2× expected interval.

@@ -101,9 +101,9 @@
     "markets": [
       {
         "market_id": "0x571cb3ac535d61d92026c071ef1df4794d0bbbe1755f916ff640746f81b52af4",
-        "name": "syrupUSDC / USDT0",
+        "name": "syrupUSDC / USDT",
         "loan_token": {
-          "symbol": "USDT0",
+          "symbol": "USDT",
           "address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
           "decimals": 6,
           "category": "E"
