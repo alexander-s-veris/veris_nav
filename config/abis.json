@@ -284,6 +284,12 @@
       "name": "getPositionLiquidity",
       "outputs": [{"name": "", "type": "uint128"}],
       "stateMutability": "view", "type": "function"
+    },
+    {
+      "inputs": [{"name": "tokenId", "type": "uint256"}],
+      "name": "positionInfo",
+      "outputs": [{"name": "", "type": "bytes32"}],
+      "stateMutability": "view", "type": "function"
     }
   ]
 }

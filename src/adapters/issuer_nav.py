@@ -94,23 +94,56 @@ def _onre_nav(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
 
 
 def _midas_pdf_nav(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
-    """Midas PDF report NAV for mF-ONE, msyrupUSDp."""
+    """Midas PDF report NAV for mF-ONE, msyrupUSDp.
+
+    Caches parsed results on disk as .json alongside the PDF to avoid
+    re-downloading and re-OCRing on subsequent runs.
+    """
     import os
     import re
+    import glob
+    from datetime import date
+
+    from evm import CONFIG_DIR
+    import json as _json
+
+    local_path = feed_cfg.get("local_report_path", "docs/reference/midas")
+    filename_pattern = feed_cfg["filename_pattern"]
+
+    if not os.path.isabs(local_path):
+        local_path = os.path.join(os.path.dirname(__file__), "..", "..", local_path)
+
+    # Check for cached parsed result from the latest local PDF
+    # Filename pattern has {date} placeholder — glob for all matching PDFs
+    glob_pattern = filename_pattern.replace("{date}", "*")
+    local_pdfs = sorted(glob.glob(os.path.join(local_path, glob_pattern)), reverse=True)
+
+    if local_pdfs:
+        latest_local = local_pdfs[0]
+        cache_path = latest_local + ".cache.json"
+
+        # If cache exists, use it (fast path — no Drive, no OCR)
+        if os.path.exists(cache_path):
+            with open(cache_path) as f:
+                cached = _json.load(f)
+            logger.info("issuer_nav.midas_pdf: using cached result from %s", os.path.basename(cache_path))
+            return _make_result(
+                Decimal(cached["price"]),
+                f"issuer_nav_midas_pdf ({os.path.basename(latest_local)})",
+                notes=f"Total assets=${cached['total_assets']}, issued={cached['issued_tokens']} (cached)",
+            )
+
+    # No cache — need to check Drive for latest, download if new, OCR and parse
     import fitz
     import pytesseract
     from PIL import Image
     from google.auth.transport.requests import Request as AuthRequest
     from google.oauth2 import service_account
     import requests
-    from datetime import date, timedelta
+    from datetime import timedelta
 
-    from evm import CONFIG_DIR
-    import json
-
-    # Load verification config for tools and Drive credentials
     with open(os.path.join(CONFIG_DIR, "verification.json")) as f:
-        ver_cfg = json.load(f)
+        ver_cfg = _json.load(f)
 
     tesseract_cmd = ver_cfg.get("_tools", {}).get("tesseract_cmd", "")
     if not tesseract_cmd or not os.path.exists(tesseract_cmd):
@@ -127,10 +160,6 @@ def _midas_pdf_nav(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
     headers = {"Authorization": f"Bearer {creds.token}"}
 
     folder_id = feed_cfg["gdrive_folder_id"]
-    filename_pattern = feed_cfg["filename_pattern"]
-    local_path = feed_cfg.get("local_report_path", "docs/reference/midas")
-
-    # Navigate to current or previous month folder
     today = date.today()
     base_url = "https://www.googleapis.com/drive/v3/files"
     common = {"supportsAllDrives": "true", "includeItemsFromAllDrives": "true"}
@@ -160,7 +189,6 @@ def _midas_pdf_nav(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
     if not month_folder_id:
         raise ValueError("Cannot find month folder in Drive")
 
-    # Find latest PDF
     r = requests.get(base_url, params={**common, "q": f"'{month_folder_id}' in parents and mimeType='application/pdf'",
                      "fields": "files(id,name)", "orderBy": "name desc", "pageSize": "1"}, headers=headers, timeout=15)
     files = r.json().get("files", [])
@@ -168,16 +196,19 @@ def _midas_pdf_nav(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
         raise ValueError("No PDFs in month folder")
 
     latest = files[0]
-    pdf_bytes = requests.get(f"{base_url}/{latest['id']}?alt=media", headers=headers, timeout=30).content
-
-    # Save for audit trail
-    if not os.path.isabs(local_path):
-        local_path = os.path.join(os.path.dirname(__file__), "..", "..", local_path)
     os.makedirs(local_path, exist_ok=True)
     filepath = os.path.join(local_path, latest["name"])
-    if not os.path.exists(filepath):
+
+    # Download only if not already on disk
+    if os.path.exists(filepath):
+        with open(filepath, "rb") as f:
+            pdf_bytes = f.read()
+        logger.info("issuer_nav.midas_pdf: using local %s", latest["name"])
+    else:
+        pdf_bytes = requests.get(f"{base_url}/{latest['id']}?alt=media", headers=headers, timeout=30).content
         with open(filepath, "wb") as f:
             f.write(pdf_bytes)
+        logger.info("issuer_nav.midas_pdf: downloaded %s", latest["name"])
 
     # OCR
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -209,6 +240,12 @@ def _midas_pdf_nav(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
 
     logger.info("issuer_nav.midas_pdf: %s price=$%s assets=$%s issued=%s",
                 latest["name"], price, total_assets, issued_tokens)
+
+    # Cache parsed result for fast path on next run
+    cache_path = filepath + ".cache.json"
+    with open(cache_path, "w") as f:
+        _json.dump({"price": str(price), "total_assets": str(total_assets),
+                     "issued_tokens": str(issued_tokens), "filename": latest["name"]}, f)
 
     return _make_result(price, f"issuer_nav_midas_pdf ({latest['name']})",
                         notes=f"Total assets=${total_assets}, issued={issued_tokens}")

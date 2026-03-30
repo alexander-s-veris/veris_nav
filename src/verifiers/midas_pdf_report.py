@@ -298,43 +298,80 @@ def verify(config: dict, primary_price: Decimal, api_base: str) -> dict:
     local_path = config.get("local_report_path", "docs/reference/midas")
     max_age_days = config.get("max_report_age_days", 10)
 
-    # 1. Authenticate with Google Drive
-    creds = _get_drive_credentials(api_base)
+    # Resolve local path
+    if not os.path.isabs(local_path):
+        local_path = os.path.join(os.path.dirname(__file__), "..", "..", local_path)
 
-    # 2. Navigate to current month folder and find latest PDF.
-    #    If no PDFs in current month (e.g. April 1st, latest report still
-    #    in March folder), fall back to previous month.
-    today = date.today()
-    files = []
-    for month_offset in (0, 1):
-        try:
-            target = today.replace(day=1)
-            if month_offset:
-                # Previous month
-                target = (target - timedelta(days=1)).replace(day=1)
-            month_folder_id = _find_month_folder(creds, folder_id, target)
-            files = _list_pdfs(creds, month_folder_id)
-            if files:
-                break
-        except ValueError:
-            continue
+    # Fast path: check for cached parsed result from latest local PDF
+    import glob as _glob
+    import json as _json
+    glob_pattern = filename_pattern.replace("{date}", "*")
+    local_pdfs = sorted(_glob.glob(os.path.join(local_path, glob_pattern)), reverse=True)
+    cached_result = None
 
-    if not files:
-        raise ValueError(f"No PDFs found in Drive folder for {today.strftime('%Y-%m')} or previous month")
+    if local_pdfs:
+        latest_local = local_pdfs[0]
+        cache_path = latest_local + ".cache.json"
+        if os.path.exists(cache_path):
+            with open(cache_path) as f:
+                cached_result = _json.load(f)
+            # Extract report_date from filename
+            import re as _re
+            date_regex = filename_pattern.replace("{date}", r"(?P<date>\d{8})")
+            m = _re.search(date_regex, os.path.basename(latest_local))
+            report_date = datetime.strptime(m.group("date"), "%Y%m%d").date() if m else date.today()
+            logger.info("Using cached PDF result: %s", os.path.basename(latest_local))
 
-    latest_file, report_date = _find_latest_report(files, filename_pattern)
-    logger.info("Latest report: %s (date: %s)", latest_file["name"], report_date)
+    if cached_result:
+        total_assets = Decimal(cached_result["total_assets"])
+        issued_tokens = Decimal(cached_result["issued_tokens"])
+        report_filename = cached_result.get("filename", os.path.basename(latest_local))
+    else:
+        # Full path: Drive download + OCR
+        # 1. Authenticate with Google Drive
+        creds = _get_drive_credentials(api_base)
 
-    # 3. Download and save for audit trail
-    pdf_bytes = _download_pdf(creds, latest_file["id"])
-    _save_report(pdf_bytes, local_path, latest_file["name"])
+        # 2. Navigate to current month folder and find latest PDF.
+        today = date.today()
+        files = []
+        for month_offset in (0, 1):
+            try:
+                target = today.replace(day=1)
+                if month_offset:
+                    target = (target - timedelta(days=1)).replace(day=1)
+                month_folder_id = _find_month_folder(creds, folder_id, target)
+                files = _list_pdfs(creds, month_folder_id)
+                if files:
+                    break
+            except ValueError:
+                continue
 
-    # 4. OCR and parse
-    text = _ocr_pdf(pdf_bytes, tesseract_cmd)
-    parsed = _parse_report(text)
+        if not files:
+            raise ValueError(f"No PDFs found in Drive folder for {date.today().strftime('%Y-%m')} or previous month")
 
-    total_assets = parsed["total_assets"]
-    issued_tokens = parsed["issued_tokens"]
+        latest_file, report_date = _find_latest_report(files, filename_pattern)
+        logger.info("Latest report: %s (date: %s)", latest_file["name"], report_date)
+
+        # 3. Download and save for audit trail
+        pdf_bytes = _download_pdf(creds, latest_file["id"])
+        _save_report(pdf_bytes, local_path, latest_file["name"])
+
+        # 4. OCR and parse
+        text = _ocr_pdf(pdf_bytes, tesseract_cmd)
+        parsed = _parse_report(text)
+
+        total_assets = parsed["total_assets"]
+        issued_tokens = parsed["issued_tokens"]
+        report_filename = latest_file["name"]
+
+        # Cache parsed result
+        filepath = os.path.join(local_path, report_filename)
+        cache_path = filepath + ".cache.json"
+        with open(cache_path, "w") as f:
+            _json.dump({"price": str(total_assets / issued_tokens),
+                         "total_assets": str(total_assets),
+                         "issued_tokens": str(issued_tokens),
+                         "filename": report_filename}, f)
 
     # 5. Compute verified price
     verified_price = total_assets / issued_tokens
@@ -346,6 +383,7 @@ def verify(config: dict, primary_price: Decimal, api_base: str) -> dict:
         divergence_pct = Decimal(0)
 
     # 7. Staleness check
+    today = date.today()
     report_age_days = (today - report_date).days
     stale_flag = ""
     if report_age_days > max_age_days:
@@ -366,9 +404,9 @@ def verify(config: dict, primary_price: Decimal, api_base: str) -> dict:
         "details": {
             "total_nav_usd": str(total_assets),
             "total_supply": str(issued_tokens),
-            "report_price": str(parsed.get("report_price", "")),
+            "report_price": str(verified_price),
             "report_date": str(report_date),
-            "report_filename": latest_file["name"],
+            "report_filename": report_filename,
             "report_age_days": report_age_days,
             "computed_price": str(verified_price),
         },

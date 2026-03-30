@@ -119,10 +119,9 @@ def run_asset_verifications(positions: list[dict]) -> list[dict]:
         return []
 
     tolerances = _load_divergence_tolerances()
-    results = []
 
-    # Build lookup: token_symbol -> first matching position
-    # (verification is per-token, not per-position — one check per unique token)
+    # Collect verification tasks (one per unique token with verification config)
+    tasks = []
     verified_symbols = set()
 
     for pos in positions:
@@ -148,12 +147,31 @@ def run_asset_verifications(positions: list[dict]) -> list[dict]:
             logger.info("Skipping verification for %s — no primary price", symbol)
             continue
 
-        try:
-            api_base = _get_api_base(reg["api_provider"])
-            result = reg["fn"](entry, primary_price, api_base)
+        api_base = _get_api_base(reg["api_provider"])
+        tasks.append({
+            "symbol": symbol,
+            "entry": entry,
+            "vtype": vtype,
+            "fn": reg["fn"],
+            "api_base": api_base,
+            "primary_price": primary_price,
+            "category": pos.get("category", ""),
+            "chain": pos.get("chain", ""),
+        })
+        verified_symbols.add(symbol)
 
-            # Compute divergence flag against category tolerance
-            category = pos.get("category", "")
+    if not tasks:
+        return []
+
+    # Run all verifications concurrently
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _run_verification(task):
+        symbol = task["symbol"]
+        try:
+            result = task["fn"](task["entry"], task["primary_price"], task["api_base"])
+
+            category = task["category"]
             threshold = Decimal(str(tolerances.get(category, 10.0)))
             divergence = result.get("divergence_pct", Decimal(0))
 
@@ -165,34 +183,35 @@ def run_asset_verifications(positions: list[dict]) -> list[dict]:
             else:
                 result["divergence_flag"] = ""
 
-            # Enrich with position context
             result["token_symbol"] = symbol
-            result["chain"] = pos.get("chain", "")
+            result["chain"] = task["chain"]
             result["category"] = category
-            result["primary_price_usd"] = primary_price
+            result["primary_price_usd"] = task["primary_price"]
             result["threshold_pct"] = threshold
 
-            results.append(result)
-            verified_symbols.add(symbol)
-
-            flag = result["divergence_flag"]
             logger.info(
                 "Verification %s: primary=%.6f verified=%.6f divergence=%.2f%% %s",
-                symbol, primary_price, result.get("verified_price_usd", 0),
-                divergence, flag or "OK",
+                symbol, task["primary_price"], result.get("verified_price_usd", 0),
+                divergence, result["divergence_flag"] or "OK",
             )
+            return result
 
         except Exception as e:
-            logger.error("Verification failed for %s (%s): %s", symbol, vtype, e)
-            results.append({
+            logger.error("Verification failed for %s (%s): %s", symbol, task["vtype"], e)
+            return {
                 "token_symbol": symbol,
-                "chain": pos.get("chain", ""),
-                "category": pos.get("category", ""),
-                "primary_price_usd": primary_price,
-                "source": vtype,
+                "chain": task["chain"],
+                "category": task["category"],
+                "primary_price_usd": task["primary_price"],
+                "source": task["vtype"],
                 "error": str(e),
                 "divergence_flag": f"VERIFICATION_ERROR: {e}",
-            })
-            verified_symbols.add(symbol)
+            }
+
+    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = {executor.submit(_run_verification, t): t for t in tasks}
+        results = []
+        for future in as_completed(futures):
+            results.append(future.result())
 
     return results

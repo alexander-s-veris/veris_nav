@@ -22,7 +22,7 @@ from evm import TS_FMT
 SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 
 # Rate limit delay between Solana RPC calls (seconds)
-SOLANA_RPC_RATE_LIMIT_SECONDS = 0.3
+SOLANA_RPC_RATE_LIMIT_SECONDS = 0.1
 
 # --- Config loader for solana_protocols.json ---
 _SOLANA_CFG = None

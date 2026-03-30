@@ -164,6 +164,8 @@
         "nft_ids": [142965],
         "pool_label": "Uniswap V4 USDC/DUSD",
         "pool_fee": "0.01%",
+        "token0": {"symbol": "DUSD", "decimals": 18, "address": "0x1e33E98aF620F1D563fcD3cfd3C75acE841204ef"},
+        "token1": {"symbol": "USDC", "decimals": 6, "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},
         "description": "Uniswap V4 Position Manager -- NFT #142965 held by 0xa33e"
       }
     }
