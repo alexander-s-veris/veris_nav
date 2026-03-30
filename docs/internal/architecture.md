@@ -113,6 +113,8 @@ Pricing configuration is split into three files, each owning one concern:
 
 `valuation.py` routes all pricing through `pricing.get_price()` -- including par-priced stablecoins, which must pass through the depeg check (Policy Section 9.4). Price results carry `depeg_flag`, `depeg_deviation_pct`, `stale_flag`, and `staleness_hours` which are propagated to every position dict via `_apply_price_result()`.
 
+**Chain-agnostic pricing rule**: The same token on different chains must have identical pricing config (same feeds, same hierarchy). Oracles are cross-chain — a Chainlink feed on Ethereum prices USDT on all chains. When adding a token that already exists on another chain, copy the pricing config from the existing entry. The only acceptable difference is a chain-specific DEX TWAP fallback (last resort, only where a liquid pool exists). The price cache is keyed by `(symbol, policy, first_feed)`, ensuring one price per symbol regardless of chain.
+
 ---
 
 ## Verification Architecture (Section 7)
