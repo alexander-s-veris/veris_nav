@@ -374,13 +374,18 @@ def main():
     print("\n--- Step 3: Deduplication ---")
 
     # Protocol positions override wallet token balances — except position types
-    # where the token_contract doesn't represent a wallet-held balance
-    _NO_DEDUP_TYPES = {"lp_constituent", "collateral", "debt", "reward"}
+    # where the token_contract doesn't represent a wallet-held balance.
+    # Aave aTokens/debt tokens ARE wallet balances (same balanceOf), so they dedup.
+    # Morpho/Kamino lock tokens inside the protocol, so they must NOT dedup.
+    _NO_DEDUP_TYPES = {"lp_constituent", "reward"}
+    _NO_DEDUP_PROTOCOLS = {"morpho", "kamino"}
     protocol_tokens = set()
     for pos in protocol_rows:
         if pos.get("status") == "CLOSED":
             continue
         if pos.get("position_type") in _NO_DEDUP_TYPES:
+            continue
+        if pos.get("position_type") in ("collateral", "debt") and pos.get("protocol") in _NO_DEDUP_PROTOCOLS:
             continue
         contract = pos.get("token_contract", "").lower()
         if contract:

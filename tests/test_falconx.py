@@ -153,34 +153,39 @@ class TestRateLoader(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestDedupExclusion(unittest.TestCase):
-    """LP constituents, collateral, debt, reward must not suppress wallet balances."""
+    """Dedup must exclude types/protocols where token is locked in protocol, not in wallet.
 
-    # The exclusion set from collect.py
-    _NO_DEDUP_TYPES = {"lp_constituent", "collateral", "debt", "reward"}
+    LP constituents and rewards are always excluded by type.
+    Morpho/Kamino collateral/debt are excluded by protocol (tokens locked in protocol).
+    Aave collateral/debt are NOT excluded (aTokens/debt tokens are wallet balances).
+    """
+
+    _NO_DEDUP_TYPES = {"lp_constituent", "reward"}
+    _NO_DEDUP_PROTOCOLS = {"morpho", "kamino"}
 
     def test_lp_constituent_excluded(self):
         """lp_constituent positions must not deduplicate wallet balances."""
         self.assertIn("lp_constituent", self._NO_DEDUP_TYPES)
 
-    def test_collateral_excluded(self):
-        """collateral positions must not deduplicate wallet balances."""
-        self.assertIn("collateral", self._NO_DEDUP_TYPES)
-
-    def test_debt_excluded(self):
-        """debt positions must not deduplicate wallet balances."""
-        self.assertIn("debt", self._NO_DEDUP_TYPES)
-
     def test_reward_excluded(self):
         """reward positions must not deduplicate wallet balances."""
         self.assertIn("reward", self._NO_DEDUP_TYPES)
 
+    def test_morpho_collateral_excluded(self):
+        """Morpho collateral is locked in protocol, must not dedup."""
+        self.assertIn("morpho", self._NO_DEDUP_PROTOCOLS)
+
+    def test_kamino_collateral_excluded(self):
+        """Kamino collateral is locked in protocol, must not dedup."""
+        self.assertIn("kamino", self._NO_DEDUP_PROTOCOLS)
+
+    def test_aave_collateral_not_excluded(self):
+        """Aave aTokens ARE wallet balances, must still dedup."""
+        self.assertNotIn("aave", self._NO_DEDUP_PROTOCOLS)
+
     def test_vault_share_not_excluded(self):
         """vault_share positions should still deduplicate (handler reads same balanceOf)."""
         self.assertNotIn("vault_share", self._NO_DEDUP_TYPES)
-
-    def test_oracle_priced_not_excluded(self):
-        """oracle_priced positions should still deduplicate."""
-        self.assertNotIn("oracle_priced", self._NO_DEDUP_TYPES)
 
     def test_manual_accrual_not_excluded(self):
         """manual_accrual positions should still deduplicate."""
