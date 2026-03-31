@@ -31,8 +31,8 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     erc20_abi = _get_abi("erc20")
 
     vault = w3.eth.contract(address=Web3.to_checksum_address(GAUNTLET_VAULT), abi=erc20_abi)
-    veris_shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
-    total_supply = vault.functions.totalSupply().call()
+    veris_shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
+    total_supply = vault.functions.totalSupply().call(block_identifier=block_number)
     logger.info("gauntlet.balanceOf(%s, %s) block=%s → shares=%s, totalSupply=%s",
                  GAUNTLET_VAULT, wallet, block_number, veris_shares, total_supply)
     if veris_shares == 0:
@@ -174,7 +174,7 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
 
     token = w3.eth.contract(
         address=Web3.to_checksum_address(AA_TRANCHE), abi=erc20_abi)
-    balance = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+    balance = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
     logger.info("falconx_direct.balanceOf(%s, %s) block=%s → %s", AA_TRANCHE, wallet, block_number, balance)
     if balance == 0:
         return []

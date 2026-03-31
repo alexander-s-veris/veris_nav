@@ -27,7 +27,7 @@ def query_ethena_cooldowns(w3, chain, wallet, block_number, block_ts):
     susde = w3.eth.contract(address=Web3.to_checksum_address(susde_addr), abi=_get_abi("ethena_cooldown"))
 
     try:
-        result = susde.functions.cooldowns(Web3.to_checksum_address(wallet)).call()
+        result = susde.functions.cooldowns(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
         cooldown_end, underlying = result
         logger.info("ethena.cooldowns(%s, %s) block=%s → end=%s, amount=%s",
                      susde_addr, wallet, block_number, cooldown_end, underlying)

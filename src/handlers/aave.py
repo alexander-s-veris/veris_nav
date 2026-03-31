@@ -41,7 +41,7 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
         token = w3.eth.contract(
             address=Web3.to_checksum_address(aentry["address"]), abi=erc20_abi)
         try:
-            bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+            bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
             logger.info("aave.balanceOf(%s, %s) block=%s → %s", aentry["address"], wallet, block_number, bal)
         except Exception:
             continue
@@ -52,7 +52,7 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
         decimals = aentry.get("decimals")
         if decimals is None:
             try:
-                decimals = token.functions.decimals().call()
+                decimals = token.functions.decimals().call(block_identifier=block_number)
                 logger.info("aave.decimals(%s) → %s (on-chain)", aentry["address"], decimals)
             except Exception:
                 raise ValueError(f"No decimals in config or on-chain for aToken {akey} at {aentry['address']}")
@@ -77,7 +77,7 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
         token = w3.eth.contract(
             address=Web3.to_checksum_address(dentry["address"]), abi=erc20_abi)
         try:
-            bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+            bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
             logger.info("aave.balanceOf(%s, %s) block=%s → %s", dentry["address"], wallet, block_number, bal)
         except Exception:
             continue
@@ -88,7 +88,7 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
         decimals = dentry.get("decimals")
         if decimals is None:
             try:
-                decimals = token.functions.decimals().call()
+                decimals = token.functions.decimals().call(block_identifier=block_number)
                 logger.info("aave.decimals(%s) → %s (on-chain)", dentry["address"], decimals)
             except Exception:
                 raise ValueError(f"No decimals in config or on-chain for debt token {dkey} at {dentry['address']}")

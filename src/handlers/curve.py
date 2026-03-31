@@ -65,12 +65,12 @@ def query_curve_lp(w3, chain, wallet, block_number, block_ts):
             address=Web3.to_checksum_address(pool_addr), abi=_POOL_ABI)
 
         # Check if wallet holds LP tokens
-        lp_balance = pool.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+        lp_balance = pool.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
         if lp_balance == 0:
             continue
 
-        lp_decimals = pool.functions.decimals().call()
-        total_supply = pool.functions.totalSupply().call()
+        lp_decimals = pool.functions.decimals().call(block_identifier=block_number)
+        total_supply = pool.functions.totalSupply().call(block_identifier=block_number)
         lp_balance_human = Decimal(str(lp_balance)) / Decimal(10**lp_decimals)
         share = Decimal(str(lp_balance)) / Decimal(str(total_supply))
 
@@ -94,16 +94,16 @@ def query_curve_lp(w3, chain, wallet, block_number, block_ts):
         # Enumerate coins in the pool
         for i in range(8):  # Curve pools have at most 8 coins
             try:
-                coin_addr = pool.functions.coins(i).call()
-                coin_balance = pool.functions.balances(i).call()
+                coin_addr = pool.functions.coins(i).call(block_identifier=block_number)
+                coin_balance = pool.functions.balances(i).call(block_identifier=block_number)
             except Exception:
                 break
 
             # Get coin metadata
             coin = w3.eth.contract(address=coin_addr, abi=_ERC20_ABI)
             try:
-                coin_decimals = coin.functions.decimals().call()
-                coin_symbol = coin.functions.symbol().call()
+                coin_decimals = coin.functions.decimals().call(block_identifier=block_number)
+                coin_symbol = coin.functions.symbol().call(block_identifier=block_number)
             except Exception:
                 coin_decimals = 18
                 coin_symbol = f"coin{i}"

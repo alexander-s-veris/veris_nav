@@ -36,7 +36,7 @@ def query_midas_positions(w3, chain, wallet, block_number, block_ts):
         token = w3.eth.contract(
             address=Web3.to_checksum_address(entry["address"]), abi=erc20_abi)
         try:
-            bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+            bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
             logger.info("midas.balanceOf(%s, %s) block=%s → %s", entry["address"], wallet, block_number, bal)
         except Exception:
             continue

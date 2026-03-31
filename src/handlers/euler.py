@@ -43,21 +43,21 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
         for sub_id in [0, 1] + list(range(2, 32)):
             sub_addr = Web3.to_checksum_address(hex(wallet_int ^ sub_id))
             try:
-                shares = vault.functions.balanceOf(sub_addr).call()
+                shares = vault.functions.balanceOf(sub_addr).call(block_identifier=block_number)
             except Exception:
                 continue
 
             if shares > 0:
-                assets = vault.functions.convertToAssets(shares).call()
-                share_dec = vault.functions.decimals().call()
+                assets = vault.functions.convertToAssets(shares).call(block_identifier=block_number)
+                share_dec = vault.functions.decimals().call(block_identifier=block_number)
                 logger.info("euler.balanceOf(%s, sub=%s/id=%d) block=%s → shares=%s, assets=%s",
                              vault_addr, sub_addr, sub_id, block_number, shares, assets)
                 try:
-                    asset_addr = vault.functions.asset().call()
+                    asset_addr = vault.functions.asset().call(block_identifier=block_number)
                     u_contract = w3.eth.contract(
                         address=Web3.to_checksum_address(asset_addr),
                         abi=_get_abi("erc20"))
-                    u_dec = u_contract.functions.decimals().call()
+                    u_dec = u_contract.functions.decimals().call(block_identifier=block_number)
                 except Exception:
                     u_dec = share_dec
 

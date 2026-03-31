@@ -106,7 +106,7 @@ def query_uniswap_v4(w3, chain, wallet, block_number, block_ts):
     rows = []
     for nft_id in nft_ids:
         try:
-            owner = pm.functions.ownerOf(nft_id).call()
+            owner = pm.functions.ownerOf(nft_id).call(block_identifier=block_number)
             logger.info("uniswap.ownerOf(%s, nft=%s) block=%s → %s",
                         PM[:10], nft_id, block_number, owner)
         except Exception:
@@ -115,13 +115,13 @@ def query_uniswap_v4(w3, chain, wallet, block_number, block_ts):
         if owner.lower() != wallet.lower():
             continue
 
-        liquidity = pm.functions.getPositionLiquidity(nft_id).call()
+        liquidity = pm.functions.getPositionLiquidity(nft_id).call(block_identifier=block_number)
         logger.info("uniswap.getPositionLiquidity(nft=%s) → %s", nft_id, liquidity)
         if liquidity == 0:
             continue
 
         # Get tick range from positionInfo
-        info_raw = pm.functions.positionInfo(nft_id).call()
+        info_raw = pm.functions.positionInfo(nft_id).call(block_identifier=block_number)
         pos_info = _decode_position_info(info_raw)
         tick_lower = pos_info["tick_lower"]
         tick_upper = pos_info["tick_upper"]

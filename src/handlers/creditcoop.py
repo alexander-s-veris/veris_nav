@@ -40,12 +40,12 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
     vault = w3.eth.contract(
         address=Web3.to_checksum_address(VAULT), abi=erc4626_abi)
 
-    shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+    shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
     logger.info("creditcoop.balanceOf(%s, %s) block=%s → %s", VAULT, wallet, block_number, shares)
     if shares == 0:
         return []
 
-    assets = vault.functions.convertToAssets(shares).call()
+    assets = vault.functions.convertToAssets(shares).call(block_identifier=block_number)
     logger.info("creditcoop.convertToAssets(%s, shares=%s) block=%s → %s", VAULT, shares, block_number, assets)
     shares_human = _fmt(shares, vault_decimals)
     assets_human = _fmt(assets, underlying_decimals)
@@ -72,7 +72,7 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
         credit = w3.eth.contract(
             address=Web3.to_checksum_address(CREDIT_STRATEGY),
             abi=_get_abi("credit_coop_credit_strategy"))
-        rain_amount = _fmt(credit.functions.totalActiveCredit().call(), underlying_decimals)
+        rain_amount = _fmt(credit.functions.totalActiveCredit().call(block_identifier=block_number), underlying_decimals)
         logger.info("creditcoop.totalActiveCredit(%s) block=%s → %s", CREDIT_STRATEGY, block_number, rain_amount)
 
         # Gauntlet USDC Core — actual amount deployed via LiquidStrategy
@@ -80,22 +80,22 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
         if GAUNTLET_CORE and LIQUID_STRATEGY:
             gauntlet = w3.eth.contract(
                 address=Web3.to_checksum_address(GAUNTLET_CORE), abi=erc4626_abi)
-            liq_shares = gauntlet.functions.balanceOf(Web3.to_checksum_address(LIQUID_STRATEGY)).call()
+            liq_shares = gauntlet.functions.balanceOf(Web3.to_checksum_address(LIQUID_STRATEGY)).call(block_identifier=block_number)
             if liq_shares > 0:
-                gauntlet_deployed = _fmt(gauntlet.functions.convertToAssets(liq_shares).call(), underlying_decimals)
+                gauntlet_deployed = _fmt(gauntlet.functions.convertToAssets(liq_shares).call(block_identifier=block_number), underlying_decimals)
             logger.info("creditcoop.gauntlet_deployed(%s) block=%s → %s", GAUNTLET_CORE[:10], block_number, gauntlet_deployed)
 
         # Credit strategy cash (USDC idle in credit strategy contract)
         usdc = w3.eth.contract(
             address=Web3.to_checksum_address(USDC), abi=erc20_abi)
-        credit_cash = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(CREDIT_STRATEGY)).call(), underlying_decimals)
+        credit_cash = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(CREDIT_STRATEGY)).call(block_identifier=block_number), underlying_decimals)
 
         # Vault cash = USDC in vault contract + LiquidStrategy idle (totalAssets - gauntlet deployed)
-        vault_usdc = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(VAULT)).call(), underlying_decimals)
+        vault_usdc = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(VAULT)).call(block_identifier=block_number), underlying_decimals)
         liquid = w3.eth.contract(
             address=Web3.to_checksum_address(LIQUID_STRATEGY),
             abi=_get_abi("credit_coop_liquid_strategy"))
-        liquid_total = _fmt(liquid.functions.totalAssets().call(), underlying_decimals)
+        liquid_total = _fmt(liquid.functions.totalAssets().call(block_identifier=block_number), underlying_decimals)
         vault_cash = vault_usdc + (liquid_total - gauntlet_deployed)
 
         rows[0]["_breakdown"] = {

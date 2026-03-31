@@ -42,7 +42,7 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
             address=Web3.to_checksum_address(vault_addr), abi=_get_abi(abi_name))
 
         try:
-            shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
+            shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
             logger.info("erc4626.balanceOf(%s, %s) block=%s → %s", vault_addr, wallet, block_number, shares)
         except Exception:
             continue
@@ -51,17 +51,17 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
             continue
 
         try:
-            assets = vault.functions.convertToAssets(shares).call()
-            share_decimals = vault.functions.decimals().call()
+            assets = vault.functions.convertToAssets(shares).call(block_identifier=block_number)
+            share_decimals = vault.functions.decimals().call(block_identifier=block_number)
             logger.info("erc4626.convertToAssets(%s, shares=%s) block=%s → assets=%s, decimals=%s",
                          vault_addr, shares, block_number, assets, share_decimals)
             # Underlying may have different decimals (e.g. vault=18dec, USDC=6dec)
             try:
-                asset_addr = vault.functions.asset().call()
+                asset_addr = vault.functions.asset().call(block_identifier=block_number)
                 underlying_contract = w3.eth.contract(
                     address=Web3.to_checksum_address(asset_addr),
                     abi=_get_abi("erc20"))
-                underlying_decimals = underlying_contract.functions.decimals().call()
+                underlying_decimals = underlying_contract.functions.decimals().call(block_identifier=block_number)
             except Exception:
                 underlying_decimals = share_decimals
         except Exception:

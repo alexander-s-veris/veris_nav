@@ -35,7 +35,7 @@ def query_morpho_markets(w3, chain, wallet, block_number, block_ts):
         is_closed = "_note" in mkt and "Closed" in mkt.get("_note", "")
 
         pos = morpho.functions.position(
-            market_id, Web3.to_checksum_address(wallet)).call()
+            market_id, Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
         supply_shares, borrow_shares, collateral = pos
         logger.info("morpho.position(%s, %s) block=%s → supply_shares=%s, borrow_shares=%s, collateral=%s",
                      morpho_addr, wallet, block_number, supply_shares, borrow_shares, collateral)
@@ -51,7 +51,7 @@ def query_morpho_markets(w3, chain, wallet, block_number, block_ts):
             continue
 
         # Get market state for shares -> assets conversion
-        mkt_state = morpho.functions.market(market_id).call()
+        mkt_state = morpho.functions.market(market_id).call(block_identifier=block_number)
         logger.info("morpho.market(%s) block=%s → state=%s", mkt["market_id"], block_number, mkt_state)
         total_borrow_assets, total_borrow_shares = mkt_state[2], mkt_state[3]
         borrow_assets = (
