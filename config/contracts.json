@@ -202,6 +202,20 @@
         "display_name": "Euler esyrupUSDC",
         "underlying_symbol": "syrupUSDC",
         "description": "Euler V2 esyrupUSDC-1. Sub-accounts: balanceOf(wallet XOR i) for i=0..255."
+      },
+      "underlying_vault": {
+        "address": "0x6302ef0f34100cddfb5489fbcb6ee1aa95cd1066",
+        "_note": "Euler V2 underlying vault on Arbitrum. DeBank uses this as pool.controller."
+      }
+    },
+    "_morpho_vaults": {
+      "_query_type": "erc4626",
+      "arb_vault_0x4b6f": {
+        "address": "0x4b6f1c9e5d470b97181786b26da0d0945a7cf027",
+        "abi": "erc4626",
+        "display_name": "Morpho Hyperithm USDC",
+        "underlying_symbol": "USDC",
+        "_note": "Morpho vault on Arbitrum held by 0xd5086229 ARMA proxy. Dust position."
       }
     }
   },

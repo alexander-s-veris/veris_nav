@@ -72,6 +72,11 @@
           "morpho": true,
           "euler": true
         }
+      },
+      "0xd5086229c2fdea72f8c3292cfafbae7337126c9b": {
+        "protocols": {
+          "_morpho_vaults": true
+        }
       }
     },
     "base": {
@@ -130,6 +135,14 @@
       "chain": "arbitrum",
       "description": "ARMA (Giza) smart account proxy",
       "parent_wallet": "0xaca2ef22f720ae3f622b9ce3065848c4333687ae",
+      "proxy_type": "erc4337_smart_account",
+      "implementation": "0x17bac39f916c21ac825aed89607fdba251dce97d"
+    },
+    {
+      "address": "0x0c58d9711711af76c5c05ca21fafef66434c3818",
+      "chain": "arbitrum",
+      "description": "ARMA (Giza) smart account proxy",
+      "parent_wallet": "0x80559941c1a741bc435cb6782b6f161d5772ac4b",
       "proxy_type": "erc4337_smart_account",
       "implementation": "0x17bac39f916c21ac825aed89607fdba251dce97d"
     }

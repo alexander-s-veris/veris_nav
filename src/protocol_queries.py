@@ -184,6 +184,7 @@ def _get_wallet_protocols(chain, wallet):
 PROTOCOL_TO_HANDLER = {
     "morpho":           "morpho_leverage",
     "erc4626_vaults":   "erc4626",
+    "_morpho_vaults":   "erc4626",
     "euler":            "euler_erc4626",
     "aave":             "aave_leverage",
     "midas":            "midas_oracle",
