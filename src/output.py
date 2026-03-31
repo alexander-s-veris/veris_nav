@@ -30,6 +30,107 @@ def sanitize_label(text):
     return text.strip()
 
 
+# --- Display name formatting for output ---
+
+_CHAIN_DISPLAY = {
+    "ethereum": "Ethereum",
+    "arbitrum": "Arbitrum",
+    "base": "Base",
+    "avalanche": "Avalanche",
+    "plasma": "Plasma",
+    "hyperevm": "HyperEVM",
+    "katana": "Katana",
+    "solana": "Solana",
+}
+
+_PROTOCOL_DISPLAY = {
+    "aave": "Aave",
+    "credit_coop": "Credit Coop",
+    "ethena": "Ethena.fi",
+    "euler": "Euler",
+    "exponent": "Exponent Finance",
+    "kamino": "Kamino",
+    "midas": "Midas",
+    "morpho": "Morpho (Markets)",
+    "uniswap_v4": "Uniswap V4",
+    "curve": "Curve",
+}
+
+
+def _format_chain(chain):
+    """Format chain name for display output."""
+    return _CHAIN_DISPLAY.get(chain, chain.capitalize() if chain else "")
+
+
+def _format_protocol(protocol, position_label=""):
+    """Format protocol name for display output.
+
+    Uses position_label for context-dependent formatting (e.g., Gauntlet vs Pareto).
+    """
+    if not protocol:
+        return "Wallet Balance"
+
+    # Morpho vaults (various section keys like morpho_vaults, morpho_vaults_0xec0b)
+    if protocol.startswith("morpho_vaults"):
+        return "Morpho (Vaults)"
+
+    # Gauntlet/Pareto — distinguished by position label
+    if protocol == "gauntlet_pareto":
+        if "Direct" in position_label or "AA_FalconXUSDC" in position_label:
+            return "Pareto"
+        return "Gauntlet Vaults"
+
+    # Wallet balances
+    if protocol == "wallet":
+        return "Wallet Balance"
+
+    # ARMA proxy balances
+    if protocol == "arma":
+        return "ARMA"
+
+    # Yearn
+    if protocol == "yearn":
+        return "yearn.fi"
+
+    # Avantis
+    if protocol == "avantis":
+        return "Avantis"
+
+    # PT lots
+    if protocol == "pt_lots":
+        return "PT Lots"
+
+    # Standard lookup
+    if protocol in _PROTOCOL_DISPLAY:
+        return _PROTOCOL_DISPLAY[protocol]
+
+    # Fallback: capitalize and replace underscores
+    return protocol.replace("_", " ").title()
+
+
+def _resolve_underlying(pos):
+    """Resolve the underlying token for a position.
+
+    Priority: explicit underlying_symbol > token_category lookup > token is its own underlying.
+    """
+    # Handler already set it
+    explicit = pos.get("underlying_symbol", "")
+    if explicit:
+        return explicit
+
+    pos_type = pos.get("position_type", "")
+    token_sym = pos.get("token_symbol", "")
+
+    # Wallet balances, LP constituents, collateral/debt tokens: the token IS the underlying
+    if pos_type in ("token_balance", "lp_constituent", "collateral", "debt"):
+        return token_sym
+
+    # A2 oracle-priced (Midas tokens etc.): the token is the product, not the underlying
+    # A3 manual accrual: specific to FalconX, underlying is complex
+    # These intentionally return empty — the underlying is embedded in the product
+    return ""
+
+
 class DecimalEncoder(json.JSONEncoder):
     """JSON encoder that handles Decimal types."""
     def default(self, obj):
@@ -43,7 +144,7 @@ class DecimalEncoder(json.JSONEncoder):
 # Common columns for positions.csv
 POSITION_COLUMNS = [
     "position_id", "chain", "protocol", "wallet", "position_label",
-    "category", "position_type", "token_symbol", "token_contract",
+    "category", "position_type", "token_symbol", "underlying", "token_contract",
     "balance_human", "price_usd", "price_source", "value_usd",
     "block_number", "block_timestamp_utc",
     "staleness_hours", "stale_flag",
@@ -100,16 +201,19 @@ def write_positions(positions, output_dir, run_ts_cet):
     for pos in positions:
         if pos.get("status") == "CLOSED":
             continue
+        if pos.get("position_type") == "lp_parent":
+            continue
 
         row = {
             "position_id": make_position_id(pos),
-            "chain": pos.get("chain", ""),
-            "protocol": pos.get("protocol", ""),
+            "chain": _format_chain(pos.get("chain", "")),
+            "protocol": _format_protocol(pos.get("protocol", ""), pos.get("position_label", "")),
             "wallet": pos.get("wallet", ""),
             "position_label": sanitize_label(pos.get("position_label", "")),
             "category": pos.get("category", ""),
             "position_type": pos.get("position_type", ""),
             "token_symbol": pos.get("token_symbol", ""),
+            "underlying": _resolve_underlying(pos),
             "token_contract": pos.get("token_contract", ""),
             "balance_human": str(pos.get("balance_human", "")),
             "price_usd": str(pos.get("price_usd", "")),
@@ -162,10 +266,10 @@ def write_leverage_detail(positions, output_dir):
     for pos in d_positions:
         rows.append({
             "parent_position_id": make_position_id(pos),
-            "protocol": pos.get("protocol", ""),
+            "protocol": _format_protocol(pos.get("protocol", ""), pos.get("position_label", "")),
             "market_id": pos.get("leverage_market_id", ""),
             "wallet": pos.get("wallet", ""),
-            "chain": pos.get("chain", ""),
+            "chain": _format_chain(pos.get("chain", "")),
             "side": pos.get("position_type", ""),
             "token_symbol": pos.get("token_symbol", ""),
             "token_category": pos.get("token_category", pos.get("category", "")),
@@ -234,8 +338,8 @@ def write_lp_decomposition(positions, output_dir):
         rows.append({
             "parent_position_id": make_position_id(pos),
             "lp_name": pos.get("position_label", ""),
-            "chain": pos.get("chain", ""),
-            "protocol": pos.get("protocol", ""),
+            "chain": _format_chain(pos.get("chain", "")),
+            "protocol": _format_protocol(pos.get("protocol", ""), pos.get("position_label", "")),
             "constituent_type": pos.get("lp_constituent_type", ""),
             "token_symbol": pos.get("token_symbol", ""),
             "token_category": pos.get("token_category", ""),
@@ -267,7 +371,7 @@ def write_verification(verification_results, output_dir):
         details = v.get("details", {})
         rows.append({
             "token_symbol": v.get("token_symbol", ""),
-            "chain": v.get("chain", ""),
+            "chain": _format_chain(v.get("chain", "")),
             "category": v.get("category", ""),
             "primary_price_usd": str(v.get("primary_price_usd", "")),
             "verified_price_usd": str(v.get("verified_price_usd", "")),
@@ -359,7 +463,7 @@ def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None,
         summary["valuation_blocks"] = valuation_blocks
         summary["valuation_block_note"] = (
             "All on-chain balance and position queries were made at the Valuation Block "
-            "shown above for each chain (closest to but not exceeding 15:00 UTC on the "
+            "shown above for each chain (closest to but not exceeding 16:00 CET/CEST on the "
             "Valuation Date, per Valuation Policy Section 12.1). "
             "Pricing data (oracles, CoinGecko, Kraken) was sourced at run time. "
             "For same-day NAV runs this is immaterial; for retrospective runs, "
@@ -369,7 +473,7 @@ def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None,
         summary["valuation_block_note"] = (
             "No --date flag was specified. All queries were made at the latest block "
             "at run time. For official NAV calculation, re-run with --date YYYY-MM-DD "
-            "to pin all queries to the Valuation Block (15:00 UTC)."
+            "to pin all queries to the Valuation Block (16:00 CET/CEST)."
         )
 
     # Verification results (Section 7.3)
@@ -378,7 +482,7 @@ def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None,
         for v in verification_results:
             entry = {
                 "token_symbol": v.get("token_symbol", ""),
-                "chain": v.get("chain", ""),
+                "chain": _format_chain(v.get("chain", "")),
                 "category": v.get("category", ""),
                 "source": v.get("source", ""),
                 "primary_price_usd": str(v.get("primary_price_usd", "")),

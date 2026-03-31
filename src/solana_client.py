@@ -92,10 +92,10 @@ def find_valuation_slot(target_ts: int) -> tuple[int, str]:
 
     Uses binary search on getBlockTime to converge on the right slot.
     The returned slot's timestamp is guaranteed to be <= target_ts
-    (per Valuation Policy: closest to but NOT exceeding 15:00 UTC).
+    (per Valuation Policy: closest to but NOT exceeding 16:00 CET/CEST).
 
     Args:
-        target_ts: Target unix timestamp (e.g. 15:00 UTC on valuation date).
+        target_ts: Target unix timestamp (e.g. 16:00 CET/CEST on valuation date).
 
     Returns:
         (slot_number, slot_timestamp_utc_str)

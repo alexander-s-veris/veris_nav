@@ -8,6 +8,7 @@ used across all collection and pricing scripts.
 import os
 import json
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from web3 import Web3
@@ -22,8 +23,8 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "outputs")
 # --- Formatting ---
 TS_FMT = "%d/%m/%Y %H:%M:%S"
 
-# CET is UTC+1 year-round (no daylight saving adjustment per Valuation Policy)
-CET = timezone(timedelta(hours=1))
+# Liechtenstein follows CET/CEST (Europe/Zurich) — automatically handles DST
+CET = ZoneInfo("Europe/Zurich")
 
 
 # Etherscan V2 unified API — one URL serves all chains via chainid param.
@@ -142,12 +143,12 @@ def find_valuation_block(w3: Web3, chain: str, target_ts: int) -> tuple[int, str
 
     Uses block_utils.estimate_blocks for initial estimate, then refine_block
     for precise alignment. The returned block timestamp is guaranteed to be
-    <= target_ts (per Valuation Policy: closest to but NOT exceeding 15:00 UTC).
+    <= target_ts (per Valuation Policy: closest to but NOT exceeding 16:00 CET/CEST).
 
     Args:
         w3: Web3 instance for the chain.
         chain: Chain name (for block time estimation).
-        target_ts: Target unix timestamp (e.g. 15:00 UTC on valuation date).
+        target_ts: Target unix timestamp (e.g. 16:00 CET/CEST on valuation date).
 
     Returns:
         (block_number, block_timestamp_utc_str)

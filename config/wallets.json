@@ -26,7 +26,8 @@
       "address": "0x6691005cd97656d488b72594c42cae987264e0e7",
       "description": "Private Deal Positions",
       "protocols": {
-        "midas": true
+        "midas": true,
+        "curve": true
       }
     },
     {

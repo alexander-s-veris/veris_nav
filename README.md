@@ -27,11 +27,11 @@ SOLSCAN_API_KEY=your_key
 # Latest block (development/testing)
 python src/collect.py
 
-# Pinned to Valuation Block at 15:00 UTC on a specific date (production)
+# Pinned to Valuation Block at 16:00 CET/CEST on a specific date (production)
 python src/collect.py --date 2026-03-31
 ```
 
-When `--date` is provided, all on-chain queries are pinned to the block/slot closest to but not exceeding 15:00 UTC on that date, per the Valuation Policy. Without `--date`, queries run at latest block.
+When `--date` is provided, all on-chain queries are pinned to the block/slot closest to but not exceeding 16:00 CET/CEST (14:00 UTC in summer, 15:00 UTC in winter) on that date, per the Valuation Policy. Without `--date`, queries run at latest block.
 
 ### Snapshot Diff (pre-submission check)
 

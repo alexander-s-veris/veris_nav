@@ -63,7 +63,7 @@ def main():
     print("=" * 80, flush=True)
     print("VERIS NAV — FULL POSITION COLLECTION")
     print(f"Valuation date: {valuation_date}")
-    print(f"Run: {run_ts_cet} CET")
+    print(f"Run: {run_ts_cet} {now.astimezone(CET).strftime('%Z')}")
     print("=" * 80, flush=True)
 
     set_config_validation(strict=args.strict_config)
@@ -86,17 +86,20 @@ def main():
 
     # --- Valuation Block pinning ---
     # When --date is specified, find the block on each chain closest to but not
-    # exceeding 15:00 UTC on the valuation date. All on-chain queries use this block.
+    # exceeding 16:00 local (Europe/Zurich) on the valuation date.
+    # This is 15:00 UTC in winter (CET) and 14:00 UTC in summer (CEST).
     valuation_blocks = {}  # chain -> (block_number, block_ts_str)
     solana_valuation_slot = None  # (slot, slot_ts_str)
     valuation_ts = None
 
     if args.date:
-        valuation_dt = datetime(valuation_date.year, valuation_date.month,
-                                valuation_date.day, 15, 0, 0, tzinfo=timezone.utc)
+        valuation_dt_local = datetime(valuation_date.year, valuation_date.month,
+                                      valuation_date.day, 16, 0, 0, tzinfo=CET)
+        valuation_dt = valuation_dt_local.astimezone(timezone.utc)
         valuation_ts = int(valuation_dt.timestamp())
 
-        print(f"Valuation time: {valuation_dt.strftime(TS_FMT)} UTC")
+        print(f"Valuation time: {valuation_dt.strftime(TS_FMT)} UTC "
+              f"({valuation_dt_local.strftime('%H:%M')} {valuation_dt_local.strftime('%Z')})")
         print("Finding valuation blocks...", flush=True)
 
         def find_block_for_chain(chain_name):
@@ -127,19 +130,16 @@ def main():
 
         print()
 
-    # --- Output directory (don't overwrite previous runs on the same date) ---
-    base_dir = os.path.join(OUTPUT_DIR, f"nav_{valuation_date.strftime('%Y%m%d')}")
-    if os.path.exists(base_dir) and os.listdir(base_dir):
-        run_num = 2
-        while True:
-            candidate = f"{base_dir}_run{run_num}"
-            if not os.path.exists(candidate) or not os.listdir(candidate):
-                break
-            run_num += 1
-        output_dir = candidate
-    else:
-        output_dir = base_dir
-    os.makedirs(output_dir, exist_ok=True)
+    # --- Output directory: outputs/MM_Month YYYY/nav_YYYYMMDD_HH-MM-SS ---
+    month_dir = os.path.join(
+        OUTPUT_DIR,
+        f"{valuation_date.strftime('%m')}_{valuation_date.strftime('%B')} {valuation_date.strftime('%Y')}")
+    cet_now = now.astimezone(CET)
+    run_ts_for_dir = cet_now.strftime("%H_%M_%S")
+    tz_abbr = cet_now.strftime("%Z")  # CET or CEST
+    output_dir = os.path.join(
+        month_dir,
+        f"nav_{valuation_date.strftime('%Y%m%d')}_{run_ts_for_dir}_{tz_abbr}")
     print(f"Output: {output_dir}")
     print()
 

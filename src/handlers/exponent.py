@@ -57,6 +57,7 @@ def query_exponent_lps(wallet, block_ts):
             "position_label": f"Exponent {mcfg['name']} LP",
             "category": "C", "position_type": "lp_constituent",
             "token_symbol": sy["symbol"],
+            "token_contract": sy.get("mint", ""),
             "token_category": sy["category"],
             "balance_human": sy_amount,
             "decimals": sy["decimals"],
@@ -71,8 +72,9 @@ def query_exponent_lps(wallet, block_ts):
             "position_label": f"Exponent {mcfg['name']} LP",
             "category": "C", "position_type": "lp_constituent",
             "token_symbol": pt["symbol"],
+            "token_contract": pt.get("mint", ""),
             "token_category": "C",  # PT in LP uses AMM rate, not lot amortisation
-            "underlying_symbol": sy["symbol"],  # SY token is the underlying for PT pricing
+            "underlying_symbol": sy["symbol"],
             "balance_human": pt_amount,
             "decimals": pt["decimals"],
             "lp_constituent_type": "PT",
@@ -135,6 +137,7 @@ def query_exponent_yts(wallet, block_ts):
             "position_label": f"Exponent {yt_cfg['symbol']}",
             "category": "F", "position_type": "reward",
             "token_symbol": yt_cfg["symbol"],
+            "token_contract": yt_cfg.get("mint", ""),
             "underlying_symbol": yt_cfg.get("underlying", ""),
             "balance_human": yt_human,
             "decimals": yt_cfg["decimals"],

@@ -97,6 +97,7 @@ from handlers.gauntlet import (
     _read_falconx_sqlite,
 )
 from handlers.uniswap import query_uniswap_v4
+from handlers.curve import query_curve_lp
 from handlers.ethena import query_ethena_cooldowns
 from handlers.creditcoop import query_creditcoop
 from handlers.kamino import query_kamino_obligations

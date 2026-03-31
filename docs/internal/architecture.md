@@ -22,7 +22,7 @@ This document defines the architectural principles and patterns of the NAV colle
    - Verification sources --> `config/verification.json`
    - PT lot details --> `config/pt_lots.json`
    - ABIs --> `config/abis.json`
-   - Shared constants (timestamp format, CET timezone) --> `src/evm.py`
+   - Shared constants (timestamp format, CET/CEST timezone) --> `src/evm.py`
 
 4. **Category-driven valuation.** Every position is classified into a category (A1-F). The category determines the valuation methodology. `valuation.py` dispatches to category-specific functions. Pricing routes through `pricing.py` which reads the hierarchy from `pricing_policy.json`.
 
@@ -93,7 +93,7 @@ ARMA smart account proxies are scanned as regular wallets with a `parent_wallet`
 
 ## Valuation Block Pinning
 
-When run with `--date YYYY-MM-DD`, collect.py pins all queries to 15:00 UTC on that date:
+When run with `--date YYYY-MM-DD`, collect.py pins all queries to 16:00 CET/CEST (Europe/Zurich) on that date:
 - EVM: `find_valuation_block()` in evm.py finds the block closest to but not exceeding the target timestamp
 - Solana: `find_valuation_slot()` in solana_client.py binary-searches for the correct slot
 - All balance queries and protocol queries receive the pinned block/slot

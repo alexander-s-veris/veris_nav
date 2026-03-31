@@ -56,7 +56,7 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
 
     return [{
         "chain": chain, "protocol": "gauntlet_pareto", "wallet": wallet,
-        "position_label": "Gauntlet FalconX Vault",
+        "position_label": "Gauntlet Levered FalconX",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "gpAAFalconX",
         "token_contract": GAUNTLET_VAULT,
@@ -196,7 +196,7 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
 
     return [{
         "chain": chain, "protocol": "gauntlet_pareto", "wallet": wallet,
-        "position_label": "FalconX Direct AA_FalconXUSDC",
+        "position_label": "Pareto / FalconX",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "AA_FalconXUSDC",
         "token_contract": AA_TRANCHE,

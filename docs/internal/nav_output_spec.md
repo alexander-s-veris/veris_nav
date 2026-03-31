@@ -19,7 +19,7 @@ A structured report documenting the full data sourcing and processing flow, per 
 
 **Step 1 — Valuation Block & Time**
 - The specific block number used on each chain as the reference point
-- Block timestamps confirming they are at or near 15:00 UTC on the Valuation Date
+- Block timestamps confirming they are at or near 16:00 CET/CEST on the Valuation Date
 - For off-chain sources (oracles, issuer APIs, Kraken): the timestamp of the data point used
 
 **Step 2 — Position Inventory**

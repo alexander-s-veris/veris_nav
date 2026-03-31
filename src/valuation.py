@@ -488,7 +488,7 @@ def _value_f(pos, w3_eth, tokens_registry):
             price = result["price_usd"] * yt_ratio
             pos["price_usd"] = price
             pos["value_usd"] = balance * price
-            pos["price_source"] = f"yt_formula ({underlying_sym} × {yt_ratio:.6f})"
+            pos["price_source"] = f"yt_formula ({underlying_sym} x {yt_ratio:.6f})"
             _apply_price_result(pos, result)
 
             # Flag near-expiry YTs for manual review (Policy Section 6.8)

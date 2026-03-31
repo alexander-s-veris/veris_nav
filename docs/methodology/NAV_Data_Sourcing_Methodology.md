@@ -9,8 +9,8 @@ This document describes the data sourcing and processing methodology used to pro
 
 ## 1. General Principles
 
-1. All on-chain data is queried at the **Valuation Block** - the block on each chain with timestamp closest to but not exceeding 15:00 UTC (16:00 CET) on the Valuation Date.
-2. All prices from off-chain sources (oracles, APIs, exchange prices) are obtained at or as close as practicable to the **Valuation Time** (16:00 CET).
+1. All on-chain data is queried at the **Valuation Block** - the block on each chain with timestamp closest to but not exceeding 16:00 CET/CEST (Europe/Zurich) on the Valuation Date. This corresponds to 15:00 UTC in winter (CET) and 14:00 UTC in summer (CEST).
+2. All prices from off-chain sources (oracles, APIs, exchange prices) are obtained at or as close as practicable to the **Valuation Time** (16:00 CET/CEST).
 3. Financial calculations use `decimal.Decimal` precision throughout. Final NAV per Product rounded to 2 decimal places.
 4. Every query is logged with the following fields:
     - contract address

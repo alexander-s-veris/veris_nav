@@ -19,14 +19,14 @@
       "horizon_atoken_uscc": {
         "address": "0x08b798c40b9AB931356d9aB4235F548325C4cb80",
         "abi": "erc20",
-        "display_name": "Aave Horizon USCC",
+        "display_name": "Aave Horizon USCC / RLUSD",
         "underlying_symbol": "USCC",
         "description": "aHorRwaUSCC -- supply side of USCC/RLUSD position"
       },
       "horizon_vdebt_rlusd": {
         "address": "0xace8a1c0ec12ae81814377491265b47f4ee5d3dd",
         "abi": "erc20",
-        "display_name": "Aave Horizon RLUSD debt",
+        "display_name": "Aave Horizon USCC / RLUSD",
         "underlying_symbol": "RLUSD",
         "description": "variableDebtHorRwaRLUSD -- debt side of USCC/RLUSD position"
       }
@@ -139,7 +139,7 @@
         "address": "0x2fE058CcF29f123f9dd2aEC0418AA66a877d8E50",
         "abi": "erc20",
         "symbol": "msyrupUSDp",
-        "display_name": "Midas syrupUSD Pre-deposit",
+        "display_name": "Midas syrupUSDp",
         "decimals": 18,
         "oracle": "0x337d914ff6622510FC2C63ac59c1D07983895241",
         "oracle_chain": "ethereum"
@@ -152,9 +152,11 @@
       }
     },
     "_curve": {
+      "_query_type": "curve_lp",
       "dusd_usdc_pool": {
         "address": "0x32e616f4f17d43f9a5cd9be0e294727187064cb3",
-        "description": "Curve DUSD/USDC Pool LP token"
+        "pool_label": "DUSD/USDC",
+        "description": "Curve DUSD/USDC Pool — LP token is the pool contract itself"
       }
     },
     "_uniswap": {
@@ -209,7 +211,7 @@
       "atoken_syrupusdc": {
         "address": "0xD7424238CcbE7b7198Ab3cFE232e0271E22da7bd",
         "abi": "erc20",
-        "display_name": "Aave Base syrupUSDC",
+        "display_name": "Aave syrupUSDC",
         "underlying_symbol": "syrupUSDC",
         "description": "aBassyrupUSDC -- Aave Base syrupUSDC aToken"
       }
@@ -257,14 +259,14 @@
       "atoken_usde": {
         "address": "0x7519403E12111ff6b710877Fcd821D0c12CAF43A",
         "abi": "erc20",
-        "display_name": "Aave Plasma USDe",
+        "display_name": "Aave USDe",
         "underlying_symbol": "USDe",
         "description": "aPlaUSDe -- Aave Plasma USDe aToken"
       },
       "atoken_susde": {
         "address": "0xc1a318493ff07a68fe438cee60a7ad0d0dba300e",
         "abi": "erc20",
-        "display_name": "Aave Plasma sUSDe",
+        "display_name": "Aave sUSDe",
         "underlying_symbol": "sUSDe",
         "description": "aPlasUSDe -- Aave Plasma sUSDe aToken"
       }

@@ -24,9 +24,9 @@ from block_utils import concurrent_query
 from handlers import (
     query_morpho_markets, query_erc4626_vaults, query_euler_vaults,
     query_aave_positions, query_midas_positions, query_gauntlet_falconx,
-    query_falconx_direct, query_uniswap_v4, query_ethena_cooldowns,
-    query_creditcoop, query_kamino_obligations, query_exponent_lps,
-    query_exponent_yts, query_pt_lots,
+    query_falconx_direct, query_uniswap_v4, query_curve_lp,
+    query_ethena_cooldowns, query_creditcoop, query_kamino_obligations,
+    query_exponent_lps, query_exponent_yts, query_pt_lots,
 )
 
 # Import config loaders from handlers for validation
@@ -190,6 +190,7 @@ PROTOCOL_TO_HANDLER = {
     "gauntlet_falconx": "manual_accrual_gauntlet",
     "falconx_direct":   "manual_accrual_direct",
     "uniswap_v4":       "nft_lp",
+    "curve":            "curve_lp",
     "ethena_cooldowns": "ethena_cooldown",
     "credit_coop":      "credit_coop",
 }
@@ -204,6 +205,7 @@ HANDLER_REGISTRY = {
     "manual_accrual_gauntlet":  query_gauntlet_falconx,
     "manual_accrual_direct":    query_falconx_direct,
     "nft_lp":                   query_uniswap_v4,
+    "curve_lp":                 query_curve_lp,
     "ethena_cooldown":          query_ethena_cooldowns,
     "credit_coop":              query_creditcoop,
 }

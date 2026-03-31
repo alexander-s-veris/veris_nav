@@ -432,6 +432,12 @@
       "chain": "solana",
       "address": "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5",
       "description": "ONyc (OnRe) via DefiLlama (Solana)."
+    },
+    "defillama_dusd": {
+      "type": "defillama",
+      "chain": "ethereum",
+      "address": "0x1e33e98af620f1d563fcd3cfd3c75ace841204ef",
+      "description": "DUSD via DefiLlama. Depegged stablecoin."
     }
   },
   "issuer_nav": {
