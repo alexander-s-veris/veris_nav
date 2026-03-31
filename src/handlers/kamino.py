@@ -46,6 +46,7 @@ def query_kamino_obligations(wallet, block_ts):
                 "position_label": ob_label,
                 "category": "D", "position_type": "collateral",
                 "token_symbol": dep_cfg["symbol"],
+                "underlying_symbol": dep_cfg.get("underlying", ""),
                 "token_contract": dep_cfg.get("mint", ""),
                 "token_category": dep_cfg["category"],
                 "balance_raw": str(deposit["deposited_amount"]),

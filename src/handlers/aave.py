@@ -64,7 +64,8 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
             "position_label": _get_display_name(aentry, aentry["address"], akey),
             "category": "D",  # may be reclassified if no debt
             "position_type": "collateral",
-            "token_symbol": akey,
+            "token_symbol": aentry.get("symbol", akey),
+            "underlying_symbol": aentry.get("underlying_symbol", ""),
             "token_contract": aentry["address"],
             "balance_raw": str(bal),
             "balance_human": bal_human,
@@ -99,7 +100,8 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
             "chain": chain, "protocol": "aave", "wallet": wallet,
             "position_label": _get_display_name(dentry, dentry["address"], dkey),
             "category": "D", "position_type": "debt",
-            "token_symbol": dkey,
+            "token_symbol": dentry.get("symbol", dkey),
+            "underlying_symbol": dentry.get("underlying_symbol", ""),
             "token_contract": dentry["address"],
             "balance_raw": str(bal),
             "balance_human": -bal_human,  # negative for debt

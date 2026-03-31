@@ -19,6 +19,7 @@
       "horizon_atoken_uscc": {
         "address": "0x08b798c40b9AB931356d9aB4235F548325C4cb80",
         "abi": "erc20",
+        "symbol": "USCC",
         "display_name": "Aave Horizon USCC / RLUSD",
         "underlying_symbol": "USCC",
         "description": "aHorRwaUSCC -- supply side of USCC/RLUSD position"
@@ -26,6 +27,7 @@
       "horizon_vdebt_rlusd": {
         "address": "0xace8a1c0ec12ae81814377491265b47f4ee5d3dd",
         "abi": "erc20",
+        "symbol": "RLUSD",
         "display_name": "Aave Horizon USCC / RLUSD",
         "underlying_symbol": "RLUSD",
         "description": "variableDebtHorRwaRLUSD -- debt side of USCC/RLUSD position"
@@ -216,6 +218,7 @@
       "atoken_syrupusdc": {
         "address": "0xD7424238CcbE7b7198Ab3cFE232e0271E22da7bd",
         "abi": "erc20",
+        "symbol": "syrupUSDC",
         "display_name": "Aave syrupUSDC",
         "underlying_symbol": "syrupUSDC",
         "description": "aBassyrupUSDC -- Aave Base syrupUSDC aToken"
@@ -264,6 +267,7 @@
       "atoken_usde": {
         "address": "0x7519403E12111ff6b710877Fcd821D0c12CAF43A",
         "abi": "erc20",
+        "symbol": "USDe",
         "display_name": "Aave USDe",
         "underlying_symbol": "USDe",
         "description": "aPlaUSDe -- Aave Plasma USDe aToken"
@@ -271,6 +275,7 @@
       "atoken_susde": {
         "address": "0xc1a318493ff07a68fe438cee60a7ad0d0dba300e",
         "abi": "erc20",
+        "symbol": "sUSDe",
         "display_name": "Aave sUSDe",
         "underlying_symbol": "sUSDe",
         "description": "aPlasUSDe -- Aave Plasma sUSDe aToken"
