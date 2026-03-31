@@ -192,7 +192,7 @@ def make_position_id(pos):
     return f"{chain}_{protocol}_{wallet}_{token}_{category}_{pos_type}"
 
 
-def write_positions(positions, output_dir, run_ts_cet):
+def write_positions(positions, output_dir, run_ts_cet, file_suffix=""):
     """Write positions.json and positions.csv."""
     os.makedirs(output_dir, exist_ok=True)
 
@@ -231,7 +231,7 @@ def write_positions(positions, output_dir, run_ts_cet):
         rows.append(row)
 
     # CSV
-    csv_path = os.path.join(output_dir, "positions.csv")
+    csv_path = os.path.join(output_dir, f"positions{file_suffix}.csv")
     if rows:
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=POSITION_COLUMNS)
@@ -239,7 +239,7 @@ def write_positions(positions, output_dir, run_ts_cet):
             writer.writerows(rows)
 
     # JSON
-    json_path = os.path.join(output_dir, "positions.json")
+    json_path = os.path.join(output_dir, f"positions{file_suffix}.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({
             "_schema_version": SCHEMA_VERSION,
@@ -254,14 +254,14 @@ def write_positions(positions, output_dir, run_ts_cet):
     return csv_path, json_path
 
 
-def write_leverage_detail(positions, output_dir):
+def write_leverage_detail(positions, output_dir, file_suffix=""):
     """Write leverage_detail.csv for Category D positions."""
     d_positions = [p for p in positions if p.get("category") == "D"
                    and p.get("status") != "CLOSED"]
     if not d_positions:
         return None
 
-    csv_path = os.path.join(output_dir, "leverage_detail.csv")
+    csv_path = os.path.join(output_dir, f"leverage_detail{file_suffix}.csv")
     rows = []
     for pos in d_positions:
         rows.append({
@@ -287,9 +287,9 @@ def write_leverage_detail(positions, output_dir):
     return csv_path
 
 
-def write_pt_lots(positions, output_dir):
+def write_pt_lots(positions, output_dir, file_suffix=""):
     """Write pt_lots.csv with per-lot detail from Category B positions."""
-    csv_path = os.path.join(output_dir, "pt_lots.csv")
+    csv_path = os.path.join(output_dir, f"pt_lots{file_suffix}.csv")
     rows = []
 
     for pos in positions:
@@ -326,13 +326,13 @@ def write_pt_lots(positions, output_dir):
     return None
 
 
-def write_lp_decomposition(positions, output_dir):
+def write_lp_decomposition(positions, output_dir, file_suffix=""):
     """Write lp_decomposition.csv for Category C LP constituents."""
     c_positions = [p for p in positions if p.get("category") == "C"]
     if not c_positions:
         return None
 
-    csv_path = os.path.join(output_dir, "lp_decomposition.csv")
+    csv_path = os.path.join(output_dir, f"lp_decomposition{file_suffix}.csv")
     rows = []
     for pos in c_positions:
         rows.append({
@@ -359,12 +359,12 @@ def write_lp_decomposition(positions, output_dir):
     return csv_path
 
 
-def write_verification(verification_results, output_dir):
+def write_verification(verification_results, output_dir, file_suffix=""):
     """Write verification.csv with asset-level verification results (Section 7.3)."""
     if not verification_results:
         return None
 
-    csv_path = os.path.join(output_dir, "verification.csv")
+    csv_path = os.path.join(output_dir, f"verification{file_suffix}.csv")
     rows = []
 
     for v in verification_results:
@@ -393,8 +393,9 @@ def write_verification(verification_results, output_dir):
     return csv_path
 
 
-def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None,
-                      chain_health=None, verification_results=None):
+def write_nav_summary(positions, output_dir, run_ts_cet, file_suffix="",
+                      valuation_blocks=None, chain_health=None,
+                      verification_results=None):
     """Write nav_summary.json with aggregations by category and wallet.
 
     Args:
@@ -510,7 +511,7 @@ def write_nav_summary(positions, output_dir, run_ts_cet, valuation_blocks=None,
             health_summary[chain] = entry
         summary["chain_health"] = health_summary
 
-    json_path = os.path.join(output_dir, "nav_summary.json")
+    json_path = os.path.join(output_dir, f"nav_summary{file_suffix}.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, cls=DecimalEncoder)
 

@@ -137,9 +137,10 @@ def main():
     cet_now = now.astimezone(CET)
     run_ts_for_dir = cet_now.strftime("%H_%M_%S")
     tz_abbr = cet_now.strftime("%Z")  # CET or CEST
+    file_suffix = f"_{valuation_date.strftime('%Y%m%d')}_{run_ts_for_dir}_{tz_abbr}"
     output_dir = os.path.join(
         month_dir,
-        f"nav_{valuation_date.strftime('%Y%m%d')}_{run_ts_for_dir}_{tz_abbr}")
+        f"nav{file_suffix}")
     print(f"Output: {output_dir}")
     print()
 
@@ -459,23 +460,23 @@ def main():
         pos.pop("_registry_entry", None)
         pos.pop("_pt_symbol", None)
 
-    csv_path, json_path = write_positions(all_positions, output_dir, run_ts_cet)
+    csv_path, json_path = write_positions(all_positions, output_dir, run_ts_cet, file_suffix)
     print(f"  {csv_path}")
     print(f"  {json_path}")
 
-    lev_path = write_leverage_detail(all_positions, output_dir)
+    lev_path = write_leverage_detail(all_positions, output_dir, file_suffix)
     if lev_path:
         print(f"  {lev_path}")
 
-    pt_path = write_pt_lots(all_positions, output_dir)
+    pt_path = write_pt_lots(all_positions, output_dir, file_suffix)
     if pt_path:
         print(f"  {pt_path}")
 
-    lp_path = write_lp_decomposition(all_positions, output_dir)
+    lp_path = write_lp_decomposition(all_positions, output_dir, file_suffix)
     if lp_path:
         print(f"  {lp_path}")
 
-    ver_path = write_verification(verification_results, output_dir)
+    ver_path = write_verification(verification_results, output_dir, file_suffix)
     if ver_path:
         print(f"  {ver_path}")
 
@@ -489,6 +490,7 @@ def main():
         vb_metadata["solana"] = {"slot": sol_slot, "slot_timestamp_utc": sol_ts}
 
     summary_path = write_nav_summary(all_positions, output_dir, run_ts_cet,
+                                     file_suffix=file_suffix,
                                      valuation_blocks=vb_metadata,
                                      chain_health=chain_health,
                                      verification_results=verification_results)
