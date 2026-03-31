@@ -8,6 +8,11 @@ Per Valuation Policy Section 7.1 (Portfolio-level verification).
 
 API docs: https://docs.cloud.debank.com/en/readme/api-pro-reference/user
 Auth: AccessKey header with DEBANK_API_KEY environment variable.
+
+Token matching priority:
+  1. Normalize native tokens (our "native" -> DeBank chain slug from config)
+  2. Exact contract match (case-insensitive)
+  3. Symbol + chain fallback (handles protocol wrappers)
 """
 
 import logging
@@ -59,6 +64,39 @@ def _debank_get(api_base, endpoint, params=None):
     return None
 
 
+# --- Config helpers ---
+
+def _build_chain_maps(chain_id_map):
+    """Build lookup dicts from the chain_id_map config.
+
+    Returns:
+        (our_to_debank, debank_to_our, native_ids)
+        - our_to_debank: {"ethereum": "eth", ...}
+        - debank_to_our: {"eth": "ethereum", ...}
+        - native_ids: {"ethereum": "eth", "base": "base", ...} — native token IDs per chain
+    """
+    our_to_debank = {}
+    debank_to_our = {}
+    native_ids = {}
+
+    for our_chain, cfg in chain_id_map.items():
+        if isinstance(cfg, dict):
+            debank_id = cfg.get("debank_id", our_chain)
+            native_id = cfg.get("native_token_id", debank_id)
+        else:
+            # Backward compat: string value = debank_id
+            debank_id = cfg
+            native_id = cfg
+
+        our_to_debank[our_chain] = debank_id
+        debank_to_our[debank_id] = our_chain
+        native_ids[our_chain] = native_id
+
+    return our_to_debank, debank_to_our, native_ids
+
+
+# --- Main entry point ---
+
 def verify_portfolio(positions, wallets_cfg, verification_cfg, api_base):
     """Run portfolio-level verification against DeBank.
 
@@ -74,20 +112,22 @@ def verify_portfolio(positions, wallets_cfg, verification_cfg, api_base):
     """
     chain_id_map = verification_cfg.get("chain_id_map", {})
     threshold_pct = Decimal(str(verification_cfg.get("divergence_threshold_pct", 3.0)))
+    noise_filter = Decimal(str(verification_cfg.get("noise_filter_usd", 10)))
+
+    our_to_debank, debank_to_our, native_ids = _build_chain_maps(chain_id_map)
 
     # Step 1: Collect all EVM addresses
     addresses = _collect_evm_addresses(wallets_cfg, chain_id_map)
     logger.info("debank: %d EVM addresses to verify", len(addresses))
 
     # Step 2: Compute our EVM totals from positions
-    our_by_wallet, our_by_token = _compute_our_totals(positions, chain_id_map)
-
+    our_by_wallet, our_by_token = _compute_our_totals(positions, chain_id_map, native_ids)
     our_evm_total = sum(our_by_wallet.values())
 
-    # Step 3+4: Query DeBank and match tokens
+    # Step 3: Query DeBank per address
     debank_total = Decimal(0)
     per_wallet = {}
-    token_matches = []
+    all_debank_tokens = {}  # {addr: [token_list]}
 
     for addr_info in addresses:
         addr = addr_info["address"]
@@ -116,33 +156,14 @@ def verify_portfolio(positions, wallets_cfg, verification_cfg, api_base):
         _time.sleep(_RATE_LIMIT_SECONDS)
         try:
             tokens_data = _debank_get(api_base, "/user/all_token_list", {"id": addr, "is_all": "true"})
-            if tokens_data:
-                matches = _match_tokens(addr, tokens_data, our_by_token, chain_id_map)
-                token_matches.extend(matches)
+            all_debank_tokens[addr] = tokens_data or []
         except Exception as e:
             logger.error("debank: all_token_list failed for %s: %s", addr[:10], e)
+            all_debank_tokens[addr] = []
 
-    # Add OUR_ONLY entries — positions we have that DeBank didn't return
-    matched_keys = {(m["wallet"], m["chain"], m["token_contract"].lower()) for m in token_matches}
-    for key, info in our_by_token.items():
-        wallet, chain, contract = key
-        if key not in matched_keys and chain in chain_id_map:
-            token_matches.append({
-                "wallet": wallet,
-                "chain": chain,
-                "token_symbol": info.get("token_symbol", ""),
-                "token_contract": contract,
-                "our_balance": str(info.get("balance", "")),
-                "debank_balance": "",
-                "balance_match": False,
-                "our_price": str(info.get("price", "")),
-                "debank_price": "",
-                "price_divergence_pct": "",
-                "our_value": str(info.get("value", "")),
-                "debank_value": "",
-                "value_diff": str(info.get("value", "")),
-                "flag": _classify_our_only(info),
-            })
+    # Step 4: Match tokens
+    token_matches = _match_all_tokens(
+        our_by_token, all_debank_tokens, debank_to_our, native_ids, noise_filter)
 
     # Compute aggregate divergence
     if our_evm_total > 0:
@@ -154,8 +175,7 @@ def verify_portfolio(positions, wallets_cfg, verification_cfg, api_base):
     if divergence_pct > threshold_pct:
         divergence_flag = f"EXCEEDS_THRESHOLD ({divergence_pct:.2f}% > {threshold_pct}%)"
 
-    # Per-chain breakdown
-    per_chain = _compute_per_chain(token_matches, chain_id_map)
+    per_chain = _compute_per_chain(token_matches)
 
     now_utc = datetime.now(timezone.utc).strftime(TS_FMT)
 
@@ -181,14 +201,13 @@ def verify_portfolio(positions, wallets_cfg, verification_cfg, api_base):
     return result
 
 
-# --- Internal helpers ---
+# --- Address collection ---
 
 def _collect_evm_addresses(wallets_cfg, chain_id_map):
     """Collect all unique EVM addresses from wallets config."""
     seen = set()
     addresses = []
 
-    # Main EVM wallets
     for chain in chain_id_map:
         for w in wallets_cfg.get(chain, []):
             addr = w.get("address", "").lower()
@@ -196,7 +215,6 @@ def _collect_evm_addresses(wallets_cfg, chain_id_map):
                 seen.add(addr)
                 addresses.append({"address": addr, "type": "wallet"})
 
-    # Chain-specific protocol wallets
     chain_protocols = wallets_cfg.get("_chain_protocols", {})
     for chain, chain_wallets in chain_protocols.items():
         if chain not in chain_id_map:
@@ -207,7 +225,6 @@ def _collect_evm_addresses(wallets_cfg, chain_id_map):
                 seen.add(addr_lower)
                 addresses.append({"address": addr_lower, "type": "wallet"})
 
-    # ARMA proxies
     for proxy in wallets_cfg.get("arma_proxies", []):
         addr = proxy.get("address", "").lower()
         proxy_chain = proxy.get("chain", "")
@@ -218,13 +235,16 @@ def _collect_evm_addresses(wallets_cfg, chain_id_map):
     return addresses
 
 
-def _compute_our_totals(positions, chain_id_map):
+# --- Our totals ---
+
+def _compute_our_totals(positions, chain_id_map, native_ids):
     """Compute our EVM totals from positions.
 
+    Normalizes native token contracts to the chain's native_token_id
+    so they match DeBank's convention.
+
     Returns:
-        (by_wallet, by_token) where:
-        - by_wallet: {wallet_lower: total_value_usd}
-        - by_token: {(wallet_lower, chain, contract_lower): {value, balance, price, ...}}
+        (by_wallet, by_token)
     """
     by_wallet = {}
     by_token = {}
@@ -232,12 +252,19 @@ def _compute_our_totals(positions, chain_id_map):
     for pos in positions:
         if pos.get("status") == "CLOSED":
             continue
+        if pos.get("position_type") == "lp_parent":
+            continue
         chain = pos.get("chain", "")
         if chain not in chain_id_map:
             continue
 
         wallet = pos.get("wallet", "").lower()
         contract = pos.get("token_contract", "").lower()
+
+        # Normalize native token contract to DeBank's convention
+        if contract == "native":
+            contract = native_ids.get(chain, contract)
+
         value = pos.get("value_usd", Decimal(0))
         if not isinstance(value, Decimal):
             try:
@@ -248,174 +275,225 @@ def _compute_our_totals(positions, chain_id_map):
         by_wallet[wallet] = by_wallet.get(wallet, Decimal(0)) + value
 
         key = (wallet, chain, contract)
-        by_token[key] = {
-            "value": value,
-            "balance": pos.get("balance_human", ""),
-            "price": pos.get("price_usd", ""),
-            "token_symbol": pos.get("token_symbol", ""),
-            "category": pos.get("category", ""),
-            "position_type": pos.get("position_type", ""),
-        }
+        if key in by_token:
+            # Multiple positions for same token (e.g. multiple Morpho markets with same collateral)
+            existing = by_token[key]
+            existing["value"] = existing.get("value", Decimal(0)) + value
+        else:
+            by_token[key] = {
+                "value": value,
+                "balance": pos.get("balance_human", ""),
+                "price": pos.get("price_usd", ""),
+                "token_symbol": pos.get("token_symbol", ""),
+                "category": pos.get("category", ""),
+                "position_type": pos.get("position_type", ""),
+            }
 
     return by_wallet, by_token
 
 
-def _match_tokens(wallet, debank_tokens, our_by_token, chain_id_map):
-    """Match DeBank token list against our positions for one wallet."""
-    # Reverse chain_id_map: debank_chain -> our_chain
-    debank_to_our_chain = {v: k for k, v in chain_id_map.items()}
+# --- Token matching ---
 
+def _match_all_tokens(our_by_token, all_debank_tokens, debank_to_our, native_ids, noise_filter):
+    """Match all DeBank tokens against our positions across all wallets.
+
+    Matching priority per DeBank token:
+      1. Exact contract match (case-insensitive)
+      2. Symbol + chain fallback
+
+    Returns list of match result dicts.
+    """
+    # Build symbol index for fallback matching: {(wallet, chain, symbol_lower): key}
+    symbol_index = {}
+    for key, info in our_by_token.items():
+        wallet, chain, contract = key
+        sym = info.get("token_symbol", "").lower()
+        if sym:
+            skey = (wallet, chain, sym)
+            if skey not in symbol_index:
+                symbol_index[skey] = key
+
+    matched_our_keys = set()
     matches = []
-    wallet_lower = wallet.lower()
 
-    for dt in debank_tokens:
-        debank_chain = dt.get("chain", "")
-        our_chain = debank_to_our_chain.get(debank_chain, "")
-        if not our_chain:
-            continue  # Chain not in our scope
+    for addr, debank_tokens in all_debank_tokens.items():
+        wallet_lower = addr.lower()
 
-        contract = dt.get("id", "").lower()
-        debank_balance = Decimal(str(dt.get("amount", 0)))
-        debank_price = Decimal(str(dt.get("price", 0)))
-        debank_value = debank_balance * debank_price
-        debank_symbol = dt.get("symbol", "")
+        for dt in debank_tokens:
+            debank_chain = dt.get("chain", "")
+            our_chain = debank_to_our.get(debank_chain, "")
+            if not our_chain:
+                continue
 
-        # Skip dust
-        if abs(debank_value) < Decimal("0.01"):
+            debank_contract = dt.get("id", "").lower()
+            debank_balance = _to_decimal(dt.get("amount", 0))
+            debank_price = _to_decimal(dt.get("price", 0))
+            debank_value = debank_balance * debank_price
+            debank_symbol = dt.get("symbol", "")
+
+            # Priority 1: exact contract match
+            key = (wallet_lower, our_chain, debank_contract)
+            our_info = our_by_token.get(key)
+
+            # Priority 2: symbol + chain fallback
+            if not our_info:
+                skey = (wallet_lower, our_chain, debank_symbol.lower())
+                fallback_key = symbol_index.get(skey)
+                if fallback_key:
+                    our_info = our_by_token.get(fallback_key)
+                    key = fallback_key
+
+            if our_info:
+                matched_our_keys.add(key)
+                our_value = _to_decimal(our_info.get("value", 0))
+                our_price = _to_decimal(our_info.get("price", 0))
+                our_balance = our_info.get("balance", "")
+
+                # Noise filter: skip if BOTH sides below threshold
+                if abs(our_value) < noise_filter and abs(debank_value) < noise_filter:
+                    continue
+
+                price_div = _price_divergence(our_price, debank_price)
+                bal_match = _balance_match(our_balance, debank_balance)
+                flag = _classify_match(our_info, price_div, bal_match)
+
+                matches.append(_build_match_row(
+                    wallet_lower, our_chain, our_info.get("token_symbol", debank_symbol),
+                    debank_contract, our_balance, debank_balance, bal_match,
+                    our_price, debank_price, price_div, our_value, debank_value, flag))
+            else:
+                # Noise filter for DEBANK_ONLY
+                if abs(debank_value) < noise_filter:
+                    continue
+                matches.append(_build_match_row(
+                    wallet_lower, our_chain, debank_symbol, debank_contract,
+                    "", debank_balance, False, "", debank_price, "",
+                    "", debank_value, "DEBANK_ONLY"))
+
+    # OUR_ONLY: positions we have that weren't matched
+    for key, info in our_by_token.items():
+        if key in matched_our_keys:
+            continue
+        wallet, chain, contract = key
+        our_value = _to_decimal(info.get("value", 0))
+
+        # Noise filter
+        if abs(our_value) < noise_filter:
             continue
 
-        # Match against our positions
-        key = (wallet_lower, our_chain, contract)
-        our_info = our_by_token.get(key)
-
-        if our_info:
-            our_value = our_info.get("value", Decimal(0))
-            our_price = our_info.get("price", Decimal(0))
-            our_balance = our_info.get("balance", "")
-
-            if not isinstance(our_price, Decimal):
-                try:
-                    our_price = Decimal(str(our_price))
-                except Exception:
-                    our_price = Decimal(0)
-            if not isinstance(our_value, Decimal):
-                try:
-                    our_value = Decimal(str(our_value))
-                except Exception:
-                    our_value = Decimal(0)
-
-            # Price divergence
-            if our_price > 0 and debank_price > 0:
-                price_div = ((debank_price - our_price) / our_price) * Decimal(100)
-            else:
-                price_div = Decimal(0)
-
-            # Balance match (within 0.01%)
-            try:
-                our_bal_dec = Decimal(str(our_balance))
-                bal_match = abs(our_bal_dec - debank_balance) / max(our_bal_dec, Decimal("0.001")) < Decimal("0.0001")
-            except Exception:
-                bal_match = False
-
-            flag = _classify_match(our_info, price_div, bal_match)
-
-            matches.append({
-                "wallet": wallet_lower,
-                "chain": our_chain,
-                "token_symbol": our_info.get("token_symbol", debank_symbol),
-                "token_contract": contract,
-                "our_balance": str(our_balance),
-                "debank_balance": str(debank_balance),
-                "balance_match": bal_match,
-                "our_price": str(our_price),
-                "debank_price": str(debank_price),
-                "price_divergence_pct": str(price_div),
-                "our_value": str(our_value),
-                "debank_value": str(debank_value),
-                "value_diff": str(our_value - debank_value),
-                "flag": flag,
-            })
-        else:
-            # DeBank sees it, we don't
-            if debank_value < Decimal("1"):
-                continue  # Skip dust
-            matches.append({
-                "wallet": wallet_lower,
-                "chain": our_chain,
-                "token_symbol": debank_symbol,
-                "token_contract": contract,
-                "our_balance": "",
-                "debank_balance": str(debank_balance),
-                "balance_match": False,
-                "our_price": "",
-                "debank_price": str(debank_price),
-                "price_divergence_pct": "",
-                "our_value": "",
-                "debank_value": str(debank_value),
-                "value_diff": str(-debank_value),
-                "flag": "DEBANK_ONLY",
-            })
+        flag = _classify_our_only(info)
+        matches.append(_build_match_row(
+            wallet, chain, info.get("token_symbol", ""), contract,
+            info.get("balance", ""), "", False, info.get("price", ""), "", "",
+            our_value, "", flag))
 
     return matches
 
 
+# --- Classification ---
+
 def _classify_match(our_info, price_div, bal_match):
-    """Classify a token match into a flag category."""
+    """Classify a matched token pair."""
     category = our_info.get("category", "")
     pos_type = our_info.get("position_type", "")
 
-    # A3 manual accrual — DeBank values at exchange rate, we use workbook accrual
-    if category == "A3":
+    # Expected methodology gaps
+    if category == "A3" or pos_type == "manual_accrual":
         return "EXPECTED_GAP"
-
-    # Midas oracle-priced — DeBank may not track these
     if pos_type == "oracle_priced":
         return "EXPECTED_GAP"
 
+    if isinstance(price_div, Decimal) and abs(price_div) > Decimal("5"):
+        return "PRICE_DIVERGENCE"
+
     if not bal_match:
         return "BALANCE_MISMATCH"
-
-    if abs(price_div) > Decimal("5"):
-        return "PRICE_DIVERGENCE"
 
     return "MATCH"
 
 
 def _classify_our_only(info):
     """Classify a position we have but DeBank doesn't see."""
-    category = info.get("category", "")
     pos_type = info.get("position_type", "")
+    category = info.get("category", "")
 
-    # Protocol positions that DeBank may not decompose
-    if pos_type in ("vault_share", "vault_strategy", "manual_accrual", "lp_parent"):
+    if pos_type in ("vault_share", "vault_strategy", "manual_accrual", "lp_parent", "lp_constituent"):
         return "EXPECTED_GAP"
     if category == "A3":
         return "EXPECTED_GAP"
 
-    value = info.get("value", Decimal(0))
-    if isinstance(value, Decimal) and abs(value) < Decimal("1"):
-        return "DUST"
-
     return "OUR_ONLY"
 
 
-def _compute_per_chain(token_matches, chain_id_map):
+# --- Helpers ---
+
+def _to_decimal(val):
+    """Convert any value to Decimal, defaulting to 0."""
+    if isinstance(val, Decimal):
+        return val
+    try:
+        return Decimal(str(val))
+    except Exception:
+        return Decimal(0)
+
+
+def _price_divergence(our_price, debank_price):
+    """Compute price divergence percentage."""
+    our = _to_decimal(our_price)
+    db = _to_decimal(debank_price)
+    if our > 0 and db > 0:
+        return ((db - our) / our) * Decimal(100)
+    return Decimal(0)
+
+
+def _balance_match(our_balance, debank_balance):
+    """Check if balances match within 0.1%."""
+    try:
+        our = abs(Decimal(str(our_balance)))
+        db = abs(_to_decimal(debank_balance))
+        if our == 0 and db == 0:
+            return True
+        denom = max(our, Decimal("0.001"))
+        return abs(our - db) / denom < Decimal("0.001")
+    except Exception:
+        return False
+
+
+def _build_match_row(wallet, chain, symbol, contract, our_bal, db_bal, bal_match,
+                     our_price, db_price, price_div, our_val, db_val, flag):
+    """Build a standardized match result row."""
+    our_val_dec = _to_decimal(our_val)
+    db_val_dec = _to_decimal(db_val)
+    diff = our_val_dec - db_val_dec if our_val != "" and db_val != "" else ""
+
+    return {
+        "wallet": wallet,
+        "chain": chain,
+        "token_symbol": symbol,
+        "token_contract": contract,
+        "our_balance": str(our_bal),
+        "debank_balance": str(db_bal),
+        "balance_match": bal_match,
+        "our_price": str(our_price),
+        "debank_price": str(db_price),
+        "price_divergence_pct": str(price_div),
+        "our_value": str(our_val),
+        "debank_value": str(db_val),
+        "value_diff": str(diff),
+        "flag": flag,
+    }
+
+
+def _compute_per_chain(token_matches):
     """Aggregate token matches by chain."""
     per_chain = {}
     for m in token_matches:
         chain = m.get("chain", "")
         if chain not in per_chain:
             per_chain[chain] = {"our_usd": Decimal(0), "debank_usd": Decimal(0)}
-        try:
-            per_chain[chain]["our_usd"] += Decimal(m.get("our_value", "0") or "0")
-        except Exception:
-            pass
-        try:
-            per_chain[chain]["debank_usd"] += Decimal(m.get("debank_value", "0") or "0")
-        except Exception:
-            pass
+        per_chain[chain]["our_usd"] += _to_decimal(m.get("our_value", 0))
+        per_chain[chain]["debank_usd"] += _to_decimal(m.get("debank_value", 0))
 
-    # Convert to strings
     return {
         chain: {
             "our_usd": str(v["our_usd"]),

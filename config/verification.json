@@ -62,14 +62,16 @@
       "type": "debank_portfolio",
       "scope": "evm_only",
       "divergence_threshold_pct": 3.0,
+      "noise_filter_usd": 10,
+      "_noise_filter_note": "Operational filter only. Tokens where both our value and DeBank value are below this amount are skipped to avoid dust/spam false positives. Not a policy threshold.",
       "chain_id_map": {
-        "ethereum": "eth",
-        "arbitrum": "arb",
-        "base": "base",
-        "avalanche": "avax",
-        "plasma": "plasma",
-        "hyperevm": "hyper",
-        "katana": "katana"
+        "ethereum": {"debank_id": "eth", "native_token_id": "eth"},
+        "arbitrum": {"debank_id": "arb", "native_token_id": "arb"},
+        "base": {"debank_id": "base", "native_token_id": "base"},
+        "avalanche": {"debank_id": "avax", "native_token_id": "avax"},
+        "plasma": {"debank_id": "plasma", "native_token_id": "plasma"},
+        "hyperevm": {"debank_id": "hyper", "native_token_id": "hyper"},
+        "katana": {"debank_id": "katana", "native_token_id": "katana"}
       },
       "_note": "EVM-only portfolio aggregator. Compares aggregate and token-level DeBank values against our NAV. API key in DEBANK_API_KEY env var."
     }
