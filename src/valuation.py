@@ -325,7 +325,7 @@ def _value_b(pos, w3_eth, valuation_date, tokens_registry=None):
         pos["price_source"] = "pt_no_valuation_date"
         return pos
 
-    underlying = pos.get("underlying", "")
+    underlying = pos.get("underlying_symbol", "")
 
     # Get underlying price via registry (no hardcoded Pyth feed IDs)
     if underlying:
@@ -428,20 +428,64 @@ def _value_d_side(pos, w3_eth, tokens_registry):
     token_cat = pos.get("token_category", "")
     token_sym = pos.get("token_symbol", "")
 
-    # PT tokens as collateral (Kamino Solstice) — don't price here,
-    # they'll be valued via the B methodology in collect.py
+    # PT tokens as collateral (Kamino Solstice) — price via lot-based amortisation
     if token_cat == "B":
-        pos["price_usd"] = Decimal(0)
-        pos["value_usd"] = Decimal(0)
-        pos["price_source"] = "pt_collateral_see_B_lots"
-        pos["notes"] = "PT collateral priced via Category B lot methodology"
-        return pos
+        return _value_d_pt_collateral(pos, w3_eth, tokens_registry)
 
     result = _price_by_symbol(token_sym, pos.get("chain", ""), w3_eth, tokens_registry)
 
     pos["price_usd"] = result["price_usd"]
     pos["value_usd"] = balance * result["price_usd"]  # balance is negative for debt
     pos["price_source"] = result["price_source"]
+    _apply_price_result(pos, result)
+    return pos
+
+
+def _value_d_pt_collateral(pos, w3_eth, tokens_registry):
+    """Value PT collateral inside a Kamino leveraged position.
+
+    Uses the same lot-based linear amortisation as Category B, but the
+    position stays in Category D as part of the obligation.
+    """
+    from datetime import date
+    pt_symbol = pos.get("token_symbol", "")
+    valuation_date = date.today()
+
+    # Get underlying symbol from pt_lots.json config
+    import json, os
+    from evm import CONFIG_DIR
+    with open(os.path.join(CONFIG_DIR, "pt_lots.json")) as f:
+        pt_cfg = json.load(f)
+
+    pt_entry = pt_cfg.get(pt_symbol, {})
+    underlying = pt_entry.get("underlying", "")
+
+    if not underlying:
+        pos["price_usd"] = Decimal(0)
+        pos["value_usd"] = Decimal(0)
+        pos["price_source"] = "pt_collateral_no_underlying"
+        return pos
+
+    # Get underlying price
+    result = _price_by_symbol(underlying, pos.get("chain", "solana"), w3_eth, tokens_registry)
+    underlying_price = result["price_usd"]
+    if underlying_price <= 0:
+        underlying_price = Decimal(1)
+
+    # Compute lot-based amortisation value
+    val = value_pt_from_config(pt_symbol, valuation_date, underlying_price)
+
+    balance = pos.get("balance_human", Decimal(0))
+    if val["total_pt_quantity"] > 0:
+        price_per_pt = val["total_usd_value"] / val["total_pt_quantity"]
+    else:
+        price_per_pt = Decimal(0)
+
+    pos["price_usd"] = price_per_pt
+    pos["value_usd"] = balance * price_per_pt
+    pos["price_source"] = "pt_linear_amortisation"
+    pos["_pt_symbol"] = pt_symbol
+    pos["_pt_lot_detail"] = val["lots"]
     _apply_price_result(pos, result)
     return pos
 

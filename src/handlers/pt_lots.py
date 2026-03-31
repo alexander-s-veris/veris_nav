@@ -25,6 +25,10 @@ def query_pt_lots(wallet, block_ts):
             continue
         if "lots_discovered" not in cfg:
             continue
+        # PTs held as Kamino collateral are valued inside the D obligation,
+        # not as standalone B positions
+        if cfg.get("held_as", "").startswith("kamino_"):
+            continue
 
         logger.info("PT lot: %s — %d lots, %s total tokens",
                      pt_symbol, cfg.get("total_lots", 0), cfg.get("total_tokens", 0))
