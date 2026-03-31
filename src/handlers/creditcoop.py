@@ -29,6 +29,7 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
         raise ValueError("CreditCoop config missing required 'decimals' or 'underlying_decimals' in contracts.json")
     LIQUID_STRATEGY = cc_section.get("liquid_strategy", {}).get("address")
     CREDIT_STRATEGY = cc_section.get("credit_strategy", {}).get("address")
+    GAUNTLET_CORE = cc_section.get("gauntlet_usdc_core", {}).get("address")
     USDC = cc_section.get("usdc_token", {}).get("address")
     if not VAULT:
         return []
@@ -64,38 +65,48 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
         "block_number": block_number, "block_timestamp_utc": block_ts,
     }]
 
-    # Sub-strategy breakdown (for methodology log, not separate NAV rows)
-    # These are informational -- the aggregate convertToAssets is the primary value
+    # Sub-strategy breakdown
+    # Rain credit + Gauntlet deployed + idle cash = aggregate convertToAssets
     try:
         # Rain credit line (principal + uncollected interest)
         credit = w3.eth.contract(
             address=Web3.to_checksum_address(CREDIT_STRATEGY),
             abi=_get_abi("credit_coop_credit_strategy"))
-        credit_amount = _fmt(credit.functions.totalActiveCredit().call(), underlying_decimals)
-        logger.info("creditcoop.totalActiveCredit(%s) block=%s → %s", CREDIT_STRATEGY, block_number, credit_amount)
+        rain_amount = _fmt(credit.functions.totalActiveCredit().call(), underlying_decimals)
+        logger.info("creditcoop.totalActiveCredit(%s) block=%s → %s", CREDIT_STRATEGY, block_number, rain_amount)
 
-        # Gauntlet USDC Core liquid reserve
+        # Gauntlet USDC Core — actual amount deployed via LiquidStrategy
+        gauntlet_deployed = Decimal(0)
+        if GAUNTLET_CORE and LIQUID_STRATEGY:
+            gauntlet = w3.eth.contract(
+                address=Web3.to_checksum_address(GAUNTLET_CORE), abi=erc4626_abi)
+            liq_shares = gauntlet.functions.balanceOf(Web3.to_checksum_address(LIQUID_STRATEGY)).call()
+            if liq_shares > 0:
+                gauntlet_deployed = _fmt(gauntlet.functions.convertToAssets(liq_shares).call(), underlying_decimals)
+            logger.info("creditcoop.gauntlet_deployed(%s) block=%s → %s", GAUNTLET_CORE[:10], block_number, gauntlet_deployed)
+
+        # Credit strategy cash (USDC idle in credit strategy contract)
+        usdc = w3.eth.contract(
+            address=Web3.to_checksum_address(USDC), abi=erc20_abi)
+        credit_cash = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(CREDIT_STRATEGY)).call(), underlying_decimals)
+
+        # Vault cash = USDC in vault contract + LiquidStrategy idle (totalAssets - gauntlet deployed)
+        vault_usdc = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(VAULT)).call(), underlying_decimals)
         liquid = w3.eth.contract(
             address=Web3.to_checksum_address(LIQUID_STRATEGY),
             abi=_get_abi("credit_coop_liquid_strategy"))
-        liquid_amount = _fmt(liquid.functions.totalAssets().call(), underlying_decimals)
-        logger.info("creditcoop.totalAssets(%s) block=%s → %s", LIQUID_STRATEGY, block_number, liquid_amount)
-
-        # Undeployed cash in vault
-        usdc = w3.eth.contract(
-            address=Web3.to_checksum_address(USDC), abi=erc20_abi)
-        vault_cash = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(VAULT)).call(), underlying_decimals)
-        credit_cash = _fmt(usdc.functions.balanceOf(Web3.to_checksum_address(CREDIT_STRATEGY)).call(), underlying_decimals)
+        liquid_total = _fmt(liquid.functions.totalAssets().call(), underlying_decimals)
+        vault_cash = vault_usdc + (liquid_total - gauntlet_deployed)
 
         rows[0]["_breakdown"] = {
-            "rain_credit_line": str(credit_amount),
-            "gauntlet_usdc_core": str(liquid_amount),
+            "rain_credit_line": str(rain_amount),
+            "gauntlet_usdc_core": str(gauntlet_deployed),
             "vault_cash": str(vault_cash),
             "credit_strategy_cash": str(credit_cash),
         }
         rows[0]["notes"] = (
-            f"Breakdown: Rain credit={credit_amount:,.2f}, "
-            f"Gauntlet USDC Core={liquid_amount:,.2f}, "
+            f"Breakdown: Rain credit={rain_amount:,.2f}, "
+            f"Gauntlet USDC Core={gauntlet_deployed:,.2f}, "
             f"vault cash={vault_cash:,.2f}, "
             f"credit cash={credit_cash:,.2f}"
         )

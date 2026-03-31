@@ -74,6 +74,11 @@
         "address": "0x671B5B6F01C5FEe16E6F9De2eb85AC027Dc9fE0e",
         "description": "LiquidStrategy -- deploys idle capital into Gauntlet USDC Core (ERC-4626)"
       },
+      "gauntlet_usdc_core": {
+        "address": "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458",
+        "abi": "erc4626",
+        "description": "Morpho Gauntlet USDC Core vault -- LiquidStrategy deploys here"
+      },
       "credit_strategy": {
         "address": "0x433E415b0fA54C570C450DD976E2402e408cB6db",
         "description": "CreditStrategy -- Line-of-Credit-v2 to Rain. getPositionActiveCredit(line, tokenId) for breakdown."
