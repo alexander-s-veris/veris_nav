@@ -150,10 +150,10 @@ PT_LOT_COLUMNS = [
 
 DEBANK_COLUMNS = [
     "wallet", "chain", "token_symbol", "token_contract",
-    "our_balance", "debank_balance", "balance_match",
-    "our_price", "debank_price", "price_divergence_pct",
+    "our_position_count",
     "our_value", "debank_value", "value_diff",
-    "flag",
+    "our_price", "debank_price", "price_divergence_pct",
+    "flag", "notes",
 ]
 
 LP_COLUMNS = [
@@ -403,16 +403,15 @@ def write_debank_verification(debank_result, output_dir, file_suffix=""):
             "chain": _format_chain(m.get("chain", "")),
             "token_symbol": m.get("token_symbol", ""),
             "token_contract": m.get("token_contract", ""),
-            "our_balance": m.get("our_balance", ""),
-            "debank_balance": m.get("debank_balance", ""),
-            "balance_match": m.get("balance_match", ""),
-            "our_price": m.get("our_price", ""),
-            "debank_price": m.get("debank_price", ""),
-            "price_divergence_pct": m.get("price_divergence_pct", ""),
+            "our_position_count": m.get("our_position_count", ""),
             "our_value": m.get("our_value", ""),
             "debank_value": m.get("debank_value", ""),
             "value_diff": m.get("value_diff", ""),
+            "our_price": m.get("our_price", ""),
+            "debank_price": m.get("debank_price", ""),
+            "price_divergence_pct": m.get("price_divergence_pct", ""),
             "flag": m.get("flag", ""),
+            "notes": m.get("notes", ""),
         })
 
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
