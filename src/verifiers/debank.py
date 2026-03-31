@@ -327,13 +327,18 @@ def _match_all_tokens(our_by_symbol, all_debank_tokens, debank_to_our, native_id
                       noise_filter, leveraged_protocols):
     """Match DeBank tokens against our aggregated positions.
 
-    Comparison unit: (wallet, chain, symbol) aggregate.
-    Tier 2 detail — supplementary to wallet-level aggregate (Tier 1).
+    Flow:
+      1. Index DeBank tokens by (wallet, chain, contract) AND (wallet, chain, symbol)
+      2. For each of our positions, try contract match first, then symbol fallback
+      3. ALL positions enter matching — no pre-classification
+      4. Only AFTER matching: classify unmatched positions
 
     Returns list of match result dicts.
     """
-    # Aggregate DeBank tokens by (wallet, chain, symbol_lower)
-    debank_agg = {}
+    # Build DeBank indices: by contract AND by symbol
+    db_by_contract = {}  # {(wallet, chain, contract_lower): debank_entry}
+    db_by_symbol = {}    # {(wallet, chain, symbol_lower): debank_entry}
+
     for addr, tokens in all_debank_tokens.items():
         wallet = addr.lower()
         for dt in tokens:
@@ -342,101 +347,118 @@ def _match_all_tokens(our_by_symbol, all_debank_tokens, debank_to_our, native_id
             if not our_chain:
                 continue
 
+            contract = dt.get("id", "").lower()
             symbol = dt.get("symbol", "").lower()
             balance = _to_decimal(dt.get("amount", 0))
             price = _to_decimal(dt.get("price", 0))
             value = balance * price
-            contract = dt.get("id", "").lower()
 
-            dk = (wallet, our_chain, symbol)
-            if dk in debank_agg:
-                debank_agg[dk]["value"] += value
-                debank_agg[dk]["balance"] += balance
+            entry = {
+                "value": value,
+                "balance": balance,
+                "price": price,
+                "contract": contract,
+                "symbol": dt.get("symbol", ""),
+                "_matched": False,
+            }
+
+            # Contract index (primary)
+            ck = (wallet, our_chain, contract)
+            if ck not in db_by_contract:
+                db_by_contract[ck] = entry
             else:
-                debank_agg[dk] = {
-                    "value": value,
-                    "balance": balance,
-                    "price": price,
-                    "contract": contract,
-                    "symbol": dt.get("symbol", ""),
-                }
+                db_by_contract[ck]["value"] += value
+                db_by_contract[ck]["balance"] += balance
+
+            # Symbol index (fallback)
+            sk = (wallet, our_chain, symbol)
+            if sk not in db_by_symbol:
+                db_by_symbol[sk] = entry
+            else:
+                db_by_symbol[sk]["value"] += value
+                db_by_symbol[sk]["balance"] += balance
 
     matched_our = set()
     matches = []
 
-    # Match our aggregates against DeBank aggregates
+    # --- Phase 1: Match ALL our positions against DeBank ---
     for sym_key, our in our_by_symbol.items():
         wallet, chain, sym_lower = sym_key
         our_value = _to_decimal(our.get("value", 0))
         our_symbol = our.get("token_symbol", "")
         pos_count = our.get("position_count", 1)
-        is_debt = our.get("is_debt", False)
+        our_contracts = our.get("contracts", set())
 
-        # Debt positions from leveraged protocols: DeBank nets these
-        if is_debt:
-            if abs(our_value) < noise_filter:
-                continue
-            protos = our.get("protocols", set())
-            if protos & leveraged_protocols:
-                flag = "EXPECTED_GAP"
-                reason = "Leveraged position debt — DeBank nets collateral/debt differently"
-            else:
-                flag = "OUR_ONLY"
-                reason = ""
-            matches.append(_build_match_row(
-                wallet, chain, our_symbol, ", ".join(our["contracts"]),
-                "", "", False, our.get("price", ""), "", "",
-                our_value, "", flag, pos_count, reason))
-            matched_our.add(sym_key)
-            continue
+        # Try contract match first — check each contract this aggregate holds
+        db = None
+        for contract in our_contracts:
+            ck = (wallet, chain, contract)
+            candidate = db_by_contract.get(ck)
+            if candidate and not candidate.get("_matched"):
+                db = candidate
+                break
 
-        # Look up in DeBank aggregate — strip _debt_ prefix for lookup
-        dk = (wallet, chain, sym_lower)
-        db = debank_agg.get(dk)
+        # Fallback: symbol match (strips _debt_ prefix for lookup)
+        if not db:
+            lookup_sym = sym_lower.replace("_debt_", "")
+            sk = (wallet, chain, lookup_sym)
+            candidate = db_by_symbol.get(sk)
+            if candidate and not candidate.get("_matched"):
+                db = candidate
 
         if db:
             db_value = db["value"]
-            db_balance = db["balance"]
-            db_price = db["price"]
-            db_symbol = db["symbol"]
+            db["_matched"] = True
+            matched_our.add(sym_key)
 
-            # Noise filter
+            # Noise filter: skip if BOTH sides below threshold
             if abs(our_value) < noise_filter and abs(db_value) < noise_filter:
-                matched_our.add(sym_key)
                 continue
 
-            price_div = _price_divergence(our.get("price", ""), db_price)
+            price_div = _price_divergence(our.get("price", ""), db["price"])
             flag = _classify_match(our, price_div)
 
             matches.append(_build_match_row(
                 wallet, chain, our_symbol, db["contract"],
-                "", db_balance, False,
-                our.get("price", ""), db_price, price_div,
+                "", db["balance"], False,
+                our.get("price", ""), db["price"], price_div,
                 our_value, db_value, flag, pos_count))
+        # Unmatched — will classify in Phase 2
 
-            matched_our.add(sym_key)
-            # Mark DeBank entry as matched too
-            debank_agg[dk]["_matched"] = True
-        else:
-            # OUR_ONLY
-            if abs(our_value) < noise_filter:
-                continue
-            flag, reason = _classify_our_only(our, leveraged_protocols)
-            matches.append(_build_match_row(
-                wallet, chain, our_symbol, ", ".join(our["contracts"]),
-                "", "", False, our.get("price", ""), "", "",
-                our_value, "", flag, pos_count, reason))
+    # --- Phase 2: Classify unmatched positions (AFTER matching) ---
+    for sym_key, our in our_by_symbol.items():
+        if sym_key in matched_our:
+            continue
 
-    # DEBANK_ONLY: tokens DeBank sees that we don't have
-    for dk, db in debank_agg.items():
+        wallet, chain, sym_lower = sym_key
+        our_value = _to_decimal(our.get("value", 0))
+        our_symbol = our.get("token_symbol", "")
+        pos_count = our.get("position_count", 1)
+
+        if abs(our_value) < noise_filter:
+            continue
+
+        flag, reason = _classify_unmatched(our, leveraged_protocols)
+        matches.append(_build_match_row(
+            wallet, chain, our_symbol, ", ".join(our.get("contracts", set())),
+            "", "", False, our.get("price", ""), "", "",
+            our_value, "", flag, pos_count, reason))
+
+    # --- Phase 3: DEBANK_ONLY — DeBank tokens not matched to anything ---
+    seen_db = set()
+    for ck, db in db_by_contract.items():
         if db.get("_matched"):
             continue
-        wallet, chain, sym_lower = dk
+        wallet, chain, contract = ck
         db_value = db["value"]
         if abs(db_value) < noise_filter:
             continue
+        row_id = (wallet, chain, db["symbol"].lower())
+        if row_id in seen_db:
+            continue
+        seen_db.add(row_id)
         matches.append(_build_match_row(
-            wallet, chain, db["symbol"], db["contract"],
+            wallet, chain, db["symbol"], contract,
             "", db["balance"], False, "", db["price"], "",
             "", db_value, "DEBANK_ONLY"))
 
@@ -462,31 +484,34 @@ def _classify_match(our_info, price_div):
     return "MATCH"
 
 
-def _classify_our_only(info, leveraged_protocols):
-    """Classify a position we have but DeBank doesn't see.
+def _classify_unmatched(info, leveraged_protocols):
+    """Classify an unmatched position AFTER matching has been attempted.
 
+    Only called for positions that failed both contract and symbol matching.
     Returns (flag, gap_reason) tuple.
     """
     pos_type = info.get("position_type", "")
     category = info.get("category", "")
     protocols = info.get("protocols", set())
+    is_debt = info.get("is_debt", False)
 
-    # Leveraged protocol collateral — DeBank uses different vault share names
+    # Debt from leveraged protocols — DeBank nets collateral/debt
+    if is_debt and protocols & leveraged_protocols:
+        return "EXPECTED_GAP", "Leveraged position debt — DeBank nets collateral/debt differently"
+
+    # Collateral from leveraged protocols — DeBank uses different contract/wrapper
     if pos_type == "collateral" and protocols & leveraged_protocols:
-        return "EXPECTED_GAP", "Leveraged position — DeBank uses different vault share names"
+        return "EXPECTED_GAP", "Leveraged collateral — DeBank tracks under different contract"
 
-    # Manual accrual (A3 FalconX) — DeBank values at exchange rate, we use accrual
+    # Manual accrual (A3 FalconX) — DeBank values at exchange rate
     if category == "A3" or pos_type == "manual_accrual":
         return "EXPECTED_GAP", "Manual accrual — DeBank values at exchange rate"
 
-    # Vault shares — DeBank may track under vault token name
-    if pos_type in ("vault_share", "vault_strategy"):
-        return "EXPECTED_GAP", "Vault share — DeBank may track under vault token name"
-
-    # LP positions — DeBank decomposes differently
+    # LP constituents — DeBank decomposes LPs differently
     if pos_type in ("lp_parent", "lp_constituent"):
         return "EXPECTED_GAP", "LP position — DeBank decomposes differently"
 
+    # Everything else: genuine miss
     return "OUR_ONLY", ""
 
 
