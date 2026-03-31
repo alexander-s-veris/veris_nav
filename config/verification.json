@@ -73,6 +73,7 @@
         "hyperevm": {"debank_id": "hyper", "native_token_id": "hyper"},
         "katana": {"debank_id": "katana", "native_token_id": "katana"}
       },
+      "leveraged_protocols": ["morpho", "aave", "kamino", "euler"],
       "_note": "EVM-only portfolio aggregator. Compares aggregate and token-level DeBank values against our NAV. API key in DEBANK_API_KEY env var."
     }
   }

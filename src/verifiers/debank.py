@@ -113,6 +113,7 @@ def verify_portfolio(positions, wallets_cfg, verification_cfg, api_base):
     chain_id_map = verification_cfg.get("chain_id_map", {})
     threshold_pct = Decimal(str(verification_cfg.get("divergence_threshold_pct", 3.0)))
     noise_filter = Decimal(str(verification_cfg.get("noise_filter_usd", 10)))
+    leveraged_protocols = set(verification_cfg.get("leveraged_protocols", []))
 
     our_to_debank, debank_to_our, native_ids = _build_chain_maps(chain_id_map)
 
@@ -161,9 +162,10 @@ def verify_portfolio(positions, wallets_cfg, verification_cfg, api_base):
             logger.error("debank: all_token_list failed for %s: %s", addr[:10], e)
             all_debank_tokens[addr] = []
 
-    # Step 4: Match tokens
+    # Step 4: Match tokens (Tier 2 — supplementary detail)
     token_matches = _match_all_tokens(
-        our_by_symbol, all_debank_tokens, debank_to_our, native_ids, noise_filter)
+        our_by_symbol, all_debank_tokens, debank_to_our, native_ids,
+        noise_filter, leveraged_protocols)
 
     # Compute aggregate divergence
     if our_evm_total > 0:
@@ -265,6 +267,7 @@ def _compute_our_totals(positions, chain_id_map, native_ids):
         contract = pos.get("token_contract", "").lower()
         symbol = pos.get("token_symbol", "")
         pos_type = pos.get("position_type", "")
+        protocol = pos.get("protocol", "")
 
         # Normalize native token contract
         if contract == "native":
@@ -283,6 +286,7 @@ def _compute_our_totals(positions, chain_id_map, native_ids):
                 by_symbol[debt_key]["value"] += value
                 by_symbol[debt_key]["position_count"] += 1
                 by_symbol[debt_key]["contracts"].add(contract)
+                by_symbol[debt_key]["protocols"].add(protocol)
             else:
                 by_symbol[debt_key] = {
                     "value": value,
@@ -292,6 +296,7 @@ def _compute_our_totals(positions, chain_id_map, native_ids):
                     "position_type": pos_type,
                     "is_debt": True,
                     "contracts": {contract},
+                    "protocols": {protocol},
                     "price": pos.get("price_usd", ""),
                 }
         else:
@@ -299,6 +304,7 @@ def _compute_our_totals(positions, chain_id_map, native_ids):
                 by_symbol[sym_key]["value"] += value
                 by_symbol[sym_key]["position_count"] += 1
                 by_symbol[sym_key]["contracts"].add(contract)
+                by_symbol[sym_key]["protocols"].add(protocol)
             else:
                 by_symbol[sym_key] = {
                     "value": value,
@@ -308,6 +314,7 @@ def _compute_our_totals(positions, chain_id_map, native_ids):
                     "position_type": pos_type,
                     "is_debt": False,
                     "contracts": {contract},
+                    "protocols": {protocol},
                     "price": pos.get("price_usd", ""),
                 }
 
@@ -316,12 +323,12 @@ def _compute_our_totals(positions, chain_id_map, native_ids):
 
 # --- Token matching ---
 
-def _match_all_tokens(our_by_symbol, all_debank_tokens, debank_to_our, native_ids, noise_filter):
+def _match_all_tokens(our_by_symbol, all_debank_tokens, debank_to_our, native_ids,
+                      noise_filter, leveraged_protocols):
     """Match DeBank tokens against our aggregated positions.
 
     Comparison unit: (wallet, chain, symbol) aggregate.
-    DeBank typically has one entry per token per wallet. We may have N positions
-    rolled up. The match compares aggregate values.
+    Tier 2 detail — supplementary to wallet-level aggregate (Tier 1).
 
     Returns list of match result dicts.
     """
@@ -365,15 +372,21 @@ def _match_all_tokens(our_by_symbol, all_debank_tokens, debank_to_our, native_id
         pos_count = our.get("position_count", 1)
         is_debt = our.get("is_debt", False)
 
-        # Debt positions: DeBank nets these, flag as EXPECTED_GAP
+        # Debt positions from leveraged protocols: DeBank nets these
         if is_debt:
             if abs(our_value) < noise_filter:
                 continue
+            protos = our.get("protocols", set())
+            if protos & leveraged_protocols:
+                flag = "EXPECTED_GAP"
+                reason = "Leveraged position debt — DeBank nets collateral/debt differently"
+            else:
+                flag = "OUR_ONLY"
+                reason = ""
             matches.append(_build_match_row(
                 wallet, chain, our_symbol, ", ".join(our["contracts"]),
                 "", "", False, our.get("price", ""), "", "",
-                our_value, "", "EXPECTED_GAP", pos_count,
-                "Debt positions netted by DeBank"))
+                our_value, "", flag, pos_count, reason))
             matched_our.add(sym_key)
             continue
 
@@ -408,11 +421,11 @@ def _match_all_tokens(our_by_symbol, all_debank_tokens, debank_to_our, native_id
             # OUR_ONLY
             if abs(our_value) < noise_filter:
                 continue
-            flag = _classify_our_only(our)
+            flag, reason = _classify_our_only(our, leveraged_protocols)
             matches.append(_build_match_row(
                 wallet, chain, our_symbol, ", ".join(our["contracts"]),
                 "", "", False, our.get("price", ""), "", "",
-                our_value, "", flag, pos_count))
+                our_value, "", flag, pos_count, reason))
 
     # DEBANK_ONLY: tokens DeBank sees that we don't have
     for dk, db in debank_agg.items():
@@ -449,19 +462,32 @@ def _classify_match(our_info, price_div):
     return "MATCH"
 
 
-def _classify_our_only(info):
-    """Classify a position we have but DeBank doesn't see."""
+def _classify_our_only(info, leveraged_protocols):
+    """Classify a position we have but DeBank doesn't see.
+
+    Returns (flag, gap_reason) tuple.
+    """
     pos_type = info.get("position_type", "")
     category = info.get("category", "")
+    protocols = info.get("protocols", set())
 
-    # Protocol positions where DeBank uses different token names/wrappers
-    if pos_type in ("vault_share", "vault_strategy", "manual_accrual",
-                     "lp_parent", "lp_constituent", "collateral"):
-        return "EXPECTED_GAP"
-    if category in ("A3", "A2"):
-        return "EXPECTED_GAP"
+    # Leveraged protocol collateral — DeBank uses different vault share names
+    if pos_type == "collateral" and protocols & leveraged_protocols:
+        return "EXPECTED_GAP", "Leveraged position — DeBank uses different vault share names"
 
-    return "OUR_ONLY"
+    # Manual accrual (A3 FalconX) — DeBank values at exchange rate, we use accrual
+    if category == "A3" or pos_type == "manual_accrual":
+        return "EXPECTED_GAP", "Manual accrual — DeBank values at exchange rate"
+
+    # Vault shares — DeBank may track under vault token name
+    if pos_type in ("vault_share", "vault_strategy"):
+        return "EXPECTED_GAP", "Vault share — DeBank may track under vault token name"
+
+    # LP positions — DeBank decomposes differently
+    if pos_type in ("lp_parent", "lp_constituent"):
+        return "EXPECTED_GAP", "LP position — DeBank decomposes differently"
+
+    return "OUR_ONLY", ""
 
 
 # --- Helpers ---

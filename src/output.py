@@ -153,7 +153,7 @@ DEBANK_COLUMNS = [
     "our_position_count",
     "our_value", "debank_value", "value_diff",
     "our_price", "debank_price", "price_divergence_pct",
-    "flag", "notes",
+    "flag", "gap_reason",
 ]
 
 LP_COLUMNS = [
@@ -411,7 +411,7 @@ def write_debank_verification(debank_result, output_dir, file_suffix=""):
             "debank_price": m.get("debank_price", ""),
             "price_divergence_pct": m.get("price_divergence_pct", ""),
             "flag": m.get("flag", ""),
-            "notes": m.get("notes", ""),
+            "gap_reason": m.get("notes", ""),
         })
 
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
