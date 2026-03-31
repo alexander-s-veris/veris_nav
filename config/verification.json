@@ -4,7 +4,8 @@
   "_api_endpoints": {
     "llamarisk": "https://dashboard.llamarisk.com/api",
     "gdrive": "secrets/gcloud-service-account.json",
-    "superstate": "https://api.superstate.com"
+    "superstate": "https://api.superstate.com",
+    "debank": "https://pro-openapi.debank.com/v1"
   },
 
   "_tools": {
@@ -56,14 +57,21 @@
   },
 
   "portfolio_level": {
-    "_doc": "Aggregate portfolio verification sources (Section 7.1). Not yet implemented.",
+    "_doc": "Aggregate portfolio verification sources (Section 7.1).",
     "debank": {
-      "type": "debank",
-      "_note": "EVM-only portfolio aggregator. Requires API key."
-    },
-    "octav": {
-      "type": "octav",
-      "_note": "DeFi portfolio analytics. Requires paid subscription."
+      "type": "debank_portfolio",
+      "scope": "evm_only",
+      "divergence_threshold_pct": 3.0,
+      "chain_id_map": {
+        "ethereum": "eth",
+        "arbitrum": "arb",
+        "base": "base",
+        "avalanche": "avax",
+        "plasma": "plasma",
+        "hyperevm": "hyper",
+        "katana": "katana"
+      },
+      "_note": "EVM-only portfolio aggregator. Compares aggregate and token-level DeBank values against our NAV. API key in DEBANK_API_KEY env var."
     }
   }
 }

@@ -148,6 +148,14 @@ PT_LOT_COLUMNS = [
     "yield_to_date", "value_underlying", "value_usd",
 ]
 
+DEBANK_COLUMNS = [
+    "wallet", "chain", "token_symbol", "token_contract",
+    "our_balance", "debank_balance", "balance_match",
+    "our_price", "debank_price", "price_divergence_pct",
+    "our_value", "debank_value", "value_diff",
+    "flag",
+]
+
 LP_COLUMNS = [
     "parent_position_id", "lp_name", "chain", "protocol",
     "constituent_type", "token_symbol", "token_category",
@@ -377,9 +385,47 @@ def write_verification(verification_results, output_dir, file_suffix=""):
     return csv_path
 
 
+def write_debank_verification(debank_result, output_dir, file_suffix=""):
+    """Write debank_verification.csv with token-level cross-reference."""
+    if not debank_result:
+        return None
+
+    token_matches = debank_result.get("token_matches", [])
+    if not token_matches:
+        return None
+
+    csv_path = os.path.join(output_dir, f"debank_verification{file_suffix}.csv")
+    rows = []
+
+    for m in token_matches:
+        rows.append({
+            "wallet": m.get("wallet", ""),
+            "chain": _format_chain(m.get("chain", "")),
+            "token_symbol": m.get("token_symbol", ""),
+            "token_contract": m.get("token_contract", ""),
+            "our_balance": m.get("our_balance", ""),
+            "debank_balance": m.get("debank_balance", ""),
+            "balance_match": m.get("balance_match", ""),
+            "our_price": m.get("our_price", ""),
+            "debank_price": m.get("debank_price", ""),
+            "price_divergence_pct": m.get("price_divergence_pct", ""),
+            "our_value": m.get("our_value", ""),
+            "debank_value": m.get("debank_value", ""),
+            "value_diff": m.get("value_diff", ""),
+            "flag": m.get("flag", ""),
+        })
+
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=DEBANK_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return csv_path
+
+
 def write_nav_summary(positions, output_dir, run_ts_cet, file_suffix="",
                       valuation_blocks=None, chain_health=None,
-                      verification_results=None):
+                      verification_results=None, debank_result=None):
     """Write nav_summary.json with aggregations by category and wallet.
 
     Args:
@@ -480,6 +526,21 @@ def write_nav_summary(positions, output_dir, run_ts_cet, file_suffix="",
                 entry["error"] = v["error"]
             verification_summary.append(entry)
         summary["verification"] = verification_summary
+
+    # Portfolio-level verification (DeBank)
+    if debank_result:
+        summary["portfolio_verification"] = {
+            "source": debank_result.get("source", ""),
+            "our_evm_total_usd": str(debank_result.get("our_evm_total_usd", "")),
+            "debank_total_usd": str(debank_result.get("debank_total_usd", "")),
+            "divergence_pct": str(debank_result.get("divergence_pct", "")),
+            "divergence_flag": debank_result.get("divergence_flag", ""),
+            "wallets_queried": debank_result.get("wallets_queried", 0),
+            "per_wallet": debank_result.get("per_wallet", {}),
+            "per_chain": debank_result.get("per_chain", {}),
+            "verification_timestamp": debank_result.get("verification_timestamp", ""),
+            "notes": debank_result.get("notes", ""),
+        }
 
     # Chain health report
     if chain_health:

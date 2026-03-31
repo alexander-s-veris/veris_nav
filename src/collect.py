@@ -42,7 +42,8 @@ from protocol_queries import (
 from valuation import value_position
 from output import (
     write_positions, write_leverage_detail, write_pt_lots,
-    write_lp_decomposition, write_verification, write_nav_summary,
+    write_lp_decomposition, write_verification, write_debank_verification,
+    write_nav_summary,
 )
 from verifiers import run_asset_verifications
 
@@ -451,6 +452,40 @@ def main():
         print(f"  Verification step failed: {e}")
 
     # =========================================================================
+    # STEP 4.6: Portfolio Verification (DeBank)
+    # =========================================================================
+    debank_result = None
+    if os.environ.get("DEBANK_API_KEY"):
+        print("\n--- Step 4.6: Portfolio Verification (DeBank) ---", flush=True)
+        try:
+            from verifiers import _load_verification_cfg, _get_api_base
+            from verifiers.debank import verify_portfolio
+            v_cfg = _load_verification_cfg()
+            debank_cfg = v_cfg.get("portfolio_level", {}).get("debank", {})
+            debank_api = _get_api_base("debank")
+            debank_result = verify_portfolio(
+                positions=all_positions,
+                wallets_cfg=wallets,
+                verification_cfg=debank_cfg,
+                api_base=debank_api,
+            )
+            our = debank_result.get("our_evm_total_usd", 0)
+            db = debank_result.get("debank_total_usd", 0)
+            div = debank_result.get("divergence_pct", 0)
+            flag = debank_result.get("divergence_flag", "")
+            print(f"  Our EVM:  ${float(our):>14,.2f}")
+            print(f"  DeBank:   ${float(db):>14,.2f}")
+            print(f"  Divergence: {float(div):.2f}% {flag}")
+            matches = debank_result.get("token_matches", [])
+            flags = {}
+            for m in matches:
+                f = m.get("flag", "")
+                flags[f] = flags.get(f, 0) + 1
+            print(f"  Tokens: {len(matches)} matched — {flags}")
+        except Exception as e:
+            print(f"  WARNING: DeBank verification failed ({e})", flush=True)
+
+    # =========================================================================
     # STEP 5: Write Outputs
     # =========================================================================
     print("\n--- Step 5: Write Outputs ---")
@@ -480,6 +515,10 @@ def main():
     if ver_path:
         print(f"  {ver_path}")
 
+    db_path = write_debank_verification(debank_result, output_dir, file_suffix)
+    if db_path:
+        print(f"  {db_path}")
+
     # Build valuation block metadata for the summary
     vb_metadata = {}
     if valuation_blocks:
@@ -493,7 +532,8 @@ def main():
                                      file_suffix=file_suffix,
                                      valuation_blocks=vb_metadata,
                                      chain_health=chain_health,
-                                     verification_results=verification_results)
+                                     verification_results=verification_results,
+                                     debank_result=debank_result)
     print(f"  {summary_path}")
 
     # =========================================================================
