@@ -197,7 +197,8 @@
       "Bash(/tmp/final_checks.py:*)",
       "Bash(/tmp/edge_cases.py:*)",
       "Bash(/tmp/AUDIT_REPORT.txt:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(grep:*)"
     ],
     "additionalDirectories": [
       "C:/Users/shipo/.claude/projects"
