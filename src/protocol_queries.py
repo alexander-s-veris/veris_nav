@@ -314,6 +314,13 @@ def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
         _slot, block_ts = block_ts_override
     else:
         block_ts = datetime.now(timezone.utc).strftime(TS_FMT)
+        # Get current slot for block_number backfill
+        try:
+            from solana_client import solana_rpc
+            slot_resp = solana_rpc("getSlot", [])
+            _slot = slot_resp.get("result")
+        except Exception:
+            _slot = None
 
     # Read wallet protocol registrations
     wallets_cfg = _load_wallets_cfg()
@@ -346,10 +353,21 @@ def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
         for name, handler_fn, needs_date in handlers:
             if needs_date:
                 if valuation_date:
-                    rows.extend(_run_with_retry(
-                        name, lambda fn=handler_fn: fn(valuation_date, block_ts)))
+                    result = _run_with_retry(
+                        name, lambda fn=handler_fn: fn(valuation_date, block_ts))
+                    if _slot:
+                        for r in result:
+                            if not r.get("block_number"):
+                                r["block_number"] = str(_slot)
+                    rows.extend(result)
             else:
-                rows.extend(_run_with_retry(
-                    name, lambda fn=handler_fn: fn(wallet, block_ts)))
+                result = _run_with_retry(
+                    name, lambda fn=handler_fn: fn(wallet, block_ts))
+                # Backfill slot as block_number for handlers that don't set it
+                if _slot:
+                    for r in result:
+                        if not r.get("block_number"):
+                            r["block_number"] = str(_slot)
+                rows.extend(result)
 
     return rows
