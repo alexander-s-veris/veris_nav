@@ -132,19 +132,14 @@ def query_uniswap_v4(w3, chain, wallet, block_number, block_ts):
         dec1 = token1_cfg["decimals"]
 
         # Estimate current tick from DefiLlama price of token0
-        # token0/token1 price ratio needed
         try:
-            import requests
-            coin_key = f"ethereum:{token0_cfg['address']}"
-            resp = requests.get(
-                f"https://coins.llama.fi/prices/current/{coin_key}", timeout=10)
-            price0 = resp.json()["coins"][coin_key]["price"]
-            # token0 price in USD, token1 (USDC) ≈ $1
-            # price_ratio = how many token1 per token0
+            from adapters import defillama_price
+            feed_cfg = {"chain": chain, "address": token0_cfg["address"]}
+            result = defillama_price(feed_cfg)
+            price0 = float(result["price_usd"])
             current_tick = _estimate_current_tick(dec0, dec1, price0)
             logger.info("uniswap: estimated current tick=%d from price=%s", current_tick, price0)
         except Exception as e:
-            # Fallback: assume mid-range
             current_tick = (tick_lower + tick_upper) // 2
             logger.warning("uniswap: tick estimation failed (%s), using mid-range=%d", e, current_tick)
 

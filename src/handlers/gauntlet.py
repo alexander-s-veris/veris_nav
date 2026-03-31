@@ -12,7 +12,12 @@ from handlers import _load_contracts_cfg, _get_abi, _fmt
 
 logger = logging.getLogger(__name__)
 
-_TP_STALENESS_THRESHOLD_DAYS = 45
+
+def _get_tp_staleness_threshold():
+    """Read TP staleness threshold from config."""
+    contracts = _load_contracts_cfg()
+    gp = contracts.get("ethereum", {}).get("_gauntlet_pareto", {})
+    return gp.get("tp_staleness_threshold_days", 45)
 
 
 def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
@@ -55,7 +60,7 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
         source_note += f" | {staleness_note}"
 
     return [{
-        "chain": chain, "protocol": "gauntlet_pareto", "wallet": wallet,
+        "chain": chain, "protocol": "gauntlet_pareto", "protocol_display": "Gauntlet Vaults", "wallet": wallet,
         "position_label": "Gauntlet Levered FalconX",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "gpAAFalconX",
@@ -98,7 +103,7 @@ def _read_falconx_sqlite(table_name, value_column):
 
 
 def _check_tp_staleness():
-    """Check if on-chain TP hasn't changed in >45 days.
+    """Check if on-chain TP hasn't changed beyond the configured threshold.
 
     First checks the tp_changes table (populated by the updater).
     Falls back to scanning gauntlet_levered for the last TP transition.
@@ -122,8 +127,8 @@ def _check_tp_staleness():
                     row[0], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
                 days = (datetime.now(timezone.utc) - last_change).days
                 conn.close()
-                if days > _TP_STALENESS_THRESHOLD_DAYS:
-                    return f"WARNING: on-chain TP stale ({days} days since last change, threshold={_TP_STALENESS_THRESHOLD_DAYS}d)"
+                if days > _get_tp_staleness_threshold():
+                    return f"WARNING: on-chain TP stale ({days} days since last change, threshold={_get_tp_staleness_threshold()}d)"
                 return None
         except sqlite3.OperationalError:
             pass  # Table doesn't exist yet — fall through
@@ -149,8 +154,8 @@ def _check_tp_staleness():
         last_change = datetime.strptime(
             last_change_ts, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
         days = (datetime.now(timezone.utc) - last_change).days
-        if days > _TP_STALENESS_THRESHOLD_DAYS:
-            return f"WARNING: on-chain TP stale ({days} days since last change, threshold={_TP_STALENESS_THRESHOLD_DAYS}d)"
+        if days > _get_tp_staleness_threshold():
+            return f"WARNING: on-chain TP stale ({days} days since last change, threshold={_get_tp_staleness_threshold()}d)"
 
     except Exception:
         pass
@@ -196,7 +201,7 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
         source_note += f" | {staleness_note}"
 
     return [{
-        "chain": chain, "protocol": "gauntlet_pareto", "wallet": wallet,
+        "chain": chain, "protocol": "gauntlet_pareto", "protocol_display": "Pareto", "wallet": wallet,
         "position_label": "Pareto / FalconX",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "AA_FalconXUSDC",

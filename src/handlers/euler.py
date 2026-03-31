@@ -75,7 +75,7 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
                     "decimals": share_dec,
                     "exchange_rate": assets_human / shares_human if shares_human > 0 else Decimal(0),
                     "underlying_amount": assets_human,
-                    "underlying_symbol": _get_underlying_symbol(entry, vault_addr, "syrupUSDC"),
+                    "underlying_symbol": _get_underlying_symbol(entry, vault_addr, ""),
                     "euler_sub_account": sub_id,
                     "euler_sub_address": sub_addr.lower(),
                     "block_number": block_number, "block_timestamp_utc": block_ts,

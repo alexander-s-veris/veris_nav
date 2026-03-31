@@ -1,7 +1,6 @@
 """Exponent LP and YT handlers (Solana -- Category C and F)."""
 
 import logging
-import math
 import time
 from decimal import Decimal
 
@@ -124,13 +123,14 @@ def query_exponent_yts(wallet, block_ts):
         logger.info("exponent.getMarket(%s) for YT pricing", mcfg["market_pubkey"])
         sec_remaining = market["expiration_ts"] - int(time.time())
         if sec_remaining > 0 and market["last_ln_implied_rate"] > 0:
-            exchange_rate = math.exp(
-                market["last_ln_implied_rate"] * sec_remaining / 31_536_000)
-            pt_price_ratio = 1.0 / exchange_rate
+            rate = Decimal(str(market["last_ln_implied_rate"]))
+            secs = Decimal(str(sec_remaining))
+            exchange_rate = (rate * secs / Decimal("31536000")).exp()
+            pt_price_ratio = Decimal(1) / exchange_rate
         else:
-            pt_price_ratio = 1.0
+            pt_price_ratio = Decimal(1)
 
-        yt_price_ratio = Decimal(str(1.0 - pt_price_ratio))
+        yt_price_ratio = Decimal(1) - pt_price_ratio
 
         rows.append({
             "chain": "solana", "protocol": "exponent", "wallet": wallet,

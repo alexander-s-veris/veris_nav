@@ -1,295 +1,729 @@
 {
   "_doc": "Minimal ABIs for all contract interactions used in the NAV collection system. Each key is a contract type, each value is the ABI array. Scripts should import from here instead of defining ABIs inline.",
-
   "erc20": [
     {
-      "inputs": [{"name": "account", "type": "address"}],
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
       "name": "balanceOf",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "totalSupply",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "decimals",
-      "outputs": [{"name": "", "type": "uint8"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "name",
-      "outputs": [{"name": "", "type": "string"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "symbol",
-      "outputs": [{"name": "", "type": "string"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "erc4626": [
     {
-      "inputs": [{"name": "account", "type": "address"}],
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
       "name": "balanceOf",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "totalSupply",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "decimals",
-      "outputs": [{"name": "", "type": "uint8"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
-      "inputs": [{"name": "shares", "type": "uint256"}],
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
       "name": "convertToAssets",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "totalAssets",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "asset",
-      "outputs": [{"name": "", "type": "address"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "morpho_core": [
     {
-      "inputs": [{"name": "id", "type": "bytes32"}, {"name": "user", "type": "address"}],
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
       "name": "position",
       "outputs": [
-        {"name": "supplyShares", "type": "uint256"},
-        {"name": "borrowShares", "type": "uint128"},
-        {"name": "collateral", "type": "uint128"}
+        {
+          "name": "supplyShares",
+          "type": "uint256"
+        },
+        {
+          "name": "borrowShares",
+          "type": "uint128"
+        },
+        {
+          "name": "collateral",
+          "type": "uint128"
+        }
       ],
-      "stateMutability": "view", "type": "function"
+      "stateMutability": "view",
+      "type": "function"
     },
     {
-      "inputs": [{"name": "id", "type": "bytes32"}],
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32"
+        }
+      ],
       "name": "market",
       "outputs": [
-        {"name": "totalSupplyAssets", "type": "uint128"},
-        {"name": "totalSupplyShares", "type": "uint128"},
-        {"name": "totalBorrowAssets", "type": "uint128"},
-        {"name": "totalBorrowShares", "type": "uint128"},
-        {"name": "lastUpdate", "type": "uint128"},
-        {"name": "fee", "type": "uint128"}
+        {
+          "name": "totalSupplyAssets",
+          "type": "uint128"
+        },
+        {
+          "name": "totalSupplyShares",
+          "type": "uint128"
+        },
+        {
+          "name": "totalBorrowAssets",
+          "type": "uint128"
+        },
+        {
+          "name": "totalBorrowShares",
+          "type": "uint128"
+        },
+        {
+          "name": "lastUpdate",
+          "type": "uint128"
+        },
+        {
+          "name": "fee",
+          "type": "uint128"
+        }
       ],
-      "stateMutability": "view", "type": "function"
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "chainlink_aggregator_v3": [
     {
       "inputs": [],
       "name": "latestRoundData",
       "outputs": [
-        {"name": "roundId", "type": "uint80"},
-        {"name": "answer", "type": "int256"},
-        {"name": "startedAt", "type": "uint256"},
-        {"name": "updatedAt", "type": "uint256"},
-        {"name": "answeredInRound", "type": "uint80"}
+        {
+          "name": "roundId",
+          "type": "uint80"
+        },
+        {
+          "name": "answer",
+          "type": "int256"
+        },
+        {
+          "name": "startedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "updatedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "answeredInRound",
+          "type": "uint80"
+        }
       ],
-      "stateMutability": "view", "type": "function"
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "decimals",
-      "outputs": [{"name": "", "type": "uint8"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "description",
-      "outputs": [{"name": "", "type": "string"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "aave_pool": [
     {
-      "inputs": [{"name": "user", "type": "address"}],
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
       "name": "getUserAccountData",
       "outputs": [
-        {"name": "totalCollateralBase", "type": "uint256"},
-        {"name": "totalDebtBase", "type": "uint256"},
-        {"name": "availableBorrowsBase", "type": "uint256"},
-        {"name": "currentLiquidationThreshold", "type": "uint256"},
-        {"name": "ltv", "type": "uint256"},
-        {"name": "healthFactor", "type": "uint256"}
+        {
+          "name": "totalCollateralBase",
+          "type": "uint256"
+        },
+        {
+          "name": "totalDebtBase",
+          "type": "uint256"
+        },
+        {
+          "name": "availableBorrowsBase",
+          "type": "uint256"
+        },
+        {
+          "name": "currentLiquidationThreshold",
+          "type": "uint256"
+        },
+        {
+          "name": "ltv",
+          "type": "uint256"
+        },
+        {
+          "name": "healthFactor",
+          "type": "uint256"
+        }
       ],
-      "stateMutability": "view", "type": "function"
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "pareto_credit_vault": [
     {
-      "inputs": [{"name": "tranche", "type": "address"}],
+      "inputs": [
+        {
+          "name": "tranche",
+          "type": "address"
+        }
+      ],
       "name": "tranchePrice",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
-      "inputs": [{"name": "tranche", "type": "address"}],
+      "inputs": [
+        {
+          "name": "tranche",
+          "type": "address"
+        }
+      ],
       "name": "virtualPrice",
-      "outputs": [{"name": "_virtualPrice", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "_virtualPrice",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
-      "inputs": [{"name": "tranche", "type": "address"}],
+      "inputs": [
+        {
+          "name": "tranche",
+          "type": "address"
+        }
+      ],
       "name": "getApr",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "getContractValue",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "lastNAVAA",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "epochDuration",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "epochEndDate",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "expectedEpochInterest",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "lastEpochApr",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "lastEpochInterest",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "isEpochRunning",
-      "outputs": [{"name": "", "type": "bool"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "defaulted",
-      "outputs": [{"name": "", "type": "bool"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "token",
-      "outputs": [{"name": "", "type": "address"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
       "name": "AATranche",
-      "outputs": [{"name": "", "type": "address"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "ethena_cooldown": [
     {
-      "inputs": [{"name": "owner", "type": "address"}],
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
       "name": "cooldowns",
       "outputs": [
-        {"name": "cooldownEnd", "type": "uint104"},
-        {"name": "underlyingAmount", "type": "uint152"}
+        {
+          "name": "cooldownEnd",
+          "type": "uint104"
+        },
+        {
+          "name": "underlyingAmount",
+          "type": "uint152"
+        }
       ],
-      "stateMutability": "view", "type": "function"
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "credit_coop_vault": [
     {
-      "inputs": [{"name": "account", "type": "address"}],
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
       "name": "balanceOf",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
-      "inputs": [{"name": "shares", "type": "uint256"}],
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
       "name": "convertToAssets",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "credit_coop_credit_strategy": [
     {
-      "inputs": [], "name": "totalActiveCredit",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "inputs": [],
+      "name": "totalActiveCredit",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "credit_coop_liquid_strategy": [
     {
-      "inputs": [], "name": "totalAssets",
-      "outputs": [{"name": "", "type": "uint256"}],
-      "stateMutability": "view", "type": "function"
+      "inputs": [],
+      "name": "totalAssets",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-
   "uniswap_v4_pm": [
     {
-      "inputs": [{"name": "tokenId", "type": "uint256"}],
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ],
       "name": "ownerOf",
-      "outputs": [{"name": "", "type": "address"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
-      "inputs": [{"name": "tokenId", "type": "uint256"}],
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ],
       "name": "getPositionLiquidity",
-      "outputs": [{"name": "", "type": "uint128"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
-      "inputs": [{"name": "tokenId", "type": "uint256"}],
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ],
       "name": "positionInfo",
-      "outputs": [{"name": "", "type": "bytes32"}],
-      "stateMutability": "view", "type": "function"
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "curve_pool": [
+    {
+      "inputs": [],
+      "name": "get_virtual_price",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "name": "i",
+          "type": "uint256"
+        }
+      ],
+      "name": "coins",
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "name": "i",
+          "type": "uint256"
+        }
+      ],
+      "name": "balances",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalSupply",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "decimals",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "balanceOf",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ]
 }

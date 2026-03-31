@@ -45,15 +45,20 @@ _CHAIN_DISPLAY = {
 
 _PROTOCOL_DISPLAY = {
     "aave": "Aave",
+    "arma": "ARMA",
+    "avantis": "Avantis",
     "credit_coop": "Credit Coop",
+    "curve": "Curve",
     "ethena": "Ethena.fi",
     "euler": "Euler",
     "exponent": "Exponent Finance",
     "kamino": "Kamino",
     "midas": "Midas",
     "morpho": "Morpho (Markets)",
+    "pt_lots": "PT Lots",
     "uniswap_v4": "Uniswap V4",
-    "curve": "Curve",
+    "wallet": "Wallet Balance",
+    "yearn": "yearn.fi",
 }
 
 
@@ -62,49 +67,27 @@ def _format_chain(chain):
     return _CHAIN_DISPLAY.get(chain, chain.capitalize() if chain else "")
 
 
-def _format_protocol(protocol, position_label=""):
+def _format_protocol(pos):
     """Format protocol name for display output.
 
-    Uses position_label for context-dependent formatting (e.g., Gauntlet vs Pareto).
+    Priority: handler-set protocol_display > dict lookup > fallback.
     """
+    # Handler can override via protocol_display field
+    explicit = pos.get("protocol_display", "")
+    if explicit:
+        return explicit
+
+    protocol = pos.get("protocol", "")
     if not protocol:
         return "Wallet Balance"
 
-    # Morpho vaults (various section keys like morpho_vaults, morpho_vaults_0xec0b)
+    # Prefix match for morpho_vaults variants
     if protocol.startswith("morpho_vaults"):
         return "Morpho (Vaults)"
 
-    # Gauntlet/Pareto — distinguished by position label
-    if protocol == "gauntlet_pareto":
-        if "Direct" in position_label or "AA_FalconXUSDC" in position_label:
-            return "Pareto"
-        return "Gauntlet Vaults"
-
-    # Wallet balances
-    if protocol == "wallet":
-        return "Wallet Balance"
-
-    # ARMA proxy balances
-    if protocol == "arma":
-        return "ARMA"
-
-    # Yearn
-    if protocol == "yearn":
-        return "yearn.fi"
-
-    # Avantis
-    if protocol == "avantis":
-        return "Avantis"
-
-    # PT lots
-    if protocol == "pt_lots":
-        return "PT Lots"
-
-    # Standard lookup
     if protocol in _PROTOCOL_DISPLAY:
         return _PROTOCOL_DISPLAY[protocol]
 
-    # Fallback: capitalize and replace underscores
     return protocol.replace("_", " ").title()
 
 
@@ -149,7 +132,7 @@ POSITION_COLUMNS = [
     "block_number", "block_timestamp_utc",
     "staleness_hours", "stale_flag",
     "depeg_flag", "depeg_deviation_pct",
-    "notes", "run_timestamp_cet",
+    "notes", "breakdown", "run_timestamp_cet",
 ]
 
 LEVERAGE_COLUMNS = [
@@ -207,7 +190,7 @@ def write_positions(positions, output_dir, run_ts_cet, file_suffix=""):
         row = {
             "position_id": make_position_id(pos),
             "chain": _format_chain(pos.get("chain", "")),
-            "protocol": _format_protocol(pos.get("protocol", ""), pos.get("position_label", "")),
+            "protocol": _format_protocol(pos),
             "wallet": pos.get("wallet", ""),
             "position_label": sanitize_label(pos.get("position_label", "")),
             "category": pos.get("category", ""),
@@ -226,6 +209,7 @@ def write_positions(positions, output_dir, run_ts_cet, file_suffix=""):
             "depeg_flag": pos.get("depeg_flag", ""),
             "depeg_deviation_pct": str(pos.get("depeg_deviation_pct", "")),
             "notes": pos.get("notes", ""),
+            "breakdown": json.dumps(pos["_breakdown"]) if pos.get("_breakdown") else "",
             "run_timestamp_cet": run_ts_cet,
         }
         rows.append(row)
@@ -266,7 +250,7 @@ def write_leverage_detail(positions, output_dir, file_suffix=""):
     for pos in d_positions:
         rows.append({
             "parent_position_id": make_position_id(pos),
-            "protocol": _format_protocol(pos.get("protocol", ""), pos.get("position_label", "")),
+            "protocol": _format_protocol(pos),
             "market_id": pos.get("leverage_market_id", ""),
             "wallet": pos.get("wallet", ""),
             "chain": _format_chain(pos.get("chain", "")),
@@ -339,7 +323,7 @@ def write_lp_decomposition(positions, output_dir, file_suffix=""):
             "parent_position_id": make_position_id(pos),
             "lp_name": pos.get("position_label", ""),
             "chain": _format_chain(pos.get("chain", "")),
-            "protocol": _format_protocol(pos.get("protocol", ""), pos.get("position_label", "")),
+            "protocol": _format_protocol(pos),
             "constituent_type": pos.get("lp_constituent_type", ""),
             "token_symbol": pos.get("token_symbol", ""),
             "token_category": pos.get("token_category", ""),

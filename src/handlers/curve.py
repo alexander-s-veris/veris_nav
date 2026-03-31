@@ -16,36 +16,6 @@ from handlers import _load_contracts_cfg, _get_abi, _fmt
 
 logger = logging.getLogger(__name__)
 
-_POOL_ABI = [
-    {"inputs": [], "name": "get_virtual_price",
-     "outputs": [{"name": "", "type": "uint256"}],
-     "stateMutability": "view", "type": "function"},
-    {"inputs": [{"name": "i", "type": "uint256"}], "name": "coins",
-     "outputs": [{"name": "", "type": "address"}],
-     "stateMutability": "view", "type": "function"},
-    {"inputs": [{"name": "i", "type": "uint256"}], "name": "balances",
-     "outputs": [{"name": "", "type": "uint256"}],
-     "stateMutability": "view", "type": "function"},
-    {"inputs": [], "name": "totalSupply",
-     "outputs": [{"name": "", "type": "uint256"}],
-     "stateMutability": "view", "type": "function"},
-    {"inputs": [], "name": "decimals",
-     "outputs": [{"name": "", "type": "uint8"}],
-     "stateMutability": "view", "type": "function"},
-    {"inputs": [{"name": "", "type": "address"}], "name": "balanceOf",
-     "outputs": [{"name": "", "type": "uint256"}],
-     "stateMutability": "view", "type": "function"},
-]
-
-_ERC20_ABI = [
-    {"inputs": [], "name": "decimals",
-     "outputs": [{"name": "", "type": "uint8"}],
-     "stateMutability": "view", "type": "function"},
-    {"inputs": [], "name": "symbol",
-     "outputs": [{"name": "", "type": "string"}],
-     "stateMutability": "view", "type": "function"},
-]
-
 
 def query_curve_lp(w3, chain, wallet, block_number, block_ts):
     """Query Curve LP positions and decompose into underlying constituents."""
@@ -62,7 +32,7 @@ def query_curve_lp(w3, chain, wallet, block_number, block_ts):
             continue
 
         pool = w3.eth.contract(
-            address=Web3.to_checksum_address(pool_addr), abi=_POOL_ABI)
+            address=Web3.to_checksum_address(pool_addr), abi=_get_abi("curve_pool"))
 
         # Check if wallet holds LP tokens
         lp_balance = pool.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
@@ -100,7 +70,7 @@ def query_curve_lp(w3, chain, wallet, block_number, block_ts):
                 break
 
             # Get coin metadata
-            coin = w3.eth.contract(address=coin_addr, abi=_ERC20_ABI)
+            coin = w3.eth.contract(address=coin_addr, abi=_get_abi("erc20"))
             try:
                 coin_decimals = coin.functions.decimals().call(block_identifier=block_number)
                 coin_symbol = coin.functions.symbol().call(block_identifier=block_number)
