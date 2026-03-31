@@ -32,7 +32,9 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     GAUNTLET_VAULT = vault_cfg.get("address")
     if not GAUNTLET_VAULT:
         return []
-    vault_decimals = vault_cfg.get("decimals", 18)
+    vault_decimals = vault_cfg.get("decimals")
+    if vault_decimals is None:
+        raise ValueError("Gauntlet vault config missing 'decimals' in contracts.json")
     erc20_abi = _get_abi("erc20")
 
     vault = w3.eth.contract(address=Web3.to_checksum_address(GAUNTLET_VAULT), abi=erc20_abi)
@@ -174,7 +176,9 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
     AA_TRANCHE = tranche_cfg.get("address")
     if not AA_TRANCHE:
         return []
-    tranche_decimals = tranche_cfg.get("decimals", 18)
+    tranche_decimals = tranche_cfg.get("decimals")
+    if tranche_decimals is None:
+        raise ValueError("AA_FalconXUSDC tranche config missing 'decimals' in contracts.json")
     erc20_abi = _get_abi("erc20")
 
     token = w3.eth.contract(

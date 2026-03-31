@@ -105,7 +105,7 @@ def _resolve_underlying(pos):
     token_sym = pos.get("token_symbol", "")
 
     # Wallet balances, LP constituents, collateral/debt tokens: the token IS the underlying
-    if pos_type in ("token_balance", "lp_constituent", "collateral", "debt"):
+    if pos_type in ("token_balance", "lp_constituent", "collateral", "debt", "vault_share"):
         return token_sym
 
     # A2 oracle-priced (Midas tokens etc.): the token is the product, not the underlying

@@ -74,7 +74,8 @@ def query_curve_lp(w3, chain, wallet, block_number, block_ts):
             try:
                 coin_decimals = coin.functions.decimals().call(block_identifier=block_number)
                 coin_symbol = coin.functions.symbol().call(block_identifier=block_number)
-            except Exception:
+            except Exception as e:
+                logger.warning("curve: failed to get decimals/symbol for coin %d (%s): %s, defaulting to 18 decimals", i, coin_addr, e)
                 coin_decimals = 18
                 coin_symbol = f"coin{i}"
 

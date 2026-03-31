@@ -43,7 +43,8 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
         try:
             bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
             logger.info("aave.balanceOf(%s, %s) block=%s → %s", aentry["address"], wallet, block_number, bal)
-        except Exception:
+        except Exception as e:
+            logger.error("aave: failed to query aToken %s (%s): %s", akey, aentry["address"], e)
             continue
         if bal == 0:
             continue
@@ -80,7 +81,8 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
         try:
             bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
             logger.info("aave.balanceOf(%s, %s) block=%s → %s", dentry["address"], wallet, block_number, bal)
-        except Exception:
+        except Exception as e:
+            logger.error("aave: failed to query debt token %s (%s): %s", dkey, dentry["address"], e)
             continue
         if bal == 0:
             continue

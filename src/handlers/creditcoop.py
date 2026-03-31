@@ -111,6 +111,7 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
             f"credit cash={credit_cash:,.2f}"
         )
     except Exception as e:
+        logger.exception("creditcoop: sub-strategy breakdown failed")
         rows[0]["notes"] = f"Sub-strategy breakdown failed: {e}"
 
     return rows

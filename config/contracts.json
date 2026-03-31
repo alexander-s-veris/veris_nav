@@ -39,6 +39,7 @@
       "gauntlet_vault": {
         "address": "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44",
         "abi": "erc20",
+        "decimals": 18,
         "description": "Gauntlet AAFalconX Vault (gpAAFalconX). Custom vault, NOT ERC-4626. Veris share = balanceOf/totalSupply."
       },
       "gauntlet_provisioner": {
