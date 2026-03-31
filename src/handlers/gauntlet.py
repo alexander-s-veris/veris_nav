@@ -1,8 +1,9 @@
-"""Gauntlet / FalconX handlers (Category A3 cross-reference)."""
+"""Gauntlet / FalconX handlers (Category A3 — manual accrual from SQLite)."""
 
 import logging
 import os
 import sqlite3
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from web3 import Web3
@@ -11,20 +12,14 @@ from handlers import _load_contracts_cfg, _get_abi, _fmt
 
 logger = logging.getLogger(__name__)
 
+_TP_STALENESS_THRESHOLD_DAYS = 45
+
 
 def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     """Query Gauntlet vault FalconX A3 position.
 
-    Computes the NAV value using accrual methodology from the raw data in the
-    supporting workbook (Gauntlet_LeveredX sheet). Also queries on-chain
-    cross-reference data (TP x collateral - debt x share%).
-
-    Accrual formula (per falconx_position_flow.md):
-      Running Balance = Opening Value + sum(Opening x Rate x Period / 365)
-      TP (re-engineered) = Running Balance / Veris AA_FalconXUSDC
-      Collateral (USD) = Vault Collateral x TP (re-engineered)
-      Net = Collateral (USD) - Borrow
-      Veris share = Net x Veris %
+    Reads the accrual NAV value from data/falconx.db (gauntlet_levered table).
+    On-chain vault shares are queried for balance_human reporting only.
     """
     contracts = _load_contracts_cfg()
     gp_section = contracts.get(chain, {}).get("_gauntlet_pareto", {})
@@ -35,7 +30,6 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     vault_decimals = vault_cfg.get("decimals", 18)
     erc20_abi = _get_abi("erc20")
 
-    # Only need veris shares for reporting (balance_human)
     vault = w3.eth.contract(address=Web3.to_checksum_address(GAUNTLET_VAULT), abi=erc20_abi)
     veris_shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
     total_supply = vault.functions.totalSupply().call()
@@ -46,18 +40,19 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
 
     share_pct = Decimal(str(veris_shares)) / Decimal(str(total_supply))
 
-    # --- Read accrual NAV from SQLite (primary) or xlsx (fallback) ---
+    # Read accrual NAV from SQLite (sole source of truth)
     accrual_value = _read_falconx_sqlite("gauntlet_levered", "veris_share")
     source_note = "from data/falconx.db gauntlet_levered"
 
     if accrual_value is None:
-        xlsx_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "outputs", "falconx_position.xlsx")
-        accrual_value = _read_falconx_xlsx(xlsx_path, "Gauntlet_LeveredX", col_index=17)
-        source_note = "from outputs/falconx_position.xlsx Gauntlet_LeveredX col R (fallback)"
-
-    if accrual_value is None:
+        logger.warning("gauntlet_levered: SQLite returned None — no data in falconx.db")
         accrual_value = Decimal(0)
+        source_note = "WARNING: no data in falconx.db"
+
+    # TP staleness check
+    staleness_note = _check_tp_staleness()
+    if staleness_note:
+        source_note += f" | {staleness_note}"
 
     return [{
         "chain": chain, "protocol": "gauntlet_pareto", "wallet": wallet,
@@ -72,7 +67,7 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
         "accrual_value": accrual_value,
         "block_number": block_number, "block_timestamp_utc": block_ts,
         "price_source": "a3_workbook_accrual",
-        "notes": f"Value {source_note} (Veris share). TP on-chain is cross-reference only (stale, not used for valuation).",
+        "notes": f"Value {source_note} (Veris share). TP on-chain is cross-reference only.",
     }]
 
 
@@ -101,46 +96,60 @@ def _read_falconx_sqlite(table_name, value_column):
     return None
 
 
-def _read_falconx_xlsx(xlsx_path, sheet_name, col_index):
-    """Read the NAV value from the FalconX workbook (fallback if SQLite unavailable).
+def _check_tp_staleness():
+    """Check if on-chain TP hasn't changed in >45 days.
 
-    First tries formula result columns (openpyxl data_only=True).
-    If formula columns are empty (newly written rows), computes the value
-    from the raw data columns using the accrual methodology.
+    First checks the tp_changes table (populated by the updater).
+    Falls back to scanning gauntlet_levered for the last TP transition.
 
-    Gauntlet_LeveredX: col R (17) = Veris share = (Collateral x TP_reeng - Borrow) x Veris%
-    Direct Accrual: col H (7) = Running Balance = Opening + cumulative interest
+    Returns a warning string if stale, or None.
     """
-    import openpyxl
-
-    if not os.path.exists(xlsx_path):
+    db_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "falconx.db")
+    if not os.path.exists(db_path):
         return None
 
     try:
-        wb = openpyxl.load_workbook(xlsx_path, data_only=True, read_only=True)
-        ws = wb[sheet_name]
+        conn = sqlite3.connect(db_path)
 
-        # Read last cached formula value from Excel-saved workbook
-        last_value = None
-        all_rows = []
-        for row in ws.iter_rows(min_row=2):
-            if len(row) > col_index and row[col_index].value is not None:
-                last_value = row[col_index].value
-            if row[0].value is not None:
-                all_rows.append([cell.value for cell in row])
+        # Try tp_changes table first (faster, populated by updater)
+        try:
+            row = conn.execute(
+                "SELECT timestamp_utc FROM tp_changes ORDER BY timestamp_utc DESC LIMIT 1"
+            ).fetchone()
+            if row:
+                last_change = datetime.strptime(
+                    row[0], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+                days = (datetime.now(timezone.utc) - last_change).days
+                conn.close()
+                if days > _TP_STALENESS_THRESHOLD_DAYS:
+                    return f"WARNING: on-chain TP stale ({days} days since last change, threshold={_TP_STALENESS_THRESHOLD_DAYS}d)"
+                return None
+        except sqlite3.OperationalError:
+            pass  # Table doesn't exist yet — fall through
 
-        wb.close()
+        # Fallback: scan gauntlet_levered for last distinct TP transition
+        rows = conn.execute(
+            "SELECT timestamp_utc, tranche_price FROM gauntlet_levered "
+            "WHERE tranche_price IS NOT NULL ORDER BY timestamp_utc DESC"
+        ).fetchall()
+        conn.close()
 
-        # Primary: cached formula value (requires workbook saved from Excel)
-        if last_value is not None:
-            return Decimal(str(last_value))
+        if not rows:
+            return None
 
-        # Fallback: compute from raw data columns if formulas not cached
-        if all_rows:
-            if sheet_name == "Gauntlet_LeveredX":
-                return _compute_gauntlet_value(all_rows)
-            elif sheet_name == "Direct Accrual":
-                return _compute_direct_value(all_rows)
+        current_tp = rows[0][1]
+        last_change_ts = rows[0][0]
+        for ts_str, tp in rows:
+            if abs(tp - current_tp) > 0.000001:
+                # Found the transition point — last_change_ts is the first row with current TP
+                break
+            last_change_ts = ts_str
+
+        last_change = datetime.strptime(
+            last_change_ts, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+        days = (datetime.now(timezone.utc) - last_change).days
+        if days > _TP_STALENESS_THRESHOLD_DAYS:
+            return f"WARNING: on-chain TP stale ({days} days since last change, threshold={_TP_STALENESS_THRESHOLD_DAYS}d)"
 
     except Exception:
         pass
@@ -148,98 +157,10 @@ def _read_falconx_xlsx(xlsx_path, sheet_name, col_index):
     return None
 
 
-def _compute_gauntlet_value(rows):
-    """Compute Gauntlet Veris share from raw data columns when formulas aren't cached.
-
-    Uses the accrual methodology from falconx_position_flow.md:
-    Running Balance accrues interest hourly at Net Rate.
-    TP_reengineered = Running Balance / Veris AA_FalconXUSDC.
-    Collateral(USD) = on-chain Collateral x TP_reengineered.
-    Net = Collateral(USD) - Borrow.
-    Veris share = Net x (VerisBalance / TotalSupply).
-    """
-    running_balance = None
-    veris_aa = None
-    prev_ts = None
-
-    for row in rows:
-        ts = row[0]
-        if ts is None:
-            continue
-        rate = Decimal(str(row[7])) if row[7] else Decimal(0)
-        if row[8] is not None:
-            veris_aa = Decimal(str(row[8]))
-        if running_balance is None:
-            if row[11] is not None:
-                running_balance = Decimal(str(row[11]))
-            elif veris_aa and row[9]:
-                running_balance = veris_aa * Decimal(str(row[9]))
-            prev_ts = ts
-            continue
-        if prev_ts is None:
-            prev_ts = ts
-            continue
-        delta = (ts - prev_ts).total_seconds()
-        period_days = Decimal(str(delta)) / Decimal(86400)
-        if period_days > 0 and rate > 0:
-            running_balance += running_balance * rate * period_days / Decimal(365)
-        prev_ts = ts
-
-    if running_balance is None or veris_aa is None or veris_aa == 0:
-        return None
-
-    last = rows[-1]
-    collateral = Decimal(str(last[2])) if last[2] else Decimal(0)
-    borrow = Decimal(str(last[3])) if last[3] else Decimal(0)
-    total_supply = Decimal(str(last[4])) if last[4] else Decimal(1)
-    veris_balance = Decimal(str(last[5])) if last[5] else Decimal(0)
-
-    tp_reeng = running_balance / veris_aa
-    collateral_usd = collateral * tp_reeng
-    net = collateral_usd - borrow
-    veris_pct = veris_balance / total_supply if total_supply > 0 else Decimal(0)
-    return net * veris_pct
-
-
-def _compute_direct_value(rows):
-    """Compute Direct Accrual Running Balance from raw data columns.
-
-    Running Balance = Opening Value + cumulative interest.
-    Interest = Running Balance x Rate x Period / 365.
-    """
-    running_balance = None
-    prev_ts = None
-    rate = None  # Must come from data (row[4]) -- no hardcoded default
-
-    for row in rows:
-        ts = row[0]
-        if ts is None:
-            continue
-        if row[4] is not None:
-            rate = Decimal(str(row[4]))
-        if running_balance is None:
-            if row[3] is not None:
-                running_balance = Decimal(str(row[3]))
-            prev_ts = ts
-            continue
-        if prev_ts is None:
-            prev_ts = ts
-            continue
-        delta = (ts - prev_ts).total_seconds()
-        period_days = Decimal(str(delta)) / Decimal(86400)
-        if rate is None:
-            raise ValueError("No rate found in Direct Accrual data -- rate must come from loan notice")
-        if period_days > 0 and rate > 0:
-            running_balance += running_balance * rate * period_days / Decimal(365)
-        prev_ts = ts
-
-    return running_balance
-
-
 def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
     """Query direct AA_FalconXUSDC holding for A3 accrual.
 
-    Reads the Running Balance from the supporting workbook (Direct Accrual sheet).
+    Reads the Running Balance from data/falconx.db (direct_accrual table).
     """
     contracts = _load_contracts_cfg()
     gp_section = contracts.get(chain, {}).get("_gauntlet_pareto", {})
@@ -250,7 +171,6 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
     tranche_decimals = tranche_cfg.get("decimals", 18)
     erc20_abi = _get_abi("erc20")
 
-    # Check if wallet holds AA_FalconXUSDC
     token = w3.eth.contract(
         address=Web3.to_checksum_address(AA_TRANCHE), abi=erc20_abi)
     balance = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call()
@@ -260,18 +180,19 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
 
     balance_human = _fmt(balance, tranche_decimals)
 
-    # Read accrual value from SQLite (primary) or xlsx (fallback)
+    # Read accrual value from SQLite (sole source of truth)
     running_balance = _read_falconx_sqlite("direct_accrual", "running_balance")
     source_note = "from data/falconx.db direct_accrual"
 
     if running_balance is None:
-        xlsx_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "outputs", "falconx_position.xlsx")
-        running_balance = _read_falconx_xlsx(xlsx_path, "Direct Accrual", col_index=7)
-        source_note = "from outputs/falconx_position.xlsx Direct Accrual col H (fallback)"
-
-    if running_balance is None:
+        logger.warning("direct_accrual: SQLite returned None — no data in falconx.db")
         running_balance = Decimal(0)
+        source_note = "WARNING: no data in falconx.db"
+
+    # TP staleness check (same TP as Gauntlet — shared Pareto tranche)
+    staleness_note = _check_tp_staleness()
+    if staleness_note:
+        source_note += f" | {staleness_note}"
 
     return [{
         "chain": chain, "protocol": "gauntlet_pareto", "wallet": wallet,

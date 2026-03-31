@@ -127,8 +127,18 @@ def main():
 
         print()
 
-    # --- Output directory ---
-    output_dir = os.path.join(OUTPUT_DIR, f"nav_{valuation_date.strftime('%Y%m%d')}")
+    # --- Output directory (don't overwrite previous runs on the same date) ---
+    base_dir = os.path.join(OUTPUT_DIR, f"nav_{valuation_date.strftime('%Y%m%d')}")
+    if os.path.exists(base_dir) and os.listdir(base_dir):
+        run_num = 2
+        while True:
+            candidate = f"{base_dir}_run{run_num}"
+            if not os.path.exists(candidate) or not os.listdir(candidate):
+                break
+            run_num += 1
+        output_dir = candidate
+    else:
+        output_dir = base_dir
     os.makedirs(output_dir, exist_ok=True)
     print(f"Output: {output_dir}")
     print()
@@ -317,6 +327,23 @@ def main():
 
         return rows, log
 
+    # --- Pre-step: Update FalconX accrual data ---
+    print("--- Pre-step: FalconX Accrual Update ---", flush=True)
+    try:
+        from falconx.update_falconx_optimized import run_update as _falconx_update
+        g_rows, d_rows = _falconx_update()
+        print(f"  Updated: {g_rows} gauntlet, {d_rows} direct rows", flush=True)
+    except Exception as e:
+        print(f"  WARNING: FalconX updater failed ({e}), using cached data", flush=True)
+
+    # Export FalconX SQLite to xlsx (overwritten each run)
+    try:
+        from falconx.export import export_falconx_xlsx
+        export_falconx_xlsx()
+        print("  Exported falconx_position_export.xlsx", flush=True)
+    except Exception as e:
+        print(f"  WARNING: FalconX xlsx export failed ({e})", flush=True)
+
     # Run both steps concurrently
     print("--- Steps 1+2: Wallet Balances + Protocol Positions (concurrent) ---", flush=True)
 
@@ -346,11 +373,14 @@ def main():
     # =========================================================================
     print("\n--- Step 3: Deduplication ---")
 
-    # Protocol positions override wallet token balances
-    # Build set of (chain, wallet, token_contract) from protocol positions
+    # Protocol positions override wallet token balances — except position types
+    # where the token_contract doesn't represent a wallet-held balance
+    _NO_DEDUP_TYPES = {"lp_constituent", "collateral", "debt", "reward"}
     protocol_tokens = set()
     for pos in protocol_rows:
         if pos.get("status") == "CLOSED":
+            continue
+        if pos.get("position_type") in _NO_DEDUP_TYPES:
             continue
         contract = pos.get("token_contract", "").lower()
         if contract:

@@ -54,7 +54,7 @@ Flags: new/disappeared positions, zero-value positions, value changes >10%, pric
 # Wallet balance scanner (standalone quick check, ~45s)
 python src/collect_balances.py
 
-# FalconX/Pareto A3 hourly accrual updater (writes to data/falconx.db, run before collect.py)
+# FalconX/Pareto A3 hourly accrual updater (writes to data/falconx.db, auto-triggered by collect.py)
 python src/falconx/update_falconx_optimized.py
 ```
 
@@ -88,7 +88,7 @@ The system uses a **config-driven handler registry** pattern. Adding a new posit
 Additional features:
 - **Oracle staleness checking**: A2 tokens flag stale prices (>2x expected update frequency) and fall through to next source in hierarchy
 - **Independent verification (Section 7.3)**: 5 tokens verified — mHYPER (LlamaRisk attestation), msyrupUSDp + mF-ONE (Midas PDF reports via Google Drive OCR), USCC (Superstate REST API), ONyc (OnRe on-chain NAV)
-- **Valuation Policy compliance tests**: 62 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
+- **Valuation Policy compliance tests**: 87 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
 - **Chain health tracking**: Reports per-chain success/failure in `nav_summary.json`
 - **Snapshot diff tool**: `python src/tools/diff_snapshots.py --latest` catches disappeared/changed positions before submission
 
@@ -126,8 +126,10 @@ src/
     extract_powerquery.py   # Extract Power Query M code
     generate_methodology_pdf.py
   falconx/                  # FalconX/Pareto A3 accrual scripts
+    __init__.py
     update_falconx_optimized.py
-    import_falconx_xlsx_to_sqlite.py
+    rates.py
+    export.py
     query_pareto_tranche_history.py
 config/
   chains.json               # RPC URLs, chain IDs, explorers
@@ -157,6 +159,7 @@ docs/
 - `config/abis.json` — Minimal ABIs for all contract interactions (ERC-20, ERC-4626, Morpho, Chainlink, Aave, Pareto, Ethena, CreditCoop strategies, Uniswap V4)
 - `config/morpho_markets.json` — Morpho leveraged position market IDs with collateral/loan token details
 - `config/pt_lots.json` — PT token individual lot details for linear amortisation
+- `config/falconx_rates.json` — FalconX loan notice rate schedule
 
 ## Asset Categories
 

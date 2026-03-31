@@ -94,8 +94,7 @@ from handlers.aave import query_aave_positions
 from handlers.midas import query_midas_positions
 from handlers.gauntlet import (
     query_gauntlet_falconx, query_falconx_direct,
-    _read_falconx_sqlite, _read_falconx_xlsx,
-    _compute_gauntlet_value, _compute_direct_value,
+    _read_falconx_sqlite,
 )
 from handlers.uniswap import query_uniswap_v4
 from handlers.ethena import query_ethena_cooldowns

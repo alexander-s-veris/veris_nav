@@ -19,7 +19,6 @@ import sys
 import os
 import json
 import csv
-import math
 import requests
 from datetime import datetime, timezone
 from decimal import Decimal

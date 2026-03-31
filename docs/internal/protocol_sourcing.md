@@ -252,7 +252,7 @@ Path 2 (direct): Wallet holds AA_FalconXUSDC directly
 
 ### Classification
 
-**Category A3** (private credit). Primary valuation is **manual accrual** from supporting workbook (`outputs/falconx_position.xlsx`). On-chain tranche price is cross-reference only (and only valid at epoch end, not at NAV date).
+**Category A3** (private credit). Primary valuation is **manual accrual** from SQLite database (`data/falconx.db`). On-chain tranche price is cross-reference only (and only valid at epoch end, not at NAV date).
 
 Full methodology: `docs/methodology/falconx_accrual_analysis.md`
 Position collection flow: `plans/falconx_position_flow.md`
@@ -296,8 +296,9 @@ Net_Rate = Gross_Rate × 0.90 (10% pool fee)
 
 - Gross rate from monthly loan notices at `docs/reference/loans/`
 - Also verifiable on-chain via `lastEpochApr()` at each TP update block
-- Supporting workbook: `outputs/falconx_position.xlsx` (two sheets: Gauntlet_LeveredX, Direct Accrual)
-- NAV figure: column R ("Veris share") for Gauntlet, column H ("Running Balance") for Direct Accrual
+- Supporting database: `data/falconx.db` (tables: gauntlet_levered, direct_accrual)
+- NAV figure: `veris_share` column for Gauntlet, `running_balance` column for Direct Accrual
+- Rate schedule: `config/falconx_rates.json`
 - Collateral value in Gauntlet uses **re-engineered TP** from accrual, not stale on-chain TP
 
 ---

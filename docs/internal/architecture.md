@@ -57,7 +57,7 @@ The system uses a two-level dispatch:
 - `aave_leverage` -- Aave aToken + debt token pairs
 - `euler_erc4626` -- ERC-4626 with sub-account scan
 - `midas_oracle` -- ERC-20 balance + oracle price
-- `manual_accrual_gauntlet` / `manual_accrual_direct` -- FalconX workbook
+- `manual_accrual_gauntlet` / `manual_accrual_direct` -- FalconX SQLite (data/falconx.db)
 - `credit_coop` -- ERC-4626 + sub-strategy breakdown
 - `ethena_cooldown` -- sUSDe pending unstakes
 - `nft_lp` -- Uniswap V4 NFT position
@@ -142,12 +142,15 @@ Independent verification is a separate concern from pricing. While adapters prov
 ## Collect.py Pipeline
 
 ```
+Pre-step: FalconX Accrual Update — auto-triggers run_update() to refresh data/falconx.db
+
 Step 1+2 (concurrent):
   Step 1: Balance scanning (all chains + Solana + ARMA proxies)
   Step 2: Protocol positions (EVM handler dispatch + Solana handler dispatch)
 
 Step 3: Deduplication
   Protocol positions override wallet token balances for the same (chain, wallet, contract)
+  Excluded from dedup: lp_constituent, collateral, debt, and reward position types
 
 Step 4: Valuation
   ALL positions (wallet balances + protocol) go through value_position()
@@ -212,7 +215,7 @@ Euler V2 uses XOR-based sub-accounts. The scan range is limited to sub-accounts 
 - **Staleness checking**: A2 tokens have `expected_update_freq_hours` in tokens.json. Prices older than 2x the expected frequency are flagged and fall through to the next source in the hierarchy.
 - **Fallback warnings**: If a price lookup fails and a $1.00 fallback is used (for PT underlying or LP constituents), a WARNING note is added to the position so it's visible in the output.
 - **Output schema versioning**: `SCHEMA_VERSION` in positions.json and nav_summary.json for downstream consumer compatibility detection.
-- **Compliance tests**: 46 automated tests validate config against the Valuation Policy v1.0.
+- **Compliance tests**: 87 automated tests validate config against the Valuation Policy v1.0.
 
 ---
 

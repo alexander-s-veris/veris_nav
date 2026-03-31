@@ -1,0 +1,15 @@
+{
+  "_doc": "FalconX loan notice rate schedule. Net rate = gross_rate × (1 - performance_fee_pct). All rates from FalconX loan notices.",
+  "performance_fee_pct": "0.10",
+  "rate_schedule": [
+    {"start": "2025-06-30T00:00:00Z", "gross_rate": "0.1125"},
+    {"start": "2025-07-31T00:00:00Z", "gross_rate": "0.1125"},
+    {"start": "2025-09-01T00:00:00Z", "gross_rate": "0.1200"},
+    {"start": "2025-10-01T00:00:00Z", "gross_rate": "0.1200"},
+    {"start": "2025-11-01T00:00:00Z", "gross_rate": "0.1200"},
+    {"start": "2025-12-01T00:00:00Z", "gross_rate": "0.1150"},
+    {"start": "2026-01-01T00:00:00Z", "gross_rate": "0.1050"},
+    {"start": "2026-02-01T00:00:00Z", "gross_rate": "0.1000"},
+    {"start": "2026-03-03T00:00:00Z", "gross_rate": "0.0925"}
+  ]
+}
