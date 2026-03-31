@@ -70,7 +70,7 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
                     "chain": chain, "protocol": "euler", "wallet": wallet,
                     "position_label": _get_display_name(entry, vault_addr, entry_key),
                     "category": "A1", "position_type": "vault_share",
-                    "token_symbol": entry_key,
+                    "token_symbol": entry.get("symbol", entry.get("display_name", entry_key)),
                     "token_contract": vault_addr,
                     "balance_raw": str(shares),
                     "balance_human": shares_human,

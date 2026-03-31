@@ -248,3 +248,19 @@ Euler V2 uses XOR-based sub-accounts. The scan range is limited to sub-accounts 
 | New protocol type | `handlers/new_protocol.py` + registry entry in `protocol_queries.py` | Handler function |
 | New price adapter | `src/adapters/new_adapter.py` + import in `pricing.py` | Adapter function |
 | New EVM chain with Multicall3 | `chains.json` (add `multicall3` address) | None |
+| New ARMA proxy | `wallets.json` (`arma_proxies` + `_chain_protocols`) | None |
+
+### Protocol Registration
+
+Protocol dispatch depends on the chain:
+
+- **Ethereum wallets**: Protocol keys live in `wallets.ethereum[].protocols` (e.g. `{"morpho": true, "erc4626_vaults": true}`).
+- **Non-ethereum chains**: Protocol keys live in `_chain_protocols.{chain}.{wallet_address}.protocols`.
+- **ARMA proxies**: Proxies have no `protocols` field on their `arma_proxies` entry. Register them in `_chain_protocols` only.
+
+To add a new position:
+1. Add contract entry to `contracts.json` under the chain's protocol section.
+2. If ethereum: add protocol key to the wallet's `protocols` object in `wallets.ethereum[]`.
+3. If non-ethereum: add to `_chain_protocols.{chain}.{wallet}.protocols`.
+4. If ARMA proxy: add to `_chain_protocols` only (proxies have no top-level protocols field).
+5. Run `collect.py` and verify the position appears in output.

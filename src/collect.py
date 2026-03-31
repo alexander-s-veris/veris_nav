@@ -78,6 +78,9 @@ def main():
     solana_wallets = wallets.get("solana", [])
     arma_proxies = wallets.get("arma_proxies", [])
 
+    def _arma_note(proxy_addr, chain):
+        return f"via ARMA proxy {proxy_addr[:10]}... on {chain}"
+
     # Ethereum Web3 for pricing (Chainlink oracles)
     try:
         w3_eth = get_web3("ethereum")
@@ -264,9 +267,9 @@ def main():
                 for r in proxy_rows:
                     rows.append(_to_position(
                         r, protocol="arma", wallet_override=parent_wallet,
-                        notes=f"via ARMA proxy {p_addr[:10]}... on {p_chain}"))
-            except Exception:
-                pass
+                        notes=_arma_note(p_addr, p_chain)))
+            except Exception as e:
+                print(f"  WARNING: ARMA balance scan failed for {p_addr[:10]}... on {p_chain}: {e}")
 
         return rows, log
 
@@ -308,7 +311,9 @@ def main():
                 for r in chain_rows:
                     if is_proxy:
                         r["wallet"] = report_wallet
-                        r["notes"] = r.get("notes", "") + f"via ARMA proxy {scan_addr[:10]}... on {chain_name}"
+                        existing = r.get("notes", "")
+                        note = _arma_note(scan_addr, chain_name)
+                        r["notes"] = f"{existing} | {note}" if existing else note
                 rows.extend(chain_rows)
 
             _track_chain(chain_name, positions=chain_pos_count)

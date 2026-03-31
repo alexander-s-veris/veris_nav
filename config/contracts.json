@@ -3,9 +3,11 @@
 
   "ethereum": {
     "_morpho": {
+      "_query_type": "reference",
       "core": {
         "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
         "abi": "morpho_core",
+        "display_name": "Morpho Core",
         "description": "Morpho Core -- position() and market() queries"
       }
     },
@@ -14,6 +16,7 @@
       "horizon_pool": {
         "address": "0xAe05Cd22df81871bc7cC2a04BeCfb516bFe332C8",
         "abi": "aave_pool",
+        "display_name": "Aave Horizon RWA Pool",
         "description": "Aave Horizon RWA Pool -- separate from standard V3"
       },
       "horizon_atoken_uscc": {
@@ -39,6 +42,7 @@
       "gauntlet_vault": {
         "address": "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44",
         "abi": "erc20",
+        "display_name": "Gauntlet AAFalconX Vault",
         "decimals": 18,
         "underlying_symbol": "USDC",
         "description": "Gauntlet AAFalconX Vault (gpAAFalconX). Custom vault, NOT ERC-4626. Veris share = balanceOf/totalSupply."
@@ -54,12 +58,14 @@
       "pareto_credit_vault": {
         "address": "0x433d5b175148da32ffe1e1a37a939e1b7e79be4d",
         "abi": "pareto_credit_vault",
+        "display_name": "Pareto Credit Vault",
         "implementation": "0x8016E6f35a4B32a5Ea4c3919418039C7DaffCcaf",
         "description": "Pareto Credit Vault (proxy). tranchePrice, getApr, getContractValue, epoch info. Underlying: USDC."
       },
       "aa_falconxusdc_tranche": {
         "address": "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C",
         "abi": "erc20",
+        "display_name": "AA FalconXUSDC Tranche",
         "decimals": 18,
         "underlying_symbol": "USDC",
         "description": "AA_FalconXUSDC tranche token. ERC-20, 18 dec, NOT ERC-4626."
@@ -83,6 +89,8 @@
       "gauntlet_usdc_core": {
         "address": "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458",
         "abi": "erc4626",
+        "symbol": "gauntletUSDCcore",
+        "display_name": "Gauntlet USDC Core",
         "description": "Morpho Gauntlet USDC Core vault -- LiquidStrategy deploys here"
       },
       "credit_strategy": {
@@ -104,6 +112,7 @@
       "steakhouse_reservoir_usdc": {
         "address": "0xBEeFF047C03714965a54b671A37C18beF6b96210",
         "abi": "erc4626",
+        "symbol": "bbqSUDCreservoir",
         "display_name": "Steakhouse Reservoir USDC",
         "underlying_symbol": "USDC",
         "description": "Steakhouse Reservoir USDC (bbqSUDCreservoir)"
@@ -111,16 +120,15 @@
       "steakhouse_usdt": {
         "address": "0xbEef047a543E45807105E51A8BBEFCc5950fcfBa",
         "abi": "erc4626",
+        "symbol": "steakUSDT",
         "display_name": "Steakhouse USDT",
         "underlying_symbol": "USDT",
         "description": "Steakhouse USDT (steakUSDT)"
-      }
-    },
-    "_morpho_vaults_0xec0b": {
-      "_query_type": "erc4626",
+      },
       "hyperithm_usdc_apex": {
         "address": "0x777791c4d6dc2ce140d00d2828a7c93503c67777",
         "abi": "erc4626",
+        "symbol": "hyperUSDCa",
         "display_name": "Hyperithm USDC Apex",
         "underlying_symbol": "USDC",
         "description": "Hyperithm USDC Apex (hyperUSDCa)"
@@ -131,6 +139,7 @@
       "susde": {
         "address": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
         "abi": "ethena_cooldown",
+        "display_name": "Ethena sUSDe",
         "symbol": "USDe",
         "underlying_symbol": "USDe",
         "usde_token": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
@@ -159,6 +168,7 @@
       }
     },
     "_fluid": {
+      "_query_type": "reference",
       "vault": {
         "address": "0xbc345229c1b52e4c30530c614bb487323ba38da5",
         "description": "Fluid Vault (syrupUSDC/USDC)"
@@ -188,9 +198,11 @@
 
   "arbitrum": {
     "_morpho": {
+      "_query_type": "reference",
       "core": {
         "address": "0x6c247b1F6182318877311737BaC0844bAa518F5e",
         "abi": "morpho_core",
+        "display_name": "Morpho Core",
         "description": "Morpho Core on Arbitrum"
       }
     },
@@ -199,13 +211,14 @@
       "syrupusdc_vault": {
         "address": "0xA999f8a38A902f27F278358c4bD20fe1459Ae47C",
         "abi": "erc4626",
+        "symbol": "esyrupUSDC",
         "display_name": "Euler esyrupUSDC",
         "underlying_symbol": "syrupUSDC",
         "description": "Euler V2 esyrupUSDC-1. Sub-accounts: balanceOf(wallet XOR i) for i=0..255."
       },
       "underlying_vault": {
         "address": "0x6302ef0f34100cddfb5489fbcb6ee1aa95cd1066",
-        "_note": "Euler V2 underlying vault on Arbitrum. DeBank uses this as pool.controller."
+        "description": "Euler V2 underlying vault on Arbitrum. DeBank uses this as pool.controller."
       }
     },
     "_morpho_vaults": {
@@ -213,18 +226,21 @@
       "arb_vault_0x4b6f": {
         "address": "0x4b6f1c9e5d470b97181786b26da0d0945a7cf027",
         "abi": "erc4626",
+        "symbol": "hyperUSDC",
         "display_name": "Morpho Hyperithm USDC",
         "underlying_symbol": "USDC",
-        "_note": "Morpho vault on Arbitrum held by 0xd5086229 ARMA proxy. Dust position."
+        "description": "Morpho vault on Arbitrum held by 0xd5086229 ARMA proxy. Dust position."
       }
     }
   },
 
   "base": {
     "_morpho": {
+      "_query_type": "reference",
       "core": {
         "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
         "abi": "morpho_core",
+        "display_name": "Morpho Core",
         "description": "Morpho Core on Base (same address as Ethereum)"
       }
     },
@@ -233,6 +249,7 @@
       "pool": {
         "address": "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
         "abi": "aave_pool",
+        "display_name": "Aave V3 Pool",
         "description": "Aave V3 Pool on Base"
       },
       "atoken_syrupusdc": {
@@ -249,6 +266,7 @@
       "clearstar_usdc_reactor": {
         "address": "0x1D3b1Cd0a0f242d598834b3F2d126dC6bd774657",
         "abi": "erc4626",
+        "symbol": "COUSDC",
         "display_name": "Clearstar USDC Reactor",
         "underlying_symbol": "USDC",
         "description": "Clearstar USDC Reactor (CSUSDC)"
@@ -259,12 +277,14 @@
       "vault": {
         "address": "0x944766f715b51967E56aFdE5f0Aa76cEaCc9E7f9",
         "abi": "erc4626",
+        "symbol": "jUSDC",
         "display_name": "Avantis USDC",
         "underlying_symbol": "USDC",
         "description": "Avantis USDC Vault (avUSDC)"
       }
     },
     "_arma": {
+      "_query_type": "reference",
       "proxy": {
         "address": "0xa8d4e894f268438d3438d0030f2e36852aeba97d",
         "description": "ARMA (Giza) smart account proxy -- scan as wallet"
@@ -282,6 +302,7 @@
       "pool": {
         "address": "0x925a2A7214Ed92428B5b1B090F80b25700095e12",
         "abi": "aave_pool",
+        "display_name": "Aave V3 Pool",
         "description": "Aave V3 Pool on Plasma"
       },
       "atoken_usde": {
@@ -315,10 +336,12 @@
       "mhyper_oracle": {
         "address": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
         "abi": "chainlink_aggregator_v3",
+        "display_name": "mHYPER/USD Oracle",
         "description": "mHYPER/USD Chainlink-style Oracle"
       }
     },
     "_fluid": {
+      "_query_type": "reference",
       "vault_resolver": {
         "address": "0x5471195328cB443c85097A7A7fF0A74eaB3Cb497",
         "description": "Fluid Vault Resolver"
@@ -337,6 +360,7 @@
       "vbusdc_vault": {
         "address": "0x80c34BD3A3569E126e7055831036aa7b212cB159",
         "abi": "erc4626",
+        "symbol": "yvvbUSDC",
         "display_name": "Yearn V3 vbUSDC",
         "underlying_symbol": "USDC",
         "description": "Yearn V3 vbUSDC yVault (yvvbUSDC)"
@@ -346,28 +370,33 @@
 
   "oracles": {
     "_chainlink": {
+      "_query_type": "reference",
       "usdt_usd": {
         "address": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
         "chain": "ethereum",
         "abi": "chainlink_aggregator_v3",
+        "display_name": "USDT/USD Feed",
         "description": "USDT/USD Price Feed"
       },
       "usdc_usd": {
         "address": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
         "chain": "ethereum",
         "abi": "chainlink_aggregator_v3",
+        "display_name": "USDC/USD Feed",
         "description": "USDC/USD Price Feed"
       },
       "dai_usd": {
         "address": "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
         "chain": "ethereum",
         "abi": "chainlink_aggregator_v3",
+        "display_name": "DAI/USD Feed",
         "description": "DAI/USD Price Feed"
       },
       "uscc_nav": {
         "address": "0xAfFd8F5578E8590665de561bdE9E7BAdb99300d9",
         "chain": "ethereum",
         "abi": "chainlink_aggregator_v3",
+        "display_name": "USCC NAVLink Feed",
         "description": "USCC NAV per share (NAVLink)",
         "notes": "uscc-nav.data.eth"
       },
@@ -375,12 +404,14 @@
         "address": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
         "chain": "ethereum",
         "abi": "chainlink_aggregator_v3",
+        "display_name": "mF-ONE/USD Feed",
         "description": "mF-ONE/USD Oracle (Midas)"
       },
       "msyrupusdp_usd": {
         "address": "0x337d914ff6622510FC2C63ac59c1D07983895241",
         "chain": "ethereum",
         "abi": "chainlink_aggregator_v3",
+        "display_name": "msyrupUSDp/USD Feed",
         "description": "msyrupUSDp/USD Oracle (Midas)"
       }
     }

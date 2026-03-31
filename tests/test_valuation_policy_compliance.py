@@ -611,7 +611,7 @@ class TestContractsConfig(unittest.TestCase):
                 if not isinstance(section, dict):
                     continue
                 qt = section.get("_query_type")
-                if qt:
+                if qt and qt != "reference":
                     self.assertIn(
                         qt, known_types,
                         f"{chain}.{section_key}: _query_type '{qt}' not in HANDLER_REGISTRY"
@@ -909,7 +909,7 @@ class TestCrossReferences(unittest.TestCase):
                 continue
             # Check if this looks like a chain section (has subsections with _query_type)
             has_query_types = any(
-                isinstance(v, dict) and "_query_type" in v
+                isinstance(v, dict) and v.get("_query_type") not in (None, "reference")
                 for v in chain_data.values()
             )
             if has_query_types:
