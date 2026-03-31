@@ -44,7 +44,8 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
             sub_addr = Web3.to_checksum_address(hex(wallet_int ^ sub_id))
             try:
                 shares = vault.functions.balanceOf(sub_addr).call(block_identifier=block_number)
-            except Exception:
+            except Exception as e:
+                logger.error("euler: balanceOf failed for vault=%s sub_id=%d: %s", vault_addr, sub_id, e)
                 continue
 
             if shares > 0:
@@ -58,7 +59,8 @@ def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
                         address=Web3.to_checksum_address(asset_addr),
                         abi=_get_abi("erc20"))
                     u_dec = u_contract.functions.decimals().call(block_identifier=block_number)
-                except Exception:
+                except Exception as e:
+                    logger.warning("euler: underlying decimals fallback for vault=%s: %s", vault_addr, e)
                     u_dec = share_dec
 
                 shares_human = _fmt(shares, share_dec)

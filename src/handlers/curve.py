@@ -67,7 +67,7 @@ def query_curve_lp(w3, chain, wallet, block_number, block_ts):
                 coin_addr = pool.functions.coins(i).call(block_identifier=block_number)
                 coin_balance = pool.functions.balances(i).call(block_identifier=block_number)
             except Exception:
-                break
+                break  # No more coins in pool — expected termination
 
             # Get coin metadata
             coin = w3.eth.contract(address=coin_addr, abi=_get_abi("erc20"))

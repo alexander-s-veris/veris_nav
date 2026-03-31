@@ -31,7 +31,8 @@ def query_ethena_cooldowns(w3, chain, wallet, block_number, block_ts):
         cooldown_end, underlying = result
         logger.info("ethena.cooldowns(%s, %s) block=%s → end=%s, amount=%s",
                      susde_addr, wallet, block_number, cooldown_end, underlying)
-    except Exception:
+    except Exception as e:
+        logger.error("ethena: cooldowns query failed for susde=%s wallet=%s: %s", susde_addr, wallet, e)
         return []
 
     if underlying == 0:
@@ -45,7 +46,8 @@ def query_ethena_cooldowns(w3, chain, wallet, block_number, block_ts):
         "chain": chain, "protocol": "ethena", "wallet": wallet,
         "position_label": "Ethena sUSDe Cooldown",
         "category": "E", "position_type": "token_balance",
-        "token_symbol": "USDe",
+        "token_symbol": susde_entry.get("symbol", "USDe"),
+        "underlying_symbol": susde_entry.get("underlying_symbol", ""),
         "token_contract": usde_addr,
         "balance_human": amount,
         "decimals": 18,

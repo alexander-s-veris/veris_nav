@@ -109,7 +109,8 @@ def query_uniswap_v4(w3, chain, wallet, block_number, block_ts):
             owner = pm.functions.ownerOf(nft_id).call(block_identifier=block_number)
             logger.info("uniswap.ownerOf(%s, nft=%s) block=%s → %s",
                         PM[:10], nft_id, block_number, owner)
-        except Exception:
+        except Exception as e:
+            logger.error("uniswap: ownerOf failed for nft_id=%s: %s", nft_id, e)
             continue
 
         if owner.lower() != wallet.lower():

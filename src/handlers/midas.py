@@ -38,7 +38,8 @@ def query_midas_positions(w3, chain, wallet, block_number, block_ts):
         try:
             bal = token.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
             logger.info("midas.balanceOf(%s, %s) block=%s → %s", entry["address"], wallet, block_number, bal)
-        except Exception:
+        except Exception as e:
+            logger.error("midas: balanceOf failed for entry=%s address=%s: %s", entry_key, entry["address"], e)
             continue
 
         if bal == 0:

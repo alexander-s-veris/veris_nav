@@ -47,6 +47,7 @@ def query_pt_lots(wallet, block_ts):
             "maturity": cfg.get("maturity", ""),
             "decimals": cfg.get("decimals", 6),
             "held_as": cfg.get("held_as", ""),
+            "block_number": "",  # Config-driven, no on-chain query
             "block_timestamp_utc": block_ts,
             "_pt_symbol": pt_symbol,  # for valuation.py to pick up
         })

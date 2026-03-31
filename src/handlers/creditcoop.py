@@ -61,7 +61,7 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
         "decimals": vault_decimals,
         "exchange_rate": assets_human / shares_human if shares_human > 0 else Decimal(0),
         "underlying_amount": assets_human,
-        "underlying_symbol": "USDC",
+        "underlying_symbol": vault_cfg.get("underlying_symbol", ""),
         "block_number": block_number, "block_timestamp_utc": block_ts,
     }]
 

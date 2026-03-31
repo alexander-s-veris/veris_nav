@@ -14,10 +14,10 @@
         "market_name": "Superstate Opening Bell",
         "obligation_pubkey": "D2rcayJTqmZvqaoViEyamQh2vw9T1KYwjbySQZSz6fsS",
         "deposits": [
-          {"reserve": "FQnQgBYzJkiVfUZgggfTRn4FGKE3FN94UoZgBreZMgTR", "symbol": "USCC", "mint": "BTRR3sj1Bn2ZjuemgbeQ6SCtf84iXS81CS7UDTSxUCaK", "decimals": 6, "category": "A2"}
+          {"reserve": "FQnQgBYzJkiVfUZgggfTRn4FGKE3FN94UoZgBreZMgTR", "symbol": "USCC", "mint": "BTRR3sj1Bn2ZjuemgbeQ6SCtf84iXS81CS7UDTSxUCaK", "decimals": 6, "category": "A2", "underlying": "USCC"}
         ],
         "borrows": [
-          {"reserve": "BnYNV7TdhwASUab7mQCRhzHvasjp8o8xmmvVtKnPe3Zi", "symbol": "USDC", "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "decimals": 6, "category": "E"}
+          {"reserve": "BnYNV7TdhwASUab7mQCRhzHvasjp8o8xmmvVtKnPe3Zi", "symbol": "USDC", "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "decimals": 6, "category": "E", "underlying": "USDC"}
         ]
       },
       {
@@ -28,7 +28,7 @@
           {"reserve": "EzmztxShSt8AwpBBbJxpYaKAY3E3PWQCyPQPkUYbP9u", "symbol": "PT-eUSX-01JUN26", "mint": "BNR2FsHo8JrYGWx2V8yxG5GBWiG3uU8voi2eMGBHFwEj", "decimals": 6, "category": "B", "underlying": "eUSX"}
         ],
         "borrows": [
-          {"reserve": "H2pmnDSjfxeQ8zUeyUohokegYbXZgkjH4kgmoQVybyAX", "symbol": "USX", "mint": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG", "decimals": 6, "category": "E"}
+          {"reserve": "H2pmnDSjfxeQ8zUeyUohokegYbXZgkjH4kgmoQVybyAX", "symbol": "USX", "mint": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG", "decimals": 6, "category": "E", "underlying": "USX"}
         ]
       }
     ]

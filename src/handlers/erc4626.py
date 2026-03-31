@@ -44,7 +44,8 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
         try:
             shares = vault.functions.balanceOf(Web3.to_checksum_address(wallet)).call(block_identifier=block_number)
             logger.info("erc4626.balanceOf(%s, %s) block=%s → %s", vault_addr, wallet, block_number, shares)
-        except Exception:
+        except Exception as e:
+            logger.error("erc4626: balanceOf failed for vault=%s entry=%s: %s", vault_addr, entry_key, e)
             continue
 
         if shares == 0:
@@ -62,9 +63,11 @@ def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
                     address=Web3.to_checksum_address(asset_addr),
                     abi=_get_abi("erc20"))
                 underlying_decimals = underlying_contract.functions.decimals().call(block_identifier=block_number)
-            except Exception:
+            except Exception as e:
+                logger.warning("erc4626: underlying decimals fallback for vault=%s: %s", vault_addr, e)
                 underlying_decimals = share_decimals
-        except Exception:
+        except Exception as e:
+            logger.error("erc4626: convertToAssets failed for vault=%s entry=%s: %s", vault_addr, entry_key, e)
             continue
 
         protocol = section_key.strip("_")

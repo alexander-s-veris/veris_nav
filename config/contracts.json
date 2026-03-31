@@ -40,6 +40,7 @@
         "address": "0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44",
         "abi": "erc20",
         "decimals": 18,
+        "underlying_symbol": "USDC",
         "description": "Gauntlet AAFalconX Vault (gpAAFalconX). Custom vault, NOT ERC-4626. Veris share = balanceOf/totalSupply."
       },
       "gauntlet_provisioner": {
@@ -60,6 +61,7 @@
         "address": "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C",
         "abi": "erc20",
         "decimals": 18,
+        "underlying_symbol": "USDC",
         "description": "AA_FalconXUSDC tranche token. ERC-20, 18 dec, NOT ERC-4626."
       }
     },
@@ -129,6 +131,8 @@
       "susde": {
         "address": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
         "abi": "ethena_cooldown",
+        "symbol": "USDe",
+        "underlying_symbol": "USDe",
         "usde_token": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
         "description": "sUSDe -- ERC-4626 + cooldowns(address) for pending unstakes"
       }

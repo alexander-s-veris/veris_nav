@@ -66,7 +66,7 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
         "position_label": "Gauntlet Levered FalconX",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "gpAAFalconX",
-        "underlying_symbol": "USDC",
+        "underlying_symbol": vault_cfg.get("underlying_symbol", ""),
         "token_contract": GAUNTLET_VAULT,
         "balance_raw": str(veris_shares),
         "balance_human": _fmt(veris_shares, vault_decimals),
@@ -99,8 +99,8 @@ def _read_falconx_sqlite(table_name, value_column):
         conn.close()
         if row and row[0] is not None:
             return Decimal(str(row[0]))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("gauntlet: _read_falconx_sqlite failed for %s.%s: %s", table_name, value_column, e)
     return None
 
 
@@ -159,8 +159,8 @@ def _check_tp_staleness():
         if days > _get_tp_staleness_threshold():
             return f"WARNING: on-chain TP stale ({days} days since last change, threshold={_get_tp_staleness_threshold()}d)"
 
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("gauntlet: _check_tp_staleness failed: %s", e)
 
     return None
 
@@ -209,7 +209,7 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
         "position_label": "Pareto / FalconX",
         "category": "A3", "position_type": "manual_accrual",
         "token_symbol": "AA_FalconXUSDC",
-        "underlying_symbol": "USDC",
+        "underlying_symbol": tranche_cfg.get("underlying_symbol", ""),
         "token_contract": AA_TRANCHE,
         "balance_raw": str(balance),
         "balance_human": balance_human,
