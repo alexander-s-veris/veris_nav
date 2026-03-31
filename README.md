@@ -103,7 +103,7 @@ src/
   handlers/                 # Protocol-specific position readers
     morpho.py, erc4626.py, euler.py, aave.py, midas.py
     gauntlet.py, creditcoop.py, uniswap.py, ethena.py
-    kamino.py, exponent.py, pt_lots.py
+    kamino.py, exponent.py, pt_lots.py, curve.py
   adapters/                 # Price feed adapters (per provider)
     chainlink.py, pyth.py, redstone.py, kraken.py
     coingecko.py, defillama.py, exchange_rate.py

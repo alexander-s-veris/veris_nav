@@ -38,6 +38,12 @@ This document defines the architectural principles and patterns of the NAV colle
 
 6. **Library modules, not standalone scripts.** Core modules (`collect_balances.py`, `protocol_queries.py`, `valuation.py`, `pricing.py`) are libraries imported by `collect.py`. They do not have standalone `main()` functions. Only `collect.py` is an entry point.
 
+7. **Use every parameter.** If a function signature includes a parameter, the function body must use it for its stated purpose. EVM handlers: every `.call()` must pass `block_identifier=block_number`. Solana handlers: every RPC call must pass the slot when available. Receiving a parameter and only logging it is not "using" it.
+
+8. **Fail loudly, not silently.** `except Exception: continue` without logging is prohibited in handlers. A failed position query means a position is missing from the NAV — this must be logged at ERROR level and flagged in the output. Use `except Exception as e: logger.error(...); continue` at minimum, or re-raise for critical positions.
+
+9. **Never fabricate config data.** If an address, mint, feed ID, or ABI is unknown, leave the field empty or raise an error. Do not insert placeholders, lowercase approximations, or guesses. Every config value must be traceable to a verified source (block explorer, on-chain query, official docs). Ask the maintainer if unsure.
+
 ---
 
 ## Handler Registry Pattern
@@ -98,6 +104,8 @@ When run with `--date YYYY-MM-DD`, collect.py pins all queries to 16:00 CET/CEST
 - Solana: `find_valuation_slot()` in solana_client.py binary-searches for the correct slot
 - All balance queries and protocol queries receive the pinned block/slot
 - Without `--date`, queries run at latest block (for development/testing)
+
+**Critical**: The pinned block/slot must actually be passed to every on-chain query. EVM handlers must use `block_identifier=block_number` on every `.call()`. Solana handlers must pass the slot to every RPC call that accepts it. Without this, pinning is cosmetic — the system records the intended block but queries latest.
 
 ---
 

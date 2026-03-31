@@ -18,6 +18,14 @@ Do NOT rely on memory alone — always re-read.
 
 - **Never run `git add`, `git commit`, or `git push` without first completing the Pre-Commit Checklist below.** No exceptions. If Alex asks you to commit, run the checklist first and report results, then commit. If you catch yourself about to commit without running it, stop and run it.
 
+- **Never fabricate config data.** If you need an address, mint, feed ID, ABI, or any on-chain value and don't have it: **STOP and ask Alex.** Do not insert a placeholder, lowercase approximation, slug name, or guess. A wrong address that passes silently is worse than a missing one that crashes loudly. Every config value must be traceable to a verified source (block explorer, on-chain query, official docs). If you can't cite where you got it, you can't add it.
+
+- **Every `.call()` must include `block_identifier=block_number`.** Every Solana RPC call that accepts a slot must include the slot parameter. Receiving a parameter and only logging it is not using it. If a function parameter exists, it must be used for its intended purpose or removed.
+
+- **No silent failures.** `except Exception: continue` without logging is banned. Every `except` block must either `logger.error()`/`logger.exception()` with the actual error, or re-raise. A missing position is a NAV error — it must be visible.
+
+- **Output fields must carry clean values.** `token_symbol` = human-readable symbol (`syrupUSDC`, not `atoken_syrupusdc`). `underlying_symbol` = set explicitly by the handler for every position. After writing any handler, check what appears in positions.csv for `token_symbol`, `underlying`, and `position_label`. If any column shows a config key or internal identifier, fix before committing.
+
 ---
 
 ## Mandatory Workflow: Before Any Implementation
@@ -52,13 +60,13 @@ Do NOT rely on memory alone — always re-read.
 All code must follow these. No exceptions. Full detail in `docs/internal/architecture.md`.
 
 1. **Config-driven, not code-driven.** New positions, chains, tokens, protocols, verification sources = config changes only. Code implements patterns; config declares instances.
-2. **No hardcoded values.** Addresses, RPC URLs, feed IDs, chain IDs, decimals, thresholds — all in config. Only structural constants (Anchor discriminators, ERC-4626 signatures) acceptable in code.
+2. **No hardcoded values.** Addresses, RPC URLs, feed IDs, chain IDs, decimals, thresholds — all in config. Only structural constants (Anchor discriminators, ERC-4626 signatures) acceptable in code. Red flags: string literals matching a token symbol, `if protocol == "specific_name"` chains in output code, default fallback values that assume a specific token, `import requests` outside `adapters/`, `math.*` on financial values.
 3. **Single source of truth.** Each piece of data defined in exactly one place. Never duplicate.
 4. **Category-driven valuation.** Category (A1–F) determines methodology. Pricing routes through `pricing.py` → `pricing_policy.json`.
-5. **Separation of concerns.** Each module owns one responsibility. See `architecture.md` for module map.
+5. **Separation of concerns.** Each module owns one responsibility. See `architecture.md` for module map. Handlers read positions. Pricing prices tokens. Output formats results. No crossover.
 6. **Library modules, not standalone scripts.** Core modules have no `main()`. Only `collect.py` is an entry point. `src/tools/` and `src/falconx/` may be standalone.
-7. **`decimal.Decimal` for all financial calculations.** Never `float` or `math.pow()`.
-8. **Log every query.** Contract address, function called, block number, result.
+7. **`decimal.Decimal` for all financial calculations.** Never `float` or `math.*()` on values that flow into NAV.
+8. **Use every parameter, fail loudly.** See Hard Rules above — `block_identifier`, slot, logging on exceptions.
 9. **Comments explaining "why"**, not "what". Non-obvious logic gets a business-reason comment.
 10. **Tests updated with every change.** A feature is not complete until its tests pass: `python -m unittest discover -s tests -v`.
 11. **Timestamps in UTC**: `dd/mm/yyyy hh:mm:ss` (e.g. `23/03/2026 19:21:35`).
@@ -72,6 +80,9 @@ Before EVERY commit and push, run this full audit autonomously — do not wait t
 ### 1. Code Consistency
 - Scan `src/**/*.py` for hardcoded values (addresses, chain IDs, feed IDs, URLs, decimals) — must be in config.
 - Check for unused imports, dead functions, orphaned adapters/handlers.
+- `grep -rn '\.call()' src/handlers/*.py` → must return zero. Every `.call(` must have `block_identifier=`.
+- `grep -rn 'except.*continue' src/handlers/*.py` → every match must have `logger.error` or `logger.exception` nearby.
+- No `math.*` on financial values (check `grep -n 'math\.' src/handlers/*.py`).
 
 ### 2. Config Integrity
 - Every token in `tokens.json` with an oracle feed → has entry in `price_feeds.json`.
@@ -79,21 +90,25 @@ Before EVERY commit and push, run this full audit autonomously — do not wait t
 - Every source in `verification.json` → has working verifier in `src/verifiers/`.
 - `solana_protocols.json` entries match what `solana_client.py` actually queries.
 - No config references (addresses, feed IDs, program IDs) living in code instead of config files.
+- All Solana addresses are valid mixed-case base58 (32-44 chars, no all-lowercase, no placeholder slugs). All EVM addresses are `0x` + 40 hex chars.
 
-### 3. Doc Sync
+### 3. Output Spot-Check
+- After `python src/collect.py`, open `positions.csv` and verify: `token_symbol` shows clean symbols (not config keys like `atoken_*`), `underlying` is populated for every position, `position_label` has no duplication or internal identifiers, `block_number` is populated for all on-chain positions.
+
+### 4. Doc Sync
 - `README.md`: test count, position count, net NAV, feature list, project structure, verifiers list.
 - `docs/internal/architecture.md`: new modules/handlers/adapters/verifiers in "Adding New Components" table.
 - `docs/internal/protocol_sourcing.md`, `data_sources.md`, `portfolio_positions.md`: if anything changed.
 
-### 4. Tests
+### 5. Tests
 - `python -m unittest discover -s tests -v` — all pass.
 - New config/handler/adapter/verifier → corresponding test exists.
 
-### 5. Final Sanity
+### 6. Final Sanity
 - `python src/collect.py` (no --date) — no runtime errors.
 - Check for warnings, zero-value positions, or $1.00 fallback prices. Investigate before committing.
 
-Only after all 5 pass: `git add -A && git commit && git push`.
+Only after all 6 pass: `git add -A && git commit && git push`.
 
 ---
 
