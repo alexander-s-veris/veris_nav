@@ -90,7 +90,7 @@ def query_merkl_rewards(w3, chain, wallet, block_number, block_ts):
                 "token_symbol": token_symbol,
                 "token_contract": token_address,
                 "balance_human": claimable,
-                "block_number": "",
+                "block_number": block_number,
                 "block_timestamp_utc": block_ts,
                 "notes": f"Merkl claimable reward. Pending in dispute: {pending_human:.6f}",
             })

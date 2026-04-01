@@ -94,24 +94,22 @@ def _format_protocol(pos):
 def _resolve_underlying(pos):
     """Resolve the underlying token for a position.
 
-    Priority: explicit underlying_symbol > token_category lookup > token is its own underlying.
+    Priority: explicit underlying_symbol > category exclusion > token is its own underlying.
     """
     # Handler already set it
     explicit = pos.get("underlying_symbol", "")
     if explicit:
         return explicit
 
-    pos_type = pos.get("position_type", "")
-    token_sym = pos.get("token_symbol", "")
-
-    # Wallet balances, LP constituents, collateral/debt tokens: the token IS the underlying
-    if pos_type in ("token_balance", "lp_constituent", "collateral", "debt", "vault_share"):
-        return token_sym
-
     # A2 oracle-priced (Midas tokens etc.): the token is the product, not the underlying
     # A3 manual accrual: specific to FalconX, underlying is complex
     # These intentionally return empty — the underlying is embedded in the product
-    return ""
+    category = pos.get("category", "")
+    if category in ("A2", "A3"):
+        return ""
+
+    # Default: the token is its own underlying
+    return pos.get("token_symbol", "")
 
 
 class DecimalEncoder(json.JSONEncoder):
