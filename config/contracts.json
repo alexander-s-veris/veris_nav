@@ -218,7 +218,11 @@
       },
       "underlying_vault": {
         "address": "0x6302ef0f34100cddfb5489fbcb6ee1aa95cd1066",
-        "description": "Euler V2 underlying vault on Arbitrum. DeBank uses this as pool.controller."
+        "description": "Euler V2 underlying vault on Arbitrum. DeBank uses this as pool.controller.",
+        "sub_addresses": {
+          "0xa33e1f748754d2d624638ab335100d92fcbe62a2": "0xa33e1f748754d2d624638ab335100d92fcbe62a3"
+        },
+        "_sub_address_note": "Euler sub-accounts: wallet XOR 1. Key = wallet, value = sub-address (position_index in DeBank)."
       }
     },
     "_morpho_vaults": {
@@ -230,6 +234,13 @@
         "display_name": "Morpho Hyperithm USDC",
         "underlying_symbol": "USDC",
         "description": "Morpho vault on Arbitrum held by 0xd5086229 ARMA proxy. Dust position."
+      }
+    },
+    "_arma": {
+      "_query_type": "reference",
+      "protocol_contract": {
+        "address": "0x1b3259eef2c5c2f80f0a47796ee3fea82f9e6f66",
+        "description": "ARMA (Giza) protocol contract on Arbitrum."
       }
     }
   },
@@ -292,6 +303,10 @@
       "implementation": {
         "address": "0x17bac39f916c21ac825aed89607fdba251dce97d",
         "description": "ARMA smart account implementation (EIP-1167 clone)"
+      },
+      "protocol_contract": {
+        "address": "0x1b3259eef2c5c2f80f0a47796ee3fea82f9e6f66",
+        "description": "ARMA (Giza) protocol contract. DeBank uses this as pool.controller for all ARMA deposits. position_index = proxy wallet address."
       }
     }
   },
