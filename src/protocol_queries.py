@@ -28,6 +28,7 @@ from handlers import (
     query_ethena_cooldowns, query_creditcoop, query_kamino_obligations,
     query_exponent_lps, query_exponent_yts, query_pt_lots,
 )
+from handlers.merkl import query_merkl_rewards
 
 # Import config loaders from handlers for validation
 from handlers import _load_contracts_cfg, _load_morpho_cfg, _load_solana_cfg
@@ -194,6 +195,7 @@ PROTOCOL_TO_HANDLER = {
     "curve":            "curve_lp",
     "ethena_cooldowns": "ethena_cooldown",
     "credit_coop":      "credit_coop",
+    "merkl":            "merkl_rewards",
 }
 
 # Handler key -> handler function
@@ -209,6 +211,7 @@ HANDLER_REGISTRY = {
     "curve_lp":                 query_curve_lp,
     "ethena_cooldown":          query_ethena_cooldowns,
     "credit_coop":              query_creditcoop,
+    "merkl_rewards":            query_merkl_rewards,
 }
 
 

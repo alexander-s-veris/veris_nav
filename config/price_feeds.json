@@ -273,6 +273,16 @@
       "type": "coingecko",
       "coin_id": "giza",
       "description": "Giza (GIZA). Primary for GIZA (F) on Base."
+    },
+    "coingecko_kat": {
+      "type": "coingecko",
+      "coin_id": "katana-network-token",
+      "description": "KAT (Katana Network Token) via CoinGecko."
+    },
+    "coingecko_yo": {
+      "type": "coingecko",
+      "coin_id": "yolo-games",
+      "description": "YO (Yologames) via CoinGecko."
     }
   },
   "defillama": {
@@ -390,6 +400,18 @@
       "chain": "ethereum",
       "address": "0x0fedba9178b70e8b54e2af08ebffcf28a1e5a43b",
       "description": "DAM (Reservoir) via DefiLlama."
+    },
+    "defillama_kat": {
+      "type": "defillama",
+      "chain": "katana",
+      "address": "0x3ba1fbc4c3aea775d335b31fb53778f46fd3a330",
+      "description": "KAT (Katana Network Token) via DefiLlama."
+    },
+    "defillama_yo": {
+      "type": "defillama",
+      "chain": "base",
+      "address": "0x1925450f5e5fb974b0aae1f3408cf5286fbd1a72",
+      "description": "YO (Yologames) via DefiLlama."
     },
     "defillama_xpl": {
       "type": "defillama",
