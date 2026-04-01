@@ -249,8 +249,9 @@ def _value_a1(pos, w3_eth, tokens_registry):
     # Look up underlying from tokens.json if not set by a handler
     if not underlying_sym and tokens_registry:
         chain = pos.get("chain", "")
-        contract = pos.get("token_contract", "").lower()
-        entry = (tokens_registry.get(chain, {}).get(contract) or {})
+        contract = pos.get("token_contract", "")
+        chain_reg = tokens_registry.get(chain, {})
+        entry = chain_reg.get(contract) or chain_reg.get(contract.lower()) or {}
         underlying_sym = entry.get("pricing", {}).get("underlying")
 
     if not underlying_sym:

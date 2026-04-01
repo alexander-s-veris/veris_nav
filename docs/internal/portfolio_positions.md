@@ -11,7 +11,7 @@ Position balances and values are in the latest NAV snapshot (`outputs/`). This d
 - **RLP (Resolv)**: Pyth oracle as primary, CoinGecko as fallback.
 
 ## A1 Positions (On-chain yield-bearing)
-- **Credit Coop / Rain**: Veris Credit Vault (Ethereum). Reclassified A3 → A1 — on-chain `convertToAssets` is authoritative (analogous to sUSDe). Sub-strategies: Rain credit line + Gauntlet USDC Core liquid reserve. Sub-strategy breakdown queried for methodology log.
+- **Credit Coop / Rain**: Veris Credit Vault (Ethereum). Reclassified A3 → A1 — on-chain `convertToAssets` is authoritative (analogous to sUSDe). Sub-strategies: Rain credit line + Gauntlet USDC Core + Gauntlet USDC Prime liquid reserves. Sub-strategy breakdown queried for methodology log.
 - **Hyperithm USDC Apex**: MetaMorpho vault (Ethereum). Standard ERC-4626.
 - **Other ERC-4626 vaults**: Euler (Arbitrum), Avantis (Base), Yearn (Katana), sUSDe (Ethereum). All standard `convertToAssets`.
 

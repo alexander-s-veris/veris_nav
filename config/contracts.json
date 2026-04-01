@@ -84,7 +84,7 @@
       },
       "liquid_strategy": {
         "address": "0x671B5B6F01C5FEe16E6F9De2eb85AC027Dc9fE0e",
-        "description": "LiquidStrategy -- deploys idle capital into Gauntlet USDC Core (ERC-4626)"
+        "description": "LiquidStrategy -- deploys idle capital into Gauntlet USDC Core + Prime (ERC-4626)"
       },
       "gauntlet_usdc_core": {
         "address": "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458",
@@ -92,6 +92,14 @@
         "symbol": "gauntletUSDCcore",
         "display_name": "Gauntlet USDC Core",
         "description": "Morpho Gauntlet USDC Core vault -- LiquidStrategy deploys here"
+      },
+      "gauntlet_usdc_prime": {
+        "address": "0x8c106eedad96553e64287a5a6839c3cc78afa3d0",
+        "abi": "erc4626",
+        "symbol": "gauntletUSDCprime",
+        "display_name": "Gauntlet USDC Prime",
+        "underlying_morpho_vault": "0xdd0f28e19C1780eb6396170735D45153D261490d",
+        "description": "Credit Coop wrapper around Morpho Gauntlet USDC Prime -- LiquidStrategy holds shares here, which in turn deposits into the Morpho vault"
       },
       "credit_strategy": {
         "address": "0x433E415b0fA54C570C450DD976E2402e408cB6db",

@@ -30,6 +30,7 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
     LIQUID_STRATEGY = cc_section.get("liquid_strategy", {}).get("address")
     CREDIT_STRATEGY = cc_section.get("credit_strategy", {}).get("address")
     GAUNTLET_CORE = cc_section.get("gauntlet_usdc_core", {}).get("address")
+    GAUNTLET_PRIME = cc_section.get("gauntlet_usdc_prime", {}).get("address")
     USDC = cc_section.get("usdc_token", {}).get("address")
     if not VAULT:
         return []
@@ -76,14 +77,27 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
         logger.info("creditcoop.totalActiveCredit(%s) block=%s → %s", CREDIT_STRATEGY, block_number, rain_amount)
 
         # Gauntlet USDC Core — actual amount deployed via LiquidStrategy
-        gauntlet_deployed = Decimal(0)
+        gauntlet_core_deployed = Decimal(0)
         if GAUNTLET_CORE and LIQUID_STRATEGY:
             gauntlet = w3.eth.contract(
                 address=Web3.to_checksum_address(GAUNTLET_CORE), abi=erc4626_abi)
             liq_shares = gauntlet.functions.balanceOf(Web3.to_checksum_address(LIQUID_STRATEGY)).call(block_identifier=block_number)
             if liq_shares > 0:
-                gauntlet_deployed = _fmt(gauntlet.functions.convertToAssets(liq_shares).call(block_identifier=block_number), underlying_decimals)
-            logger.info("creditcoop.gauntlet_deployed(%s) block=%s → %s", GAUNTLET_CORE[:10], block_number, gauntlet_deployed)
+                gauntlet_core_deployed = _fmt(gauntlet.functions.convertToAssets(liq_shares).call(block_identifier=block_number), underlying_decimals)
+            logger.info("creditcoop.gauntlet_core_deployed(%s) block=%s → %s", GAUNTLET_CORE[:10], block_number, gauntlet_core_deployed)
+
+        # Gauntlet USDC Prime — LiquidStrategy holds shares in a wrapper (0x8c10)
+        # which in turn deposits into the Morpho Gauntlet USDC Prime vault
+        gauntlet_prime_deployed = Decimal(0)
+        if GAUNTLET_PRIME and LIQUID_STRATEGY:
+            gauntlet_prime = w3.eth.contract(
+                address=Web3.to_checksum_address(GAUNTLET_PRIME), abi=erc4626_abi)
+            liq_shares_prime = gauntlet_prime.functions.balanceOf(Web3.to_checksum_address(LIQUID_STRATEGY)).call(block_identifier=block_number)
+            if liq_shares_prime > 0:
+                gauntlet_prime_deployed = _fmt(gauntlet_prime.functions.convertToAssets(liq_shares_prime).call(block_identifier=block_number), underlying_decimals)
+            logger.info("creditcoop.gauntlet_prime_deployed(%s) block=%s → %s", GAUNTLET_PRIME[:10], block_number, gauntlet_prime_deployed)
+
+        gauntlet_deployed = gauntlet_core_deployed + gauntlet_prime_deployed
 
         # Credit strategy cash (USDC idle in credit strategy contract)
         usdc = w3.eth.contract(
@@ -100,13 +114,15 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
 
         rows[0]["_breakdown"] = {
             "rain_credit_line": str(rain_amount),
-            "gauntlet_usdc_core": str(gauntlet_deployed),
+            "gauntlet_usdc_core": str(gauntlet_core_deployed),
+            "gauntlet_usdc_prime": str(gauntlet_prime_deployed),
             "vault_cash": str(vault_cash),
             "credit_strategy_cash": str(credit_cash),
         }
         rows[0]["notes"] = (
             f"Breakdown: Rain credit={rain_amount:,.2f}, "
-            f"Gauntlet USDC Core={gauntlet_deployed:,.2f}, "
+            f"Gauntlet Core={gauntlet_core_deployed:,.2f}, "
+            f"Gauntlet Prime={gauntlet_prime_deployed:,.2f}, "
             f"vault cash={vault_cash:,.2f}, "
             f"credit cash={credit_cash:,.2f}"
         )

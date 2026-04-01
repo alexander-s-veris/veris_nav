@@ -305,7 +305,7 @@ Net_Rate = Gross_Rate × 0.90 (10% pool fee)
 
 ## Credit Coop / Rain (Ethereum)
 
-ERC-4626/7540 vault that deploys capital into two sub-strategies: a Rain credit line (private credit) and a Gauntlet USDC Core vault (liquid reserve).
+ERC-4626/7540 vault that deploys capital into two sub-strategies: a Rain credit line (private credit) and Gauntlet USDC vaults as liquid reserve (Core + Prime, both via LiquidStrategy).
 
 **Reclassified A3 → A1**: The vault's `convertToAssets` is deterministic and authoritative — it reflects collected + uncollected interest from Rain, yield from the liquid strategy, and performance fee deductions. Analogous to sUSDe being A1 despite off-chain underlying yield.
 
@@ -323,7 +323,7 @@ For the NAV methodology log, document the breakdown:
 
 1. **Vault level**: `totalAssets()` → total USDC across all strategies. `totalLiquidAssets()` → liquid portion only.
 2. **Credit strategy**: `totalActiveCredit()` on CreditStrategy → principal + uncollected interest in Rain credit line. For granular breakdown: `numCreditPositions()` then `tokenIds(i)` → `creditTokenIdToLine(tokenId)` → `getPositionActiveCredit(line, tokenId)` returns `(deposit, interest)`.
-3. **Liquid strategy**: `totalAssets()` on LiquidStrategy → amount in Gauntlet USDC Core.
+3. **Liquid strategy**: `totalAssets()` on LiquidStrategy → total amount in Gauntlet vaults. Breakdown: `balanceOf(LiquidStrategy)` + `convertToAssets` on each Gauntlet vault (Core at `0x8eB6...` direct, Prime via wrapper at `0x8c10...a3d0` which deposits into Morpho vault `0xdd0f...`).
 4. **Cash**: USDC `balanceOf` on credit strategy address (undeployed cash) + USDC `balanceOf` on vault address (undeployed in vault).
 
 Interest on the Rain credit line accrues on-chain and is periodically collected by the vault, which reinvests it into the liquid strategy. The share price (`convertToAssets`) automatically reflects all of this.
