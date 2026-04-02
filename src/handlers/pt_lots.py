@@ -5,10 +5,12 @@ import logging
 import os
 
 from evm import CONFIG_DIR
+from handlers._registry import register_solana_handler
 
 logger = logging.getLogger(__name__)
 
 
+@register_solana_handler("pt_lots", display_name="PT lots", output_name="PT Lots")
 def query_pt_lots(wallet, block_ts):
     """Query PT token positions valued via lot-based linear amortisation.
 

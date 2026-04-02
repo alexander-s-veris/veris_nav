@@ -9,9 +9,12 @@ from handlers import (
     _get_display_name, _get_underlying_symbol,
 )
 
+from handlers._registry import register_evm_handler
+
 logger = logging.getLogger(__name__)
 
 
+@register_evm_handler("erc4626_vaults", "_morpho_vaults", query_type="erc4626", display_name="ERC-4626 Vaults")
 def query_erc4626_vaults(w3, chain, wallet, block_number, block_ts):
     """Query all ERC-4626 vault positions for a wallet on a chain.
 

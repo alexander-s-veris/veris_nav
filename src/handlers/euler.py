@@ -9,9 +9,12 @@ from handlers import (
     _get_display_name, _get_underlying_symbol,
 )
 
+from handlers._registry import register_evm_handler
+
 logger = logging.getLogger(__name__)
 
 
+@register_evm_handler("euler", query_type="euler_erc4626", display_name="Euler")
 def query_euler_vaults(w3, chain, wallet, block_number, block_ts):
     """Query Euler V2 vaults with sub-account scanning.
 

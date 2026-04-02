@@ -13,10 +13,12 @@ from decimal import Decimal
 from web3 import Web3
 
 from handlers import _load_contracts_cfg, _get_abi, _fmt
+from handlers._registry import register_evm_handler
 
 logger = logging.getLogger(__name__)
 
 
+@register_evm_handler("curve", query_type="curve_lp", display_name="Curve")
 def query_curve_lp(w3, chain, wallet, block_number, block_ts):
     """Query Curve LP positions and decompose into underlying constituents."""
     contracts = _load_contracts_cfg()

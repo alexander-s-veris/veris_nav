@@ -5,10 +5,12 @@ from decimal import Decimal
 from web3 import Web3
 
 from handlers import _load_contracts_cfg, _get_abi, _fmt
+from handlers._registry import register_evm_handler
 
 logger = logging.getLogger(__name__)
 
 
+@register_evm_handler("midas", query_type="midas_oracle", display_name="Midas")
 def query_midas_positions(w3, chain, wallet, block_number, block_ts):
     """Query Midas tokenised fund positions (mF-ONE, mHYPER, msyrupUSDp).
 

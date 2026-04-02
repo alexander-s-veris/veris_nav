@@ -384,7 +384,7 @@ def main():
     # where the token_contract doesn't represent a wallet-held balance.
     # Aave aTokens/debt tokens ARE wallet balances (same balanceOf), so they dedup.
     # Morpho/Kamino lock tokens inside the protocol, so they must NOT dedup.
-    _NO_DEDUP_TYPES = {"lp_constituent", "reward"}
+    _NO_DEDUP_TYPES = {"lp_constituent", "reward", "vault_breakdown"}
     _NO_DEDUP_PROTOCOLS = {"morpho", "kamino"}
     protocol_tokens = set()
     for pos in protocol_rows:

@@ -5,10 +5,12 @@ from datetime import datetime, timezone
 from web3 import Web3
 
 from handlers import _load_contracts_cfg, _get_abi, _fmt
+from handlers._registry import register_evm_handler
 
 logger = logging.getLogger(__name__)
 
 
+@register_evm_handler("ethena_cooldowns", query_type="ethena_cooldown", display_name="Ethena.fi")
 def query_ethena_cooldowns(w3, chain, wallet, block_number, block_ts):
     """Query Ethena sUSDe cooldown (pending unstakes).
     Reads sUSDe address from contracts.json _ethena section.

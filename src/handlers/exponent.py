@@ -5,6 +5,7 @@ import time
 from decimal import Decimal
 
 from handlers import _load_solana_cfg
+from handlers._registry import register_solana_handler
 from solana_client import (
     solana_rpc, get_exponent_lp_positions, get_exponent_yt_positions,
     get_exponent_market, decompose_exponent_lp, SOLANA_RPC_RATE_LIMIT_SECONDS,
@@ -13,6 +14,7 @@ from solana_client import (
 logger = logging.getLogger(__name__)
 
 
+@register_solana_handler("exponent", display_name="Exponent LP", output_name="Exponent Finance")
 def query_exponent_lps(wallet, block_ts):
     """Query Exponent LP positions and decompose into SY + PT constituents.
 
@@ -87,6 +89,7 @@ def query_exponent_lps(wallet, block_ts):
     return rows
 
 
+@register_solana_handler("exponent", display_name="Exponent YT")
 def query_exponent_yts(wallet, block_ts):
     """Query Exponent Yield Token positions.
 

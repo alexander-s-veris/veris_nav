@@ -15,6 +15,7 @@ from decimal import Decimal
 from web3 import Web3
 
 from handlers import _load_contracts_cfg, _get_abi
+from handlers._registry import register_evm_handler
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,7 @@ def _estimate_current_tick(decimals0: int, decimals1: int, price_ratio: float) -
     return int(math.log(price_ratio / decimal_adj) / math.log(1.0001))
 
 
+@register_evm_handler("uniswap_v4", query_type="nft_lp", display_name="Uniswap V4")
 def query_uniswap_v4(w3, chain, wallet, block_number, block_ts):
     """Query Uniswap V4 NFT LP positions and decompose into constituents.
 

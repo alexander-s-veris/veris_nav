@@ -9,6 +9,7 @@ from decimal import Decimal
 from web3 import Web3
 
 from handlers import _load_contracts_cfg, _get_abi, _fmt
+from handlers._registry import register_evm_handler
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ def _get_tp_staleness_threshold():
     return gp.get("tp_staleness_threshold_days", 45)
 
 
+@register_evm_handler("gauntlet_falconx", query_type="manual_accrual_gauntlet", display_name="Gauntlet (FalconX)")
 def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     """Query Gauntlet vault FalconX A3 position.
 
@@ -165,6 +167,7 @@ def _check_tp_staleness():
     return None
 
 
+@register_evm_handler("falconx_direct", query_type="manual_accrual_direct", display_name="FalconX (Direct)")
 def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
     """Query direct AA_FalconXUSDC holding for A3 accrual.
 

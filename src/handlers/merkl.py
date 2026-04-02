@@ -15,6 +15,8 @@ import requests
 
 from evm import load_chains
 
+from handlers._registry import register_evm_handler
+
 logger = logging.getLogger(__name__)
 
 _API_BASE = "https://api.merkl.xyz/v4"
@@ -22,6 +24,7 @@ _TIMEOUT = 15
 _RATE_LIMIT = 0.5
 
 
+@register_evm_handler("merkl", display_name="Merkl")
 def query_merkl_rewards(w3, chain, wallet, block_number, block_ts):
     """Query Merkl for all claimable rewards across all EVM chains.
 

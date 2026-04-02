@@ -4,11 +4,13 @@ import logging
 from decimal import Decimal
 
 from handlers import _load_solana_cfg
+from handlers._registry import register_solana_handler
 from solana_client import get_kamino_obligation
 
 logger = logging.getLogger(__name__)
 
 
+@register_solana_handler("kamino", display_name="Kamino")
 def query_kamino_obligations(wallet, block_ts):
     """Query Kamino lending obligation positions (leveraged).
 

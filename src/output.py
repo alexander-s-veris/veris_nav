@@ -43,20 +43,14 @@ _CHAIN_DISPLAY = {
     "solana": "Solana",
 }
 
-_PROTOCOL_DISPLAY = {
-    "aave": "Aave",
+from handlers._registry import DISPLAY_NAMES
+
+# Non-handler protocol names (set by collect.py, not by a handler decorator).
+# Handler-registered protocols are looked up from DISPLAY_NAMES automatically.
+_PROTOCOL_DISPLAY_FALLBACK = {
     "arma": "ARMA",
     "avantis": "Avantis",
-    "credit_coop": "Credit Coop",
-    "curve": "Curve",
-    "ethena": "Ethena.fi",
-    "euler": "Euler",
-    "exponent": "Exponent Finance",
-    "kamino": "Kamino",
-    "midas": "Midas",
-    "morpho": "Morpho (Markets)",
-    "pt_lots": "PT Lots",
-    "uniswap_v4": "Uniswap V4",
+    "morpho_vaults": "Morpho (Vaults)",
     "wallet": "Wallet Balance",
     "yearn": "yearn.fi",
 }
@@ -70,7 +64,7 @@ def _format_chain(chain):
 def _format_protocol(pos):
     """Format protocol name for display output.
 
-    Priority: handler-set protocol_display > dict lookup > fallback.
+    Priority: handler-set protocol_display > registry DISPLAY_NAMES > fallback dict > auto-format.
     """
     # Handler can override via protocol_display field
     explicit = pos.get("protocol_display", "")
@@ -81,12 +75,15 @@ def _format_protocol(pos):
     if not protocol:
         return "Wallet Balance"
 
-    # Prefix match for morpho_vaults variants
+    # Prefix match for morpho_vaults variants (erc4626 handler derives these)
     if protocol.startswith("morpho_vaults"):
         return "Morpho (Vaults)"
 
-    if protocol in _PROTOCOL_DISPLAY:
-        return _PROTOCOL_DISPLAY[protocol]
+    if protocol in DISPLAY_NAMES:
+        return DISPLAY_NAMES[protocol]
+
+    if protocol in _PROTOCOL_DISPLAY_FALLBACK:
+        return _PROTOCOL_DISPLAY_FALLBACK[protocol]
 
     return protocol.replace("_", " ").title()
 

@@ -20,15 +20,8 @@ load_dotenv()
 from evm import CONFIG_DIR, get_web3, get_block_info, TS_FMT
 from block_utils import concurrent_query
 
-# Import all handler functions from handlers package
-from handlers import (
-    query_morpho_markets, query_erc4626_vaults, query_euler_vaults,
-    query_aave_positions, query_midas_positions, query_gauntlet_falconx,
-    query_falconx_direct, query_uniswap_v4, query_curve_lp,
-    query_ethena_cooldowns, query_creditcoop, query_kamino_obligations,
-    query_exponent_lps, query_exponent_yts, query_pt_lots,
-)
-from handlers.merkl import query_merkl_rewards
+# Auto-registered handler registries
+from handlers._registry import EVM_HANDLERS, SOLANA_HANDLERS, HANDLER_REGISTRY
 
 # Import config loaders from handlers for validation
 from handlers import _load_contracts_cfg, _load_morpho_cfg, _load_solana_cfg
@@ -178,41 +171,12 @@ def _get_wallet_protocols(chain, wallet):
 
 
 # =============================================================================
-# Protocol key -> handler mapping
+# Backward-compatible aliases (used by tests)
 # =============================================================================
 
-# Protocol key (from wallets.json) -> handler key
-PROTOCOL_TO_HANDLER = {
-    "morpho":           "morpho_leverage",
-    "erc4626_vaults":   "erc4626",
-    "_morpho_vaults":   "erc4626",
-    "euler":            "euler_erc4626",
-    "aave":             "aave_leverage",
-    "midas":            "midas_oracle",
-    "gauntlet_falconx": "manual_accrual_gauntlet",
-    "falconx_direct":   "manual_accrual_direct",
-    "uniswap_v4":       "nft_lp",
-    "curve":            "curve_lp",
-    "ethena_cooldowns": "ethena_cooldown",
-    "credit_coop":      "credit_coop",
-    "merkl":            "merkl_rewards",
-}
-
-# Handler key -> handler function
-HANDLER_REGISTRY = {
-    "morpho_leverage":          query_morpho_markets,
-    "erc4626":                  query_erc4626_vaults,
-    "euler_erc4626":            query_euler_vaults,
-    "aave_leverage":            query_aave_positions,
-    "midas_oracle":             query_midas_positions,
-    "manual_accrual_gauntlet":  query_gauntlet_falconx,
-    "manual_accrual_direct":    query_falconx_direct,
-    "nft_lp":                   query_uniswap_v4,
-    "curve_lp":                 query_curve_lp,
-    "ethena_cooldown":          query_ethena_cooldowns,
-    "credit_coop":              query_creditcoop,
-    "merkl_rewards":            query_merkl_rewards,
-}
+# Flat identity map — protocol_key -> protocol_key (the two-level indirection
+# is now handled by decorators, but tests still import PROTOCOL_TO_HANDLER)
+PROTOCOL_TO_HANDLER = {k: k for k in EVM_HANDLERS}
 
 
 # =============================================================================
@@ -251,10 +215,7 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc="", block_override=Non
     # Build list of handlers to run
     handler_tasks = []
     for protocol_key in protocols:
-        handler_key = PROTOCOL_TO_HANDLER.get(protocol_key)
-        if not handler_key:
-            continue
-        handler = HANDLER_REGISTRY.get(handler_key)
+        handler = EVM_HANDLERS.get(protocol_key)
         if not handler:
             continue
         handler_tasks.append((protocol_key, handler))
@@ -290,12 +251,11 @@ def query_evm_wallet_positions(chain, wallet, wallet_desc="", block_override=Non
 # Orchestrator helper: query all Solana positions
 # =============================================================================
 
-# Solana protocol key -> list of (name, handler_fn, needs_valuation_date)
+# Backward-compatible alias — adds the needs_valuation_date=False tuple element
+# that the old manual registry had. Tests import SOLANA_HANDLER_REGISTRY.
 SOLANA_HANDLER_REGISTRY = {
-    "kamino":   [("Kamino", query_kamino_obligations, False)],
-    "exponent": [("Exponent LP", query_exponent_lps, False),
-                 ("Exponent YT", query_exponent_yts, False)],
-    "pt_lots":  [("PT lots", query_pt_lots, False)],
+    k: [(dn, fn, False) for dn, fn in v]
+    for k, v in SOLANA_HANDLERS.items()
 }
 
 

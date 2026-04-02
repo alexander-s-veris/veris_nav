@@ -601,7 +601,7 @@ class TestContractsConfig(unittest.TestCase):
 
     def test_all_sections_with_query_type_are_valid(self):
         """Every _query_type in contracts.json must map to a known handler."""
-        from protocol_queries import HANDLER_REGISTRY
+        from handlers._registry import HANDLER_REGISTRY
         known_types = set(HANDLER_REGISTRY.keys())
 
         for chain, chain_data in self.contracts.items():
@@ -755,18 +755,17 @@ class TestHandlerRegistryCompleteness(unittest.TestCase):
     """Verify handler registry covers all protocol keys."""
 
     def test_all_protocol_keys_have_handlers(self):
-        """Every key in PROTOCOL_TO_HANDLER must resolve to a function in HANDLER_REGISTRY."""
-        from protocol_queries import PROTOCOL_TO_HANDLER, HANDLER_REGISTRY
-        for protocol_key, handler_key in PROTOCOL_TO_HANDLER.items():
-            self.assertIn(
-                handler_key, HANDLER_REGISTRY,
-                f"Protocol '{protocol_key}' maps to handler '{handler_key}' "
-                f"which is not in HANDLER_REGISTRY"
+        """Every EVM protocol key must resolve to a callable handler."""
+        from handlers._registry import EVM_HANDLERS
+        for protocol_key, handler_fn in EVM_HANDLERS.items():
+            self.assertTrue(
+                callable(handler_fn),
+                f"EVM_HANDLERS['{protocol_key}'] is not callable"
             )
 
     def test_handler_functions_are_callable(self):
-        """Every handler in the registry must be a callable."""
-        from protocol_queries import HANDLER_REGISTRY
+        """Every handler in the query_type registry must be a callable."""
+        from handlers._registry import HANDLER_REGISTRY
         for key, handler in HANDLER_REGISTRY.items():
             self.assertTrue(
                 callable(handler),
@@ -874,8 +873,8 @@ class TestCrossReferences(unittest.TestCase):
 
     def test_wallet_protocols_have_handlers(self):
         """Every protocol in wallet registrations must map to a handler."""
-        from protocol_queries import PROTOCOL_TO_HANDLER, SOLANA_HANDLER_REGISTRY
-        all_known = set(PROTOCOL_TO_HANDLER.keys()) | set(SOLANA_HANDLER_REGISTRY.keys())
+        from handlers._registry import EVM_HANDLERS, SOLANA_HANDLERS
+        all_known = set(EVM_HANDLERS.keys()) | set(SOLANA_HANDLERS.keys())
         for chain_key, wallets_list in self.wallets.items():
             if not isinstance(wallets_list, list):
                 continue
@@ -886,8 +885,8 @@ class TestCrossReferences(unittest.TestCase):
                     self.assertIn(
                         proto, all_known,
                         f"wallets.json {chain_key}/{wallet.get('address', '?')[:10]}: "
-                        f"protocol '{proto}' not in PROTOCOL_TO_HANDLER or "
-                        f"SOLANA_HANDLER_REGISTRY")
+                        f"protocol '{proto}' not in EVM_HANDLERS or "
+                        f"SOLANA_HANDLERS")
 
     def test_tokens_reference_known_chains(self):
         """Every chain key in tokens.json must exist in chains.json."""
