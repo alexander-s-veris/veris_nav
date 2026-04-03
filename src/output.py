@@ -350,11 +350,22 @@ def write_verification(verification_results, output_dir, file_suffix=""):
 
     for v in verification_results:
         details = v.get("details", {})
-        # Unified source date: each verifier stores it differently
+        # Unified source date: each verifier stores it differently.
+        # Normalize to dd/mm/yyyy hh:mm:ss (or dd/mm/yyyy if no time).
         source_date = (details.get("report_date")
                        or details.get("nav_date")
                        or details.get("attestation_created_at")
                        or "")
+        if source_date:
+            try:
+                if "T" in source_date:
+                    dt = datetime.fromisoformat(source_date.replace("Z", "+00:00"))
+                    source_date = dt.strftime("%d/%m/%Y %H:%M:%S")
+                elif len(source_date) == 10:
+                    dt = datetime.strptime(source_date, "%Y-%m-%d")
+                    source_date = dt.strftime("%d/%m/%Y")
+            except (ValueError, TypeError):
+                pass
         rows.append({
             "token_symbol": v.get("token_symbol", ""),
             "chain": _format_chain(v.get("chain", "")),
