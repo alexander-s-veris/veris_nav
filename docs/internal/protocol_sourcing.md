@@ -27,13 +27,14 @@ Protocol dispatch is driven by `wallets.json` protocol registrations → `PROTOC
 
 ## Data Sourcing Method
 
-**All position data is sourced via RPC endpoints** (Alchemy) as configured in `config/chains.json`. This is the primary and only method for reading on-chain balances and positions.
+**All position data is sourced via RPC endpoints** as configured in `config/chains.json`. Chains may use Alchemy, DRPC, or other providers — the balance scanner is RPC-agnostic.
 
-Balance method per chain is configured in `config/chains.json` → `token_balance_method`:
-- `alchemy` (default): `alchemy_getTokenBalances` + direct `balanceOf` fallback
-- `etherscan_v2`: Etherscan V2 API `addresstokenbalance` endpoint
-- `balance_of`: Direct `balanceOf` per registry token
-- Solana: `getTokenAccountsByOwner` via Alchemy RPC
+Balance scanning uses `query_evm_balances()` for all EVM chains:
+- Native balance via `eth_getBalance` at the valuation block
+- ERC-20 balances via multicall `balanceOf` at the valuation block (uses Multicall3 contract)
+- On Alchemy RPCs: `alchemy_getTokenBalances` is used as a fast path, with multicall filling gaps
+- Chains with `token_balance_method: "balance_of"` in config skip wallet scanning (positions sourced via protocol handlers only)
+- Solana: `getTokenAccountsByOwner` via RPC
 
 **Performance**: `src/block_utils.py` provides reusable concurrency utilities:
 - `estimate_blocks()` pre-computes block numbers from a single reference (no per-row RPC)

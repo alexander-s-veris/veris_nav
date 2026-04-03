@@ -67,34 +67,49 @@ def refine_block(w3, estimated_block: int, target_ts: int, tolerance: int = 30,
                  chain: str = "ethereum") -> int:
     """Refine a block estimate via binary search to be within tolerance of target.
 
-    Binary search converges in O(log n) iterations instead of linear adjustment.
-    Only needed when exact block alignment matters (e.g. Valuation Block).
+    Uses the initial estimate to measure actual block rate, re-estimates if
+    far off, then binary searches with tight bounds. Converges in ~20 RPC calls.
 
     Args:
         w3: Web3 instance.
-        estimated_block: Initial estimate.
+        estimated_block: Initial estimate from estimate_blocks().
         target_ts: Target unix timestamp.
         tolerance: Acceptable seconds of deviation (default 30s).
-        chain: Chain name (for block time in range calculation).
+        chain: Chain name (unused, kept for API compat).
 
     Returns:
         Refined block number (closest to but not exceeding target_ts).
     """
-    block_time = _get_avg_block_time(chain)
     latest = w3.eth.block_number
+    est_block = min(estimated_block, latest)
 
-    # Set initial binary search bounds around the estimate
-    range_blocks = max(100, int(tolerance * 4 / block_time))
-    low = max(1, estimated_block - range_blocks)
-    high = min(estimated_block + range_blocks, latest)
-    best = max(1, min(estimated_block, latest))
+    # Iteratively re-estimate using observed block rate until close enough
+    # for binary search. Each iteration uses the previous check as a new
+    # reference point, converging in 2-3 steps even on irregular chains.
+    for _ in range(3):
+        est_data = w3.eth.get_block(est_block)
+        est_error = est_data["timestamp"] - target_ts
+        if abs(est_error) <= tolerance:
+            return est_block
+        # Use observed rate between this block and latest to correct
+        latest_ts = w3.eth.get_block(latest)["timestamp"]
+        ts_span = latest_ts - est_data["timestamp"]
+        block_span = latest - est_block
+        if ts_span <= 0 or block_span <= 0:
+            break
+        observed_rate = ts_span / block_span
+        est_block = max(1, min(est_block - int(est_error / observed_rate), latest))
 
-    for _ in range(12):
+    # Binary search with ±500 block margin around the corrected estimate
+    low = max(1, est_block - 500)
+    high = min(est_block + 500, latest)
+    best = max(1, est_block)
+
+    for _ in range(20):
         if low > high:
             break
         mid = (low + high) // 2
-        bd = w3.eth.get_block(mid)
-        mid_ts = bd["timestamp"]
+        mid_ts = w3.eth.get_block(mid)["timestamp"]
 
         if mid_ts <= target_ts:
             best = mid

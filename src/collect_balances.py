@@ -56,10 +56,14 @@ def _get_erc20_abi():
 
 # --- EVM Balance Queries ---
 
-def query_balances_alchemy(w3: Web3, chain: str, wallet: str,
-                           block_number: int, block_ts: str,
-                           registry: dict) -> list[dict]:
-    """Query native + ERC-20 balances via Alchemy, filter against registry."""
+def query_evm_balances(w3: Web3, chain: str, wallet: str,
+                       block_number: int, block_ts: str,
+                       registry: dict) -> list[dict]:
+    """Query native + ERC-20 balances for any EVM chain, filter against registry.
+
+    RPC-agnostic: uses alchemy_getTokenBalances as a fast path when the
+    RPC is Alchemy, otherwise goes straight to multicall balanceOf.
+    """
     rows = []
     checksum_wallet = Web3.to_checksum_address(wallet)
     chain_registry = registry.get(chain, {})
@@ -75,41 +79,35 @@ def query_balances_alchemy(w3: Web3, chain: str, wallet: str,
             wallet, chain, "native", native_entry, native_balance,
             block_number, block_ts))
 
-    # ERC-20 balances via Alchemy
-    try:
-        response = w3.provider.make_request(
-            "alchemy_getTokenBalances",
-            [checksum_wallet, "erc20"],
-        )
-        token_balances = response.get("result", {}).get("tokenBalances", [])
-    except Exception as e:
-        print(f"  alchemy_getTokenBalances failed on {chain}: {e}")
-        token_balances = []
-
+    # ERC-20 fast path: Alchemy-proprietary bulk token scan (only on Alchemy RPCs)
     found_contracts = set()
-    for tb in token_balances:
-        raw_balance = int(tb.get("tokenBalance", "0x0"), 16)
-        if raw_balance == 0:
-            continue
+    rpc_url = getattr(w3.provider, "endpoint_uri", "") or ""
+    if "alchemy.com" in rpc_url:
+        try:
+            response = w3.provider.make_request(
+                "alchemy_getTokenBalances",
+                [checksum_wallet, "erc20"],
+            )
+            for tb in response.get("result", {}).get("tokenBalances", []):
+                raw_balance = int(tb.get("tokenBalance", "0x0"), 16)
+                if raw_balance == 0:
+                    continue
 
-        contract_addr = tb["contractAddress"].lower()
-        token_entry = chain_registry.get(contract_addr)
-        if token_entry is None:
-            continue  # Not in registry — skip spam
+                contract_addr = tb["contractAddress"].lower()
+                token_entry = chain_registry.get(contract_addr)
+                if token_entry is None:
+                    continue  # Not in registry — skip spam
 
-        found_contracts.add(contract_addr)
-        decimals = token_entry.get("decimals")
-        if decimals is None:
-            # Fetch from Alchemy metadata as last resort
-            result = w3.provider.make_request("alchemy_getTokenMetadata", [tb["contractAddress"]])
-            decimals = result.get("result", {}).get("decimals", 18) or 18
+                found_contracts.add(contract_addr)
+                decimals = token_entry.get("decimals", 18)
+                human_balance = Decimal(raw_balance) / Decimal(10 ** decimals)
+                rows.append(_build_row(
+                    wallet, chain, contract_addr, token_entry, human_balance,
+                    block_number, block_ts))
+        except Exception:
+            pass  # Fall through to multicall
 
-        human_balance = Decimal(raw_balance) / Decimal(10 ** decimals)
-        rows.append(_build_row(
-            wallet, chain, contract_addr, token_entry, human_balance,
-            block_number, block_ts))
-
-    # Fallback: batch balanceOf via Multicall3 for registry tokens not found by Alchemy
+    # Multicall balanceOf for registry tokens not yet found
     from multicall import multicall, encode_balance_of, decode_uint256
 
     remaining = [
@@ -136,122 +134,8 @@ def query_balances_alchemy(w3: Web3, chain: str, wallet: str,
     return rows
 
 
-def query_balances_etherscan(chain: str, chain_id: int, wallet: str,
-                             registry: dict) -> list[dict]:
-    """Query native + ERC-20 balances via Etherscan V2 API, filter against registry."""
-    from evm import ETHERSCAN_V2_BASE
-    etherscan_base = ETHERSCAN_V2_BASE
-    rows = []
-    api_key = os.getenv("ETHERSCAN_API_KEY")
-    chain_registry = registry.get(chain, {})
-    native_decimals = get_native_decimals(chain)
-
-    # Get block info via Etherscan proxy
-    block_number = "N/A"
-    block_ts = "N/A"
-    try:
-        resp = requests.get(etherscan_base, params={
-            "chainid": chain_id, "module": "proxy",
-            "action": "eth_blockNumber", "apikey": api_key,
-        }, timeout=10)
-        data = resp.json()
-        if data.get("result"):
-            block_number = str(int(data["result"], 16))
-            resp2 = requests.get(etherscan_base, params={
-                "chainid": chain_id, "module": "proxy",
-                "action": "eth_getBlockByNumber",
-                "tag": data["result"], "boolean": "false", "apikey": api_key,
-            }, timeout=10)
-            block_data = resp2.json()
-            if block_data.get("result", {}).get("timestamp"):
-                ts = int(block_data["result"]["timestamp"], 16)
-                block_ts = datetime.fromtimestamp(ts, tz=timezone.utc).strftime(TS_FMT)
-    except Exception:
-        pass
-
-    # Native balance
-    native_entry = chain_registry.get("native")
-    try:
-        resp = requests.get(etherscan_base, params={
-            "chainid": chain_id, "module": "account", "action": "balance",
-            "address": wallet, "tag": "latest", "apikey": api_key,
-        }, timeout=10)
-        data = resp.json()
-        if data.get("status") == "1" and native_entry:
-            native_wei = int(data["result"])
-            native_balance = Decimal(native_wei) / Decimal(10 ** native_decimals)
-            if native_balance > 0:
-                rows.append(_build_row(
-                    wallet, chain, "native", native_entry, native_balance,
-                    block_number, block_ts))
-    except Exception:
-        pass
-
-    # ERC-20 tokens via Etherscan V2
-    page = 1
-    while True:
-        try:
-            resp = requests.get(etherscan_base, params={
-                "chainid": chain_id, "module": "account",
-                "action": "addresstokenbalance",
-                "address": wallet, "page": page, "offset": 10000, "apikey": api_key,
-            }, timeout=10)
-            data = resp.json()
-        except Exception:
-            break
-
-        if data.get("status") != "1" or not data.get("result"):
-            break
-
-        for token in data["result"]:
-            raw_balance = int(token.get("TokenQuantity", "0"))
-            if raw_balance == 0:
-                continue
-
-            contract_addr = token.get("TokenAddress", "").lower()
-            token_entry = chain_registry.get(contract_addr)
-            if token_entry is None:
-                continue
-
-            decimals = token_entry.get("decimals", int(token.get("TokenDivisor", "18")))
-            human_balance = Decimal(raw_balance) / Decimal(10 ** decimals)
-            rows.append(_build_row(
-                wallet, chain, contract_addr, token_entry, human_balance,
-                block_number, block_ts))
-
-        if len(data["result"]) < 10000:
-            break
-        page += 1
-
-    # Fallback: direct balanceOf via Etherscan proxy for registry tokens not found
-    found_contracts = {r["token_contract"] for r in rows if r["token_contract"] != "native"}
-    for contract_addr, token_entry in chain_registry.items():
-        if contract_addr == "native" or contract_addr in found_contracts:
-            continue
-        if not isinstance(token_entry, dict):
-            continue
-        try:
-            # balanceOf(address) function selector = 0x70a08231
-            call_data = "0x70a08231" + wallet[2:].lower().zfill(64)
-            resp = requests.get(etherscan_base, params={
-                "chainid": chain_id, "module": "proxy", "action": "eth_call",
-                "to": contract_addr, "data": call_data, "tag": "latest",
-                "apikey": api_key,
-            }, timeout=10)
-            result = resp.json()
-            if result.get("result") and result["result"] != "0x":
-                raw_balance = int(result["result"], 16)
-                if raw_balance == 0:
-                    continue
-                decimals = token_entry.get("decimals", 18)
-                human_balance = Decimal(raw_balance) / Decimal(10 ** decimals)
-                rows.append(_build_row(
-                    wallet, chain, contract_addr, token_entry, human_balance,
-                    block_number, block_ts))
-        except Exception:
-            pass
-
-    return rows
+# Backward-compatible alias
+query_balances_alchemy = query_evm_balances
 
 
 # --- Solana Balance Query ---

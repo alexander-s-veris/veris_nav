@@ -27,11 +27,6 @@ TS_FMT = "%d/%m/%Y %H:%M:%S"
 CET = ZoneInfo("Europe/Zurich")
 
 
-# Etherscan V2 unified API — one URL serves all chains via chainid param.
-# This is a structural constant (not deployment-specific), so it lives here.
-ETHERSCAN_V2_BASE = "https://api.etherscan.io/v2/api"
-
-
 def get_native_symbol(chain: str) -> str:
     """Get native token symbol for a chain from chains.json."""
     chains = load_chains()
@@ -104,6 +99,8 @@ def get_rpc_url(chain: str) -> str:
     if chain not in chains:
         raise ValueError(f"Unknown chain: {chain}")
     cfg = chains[chain]
+    if "rpc_url" in cfg:
+        return cfg["rpc_url"]
     if "rpc_env_var" in cfg:
         return os.getenv(cfg["rpc_env_var"])
     api_key = os.getenv("ALCHEMY_API_KEY")
@@ -130,6 +127,39 @@ def get_web3(chain: str) -> Web3:
     return w3
 
 
+_web3_fallback_cache = {}
+
+
+def get_web3_fallback(chain: str) -> Web3 | None:
+    """Return a cached Web3 instance using the chain's fallback RPC, if configured.
+
+    Used when the primary Alchemy RPC doesn't support historical queries.
+    Returns None if no fallback is configured.
+    """
+    if chain in _web3_fallback_cache:
+        return _web3_fallback_cache[chain]
+
+    chains = load_chains()
+    cfg = chains.get(chain, {})
+    fallback_url = cfg.get("fallback_rpc")
+    if not fallback_url:
+        # Check for Alchemy-templated fallback
+        template = cfg.get("fallback_rpc_template")
+        if template:
+            api_key = os.getenv("ALCHEMY_API_KEY")
+            fallback_url = template.format(api_key=api_key)
+        else:
+            return None
+
+    provider = Web3.HTTPProvider(fallback_url)
+
+    w3 = Web3(provider)
+    w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+
+    _web3_fallback_cache[chain] = w3
+    return w3
+
+
 def get_block_info(w3: Web3, block_identifier="latest") -> tuple[int, str]:
     """Return (block_number, block_timestamp_utc_str) for a given block."""
     block_number = w3.eth.block_number if block_identifier == "latest" else block_identifier
@@ -145,6 +175,9 @@ def find_valuation_block(w3: Web3, chain: str, target_ts: int) -> tuple[int, str
     for precise alignment. The returned block timestamp is guaranteed to be
     <= target_ts (per Valuation Policy: closest to but NOT exceeding 16:00 CET/CEST).
 
+    Falls back to the chain's fallback RPC if the primary one fails on
+    historical block queries.
+
     Args:
         w3: Web3 instance for the chain.
         chain: Chain name (for block time estimation).
@@ -153,6 +186,22 @@ def find_valuation_block(w3: Web3, chain: str, target_ts: int) -> tuple[int, str
     Returns:
         (block_number, block_timestamp_utc_str)
     """
+    try:
+        return _find_valuation_block(w3, chain, target_ts)
+    except Exception as primary_err:
+        # Try fallback RPC if available
+        w3_fb = get_web3_fallback(chain)
+        if w3_fb is None:
+            raise
+        import logging
+        logging.getLogger(__name__).info(
+            "find_valuation_block: primary RPC failed for %s (%s), trying fallback",
+            chain, primary_err)
+        return _find_valuation_block(w3_fb, chain, target_ts)
+
+
+def _find_valuation_block(w3: Web3, chain: str, target_ts: int) -> tuple[int, str]:
+    """Internal: find valuation block using a single Web3 instance."""
     from block_utils import estimate_blocks, refine_block
 
     # Get current block as reference

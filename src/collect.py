@@ -31,8 +31,7 @@ from evm import (
 from block_utils import concurrent_query
 from collect_balances import (
     load_tokens_registry, load_wallets,
-    query_balances_alchemy, query_balances_solana,
-    query_balances_etherscan,
+    query_evm_balances, query_balances_solana,
 )
 from protocol_queries import (
     query_evm_wallet_positions,
@@ -107,16 +106,20 @@ def main():
         print("Finding valuation blocks...", flush=True)
 
         def find_block_for_chain(chain_name):
-            try:
-                w3 = get_web3(chain_name)
-                bn, bts = find_valuation_block(w3, chain_name, valuation_ts)
-                return chain_name, bn, bts
-            except Exception as e:
-                print(f"  [{chain_name}] Cannot find valuation block: {e}")
-                return chain_name, None, None
+            for attempt in range(3):
+                try:
+                    w3 = get_web3(chain_name)
+                    bn, bts = find_valuation_block(w3, chain_name, valuation_ts)
+                    return chain_name, bn, bts
+                except Exception as e:
+                    if attempt < 2:
+                        _time.sleep(2)
+                    else:
+                        print(f"  [{chain_name}] Cannot find valuation block: {e}")
+                        return chain_name, None, None
 
-        block_results = concurrent_query(find_block_for_chain, evm_chains,
-                                         max_workers=len(evm_chains))
+        # Sequential to avoid RPC rate limits during block estimation
+        block_results = [find_block_for_chain(cn) for cn in evm_chains]
 
         for chain_name, bn, bts in block_results:
             if bn is not None:
@@ -135,9 +138,11 @@ def main():
         print()
 
     # --- Output directory: outputs/MM_Month YYYY/nav_YYYYMMDD_HH-MM-SS ---
+    # Month folder uses run date (today), not valuation date
+    run_date = date.today()
     month_dir = os.path.join(
         OUTPUT_DIR,
-        f"{valuation_date.strftime('%m')}_{valuation_date.strftime('%B')} {valuation_date.strftime('%Y')}")
+        f"{run_date.strftime('%m')}_{run_date.strftime('%B')} {run_date.strftime('%Y')}")
     cet_now = now.astimezone(CET)
     run_ts_for_dir = cet_now.strftime("%H_%M_%S")
     tz_abbr = cet_now.strftime("%Z")  # CET or CEST
@@ -193,8 +198,11 @@ def main():
         rows = []
         log = []
 
-        # Balance scanner dispatch, keyed by chain config "token_balance_method"
-        def _scan_alchemy(chain_name, chain_cfg):
+        def scan_evm_balances(chain_name):
+            chain_cfg = chains[chain_name]
+            # Chains with balance_of skip wallet scanning (handled by protocol queries)
+            if chain_cfg.get("token_balance_method") == "balance_of":
+                return chain_name, []
             chain_rows = []
             try:
                 w3 = get_web3(chain_name)
@@ -203,30 +211,11 @@ def main():
                 else:
                     bn, bts = get_block_info(w3)
                 for w in evm_wallets:
-                    chain_rows.extend(query_balances_alchemy(
+                    chain_rows.extend(query_evm_balances(
                         w3, chain_name, w["address"], bn, bts, registry))
             except ConnectionError as e:
                 _track_chain(chain_name, error=f"balance scan: {e}")
-            return chain_rows
-
-        def _scan_etherscan(chain_name, chain_cfg):
-            chain_rows = []
-            for w in evm_wallets:
-                chain_rows.extend(query_balances_etherscan(
-                    chain_name, chain_cfg["chain_id"], w["address"], registry))
-            return chain_rows
-
-        balance_scanners = {
-            "alchemy": _scan_alchemy,
-            "etherscan_v2": _scan_etherscan,
-            "balance_of": lambda cn, cc: [],  # Handled by protocol queries (e.g. Katana)
-        }
-
-        def scan_evm_balances(chain_name):
-            chain_cfg = chains[chain_name]
-            method = chain_cfg.get("token_balance_method", "alchemy")
-            scanner = balance_scanners.get(method, _scan_alchemy)
-            return chain_name, scanner(chain_name, chain_cfg)
+            return chain_name, chain_rows
 
         evm_tasks = [lambda cn=cn: scan_evm_balances(cn) for cn in evm_chains]
         evm_results = concurrent_query(lambda fn: fn(), evm_tasks, max_workers=len(evm_tasks))
@@ -261,7 +250,7 @@ def main():
                     bn, bts = valuation_blocks[p_chain]
                 else:
                     bn, bts = get_block_info(w3)
-                proxy_rows = query_balances_alchemy(w3, p_chain, p_addr, bn, bts, registry)
+                proxy_rows = query_evm_balances(w3, p_chain, p_addr, bn, bts, registry)
                 if proxy_rows:
                     log.append(f"  [{p_chain}] ARMA {p_addr[:8]}...: {len(proxy_rows)} balances")
                 for r in proxy_rows:

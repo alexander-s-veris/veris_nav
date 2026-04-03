@@ -102,8 +102,9 @@ def find_valuation_slot(target_ts: int) -> tuple[int, str]:
     """
     from datetime import datetime, timezone
 
-    # Get current slot as reference
-    current_slot = solana_rpc("getSlot", [])["result"]
+    # Get current slot as reference — Alchemy doesn't serve getBlockTime
+    # for very recent slots, so start 1000 slots back (~7 minutes)
+    current_slot = solana_rpc("getSlot", [])["result"] - 1000
     current_time = solana_rpc("getBlockTime", [current_slot])["result"]
 
     if current_time is None:
@@ -114,15 +115,30 @@ def find_valuation_slot(target_ts: int) -> tuple[int, str]:
         ts_str = datetime.fromtimestamp(current_time, tz=timezone.utc).strftime(TS_FMT)
         return current_slot, ts_str
 
-    # Solana averages ~0.4s per slot (2.5 slots/sec)
+    # Estimate slot, then refine using observed rate (same approach as EVM)
     slots_per_second = 2.5
     diff_seconds = current_time - target_ts
     est_slot = int(current_slot - diff_seconds * slots_per_second)
     est_slot = max(1, est_slot)
 
-    # Binary search refinement (12 iterations converges for 20K slot range)
-    low = est_slot - 10000
-    high = est_slot + 10000
+    # Check estimate accuracy and correct using observed slot rate
+    for _ in range(3):
+        est_time = solana_rpc("getBlockTime", [est_slot])["result"]
+        if est_time is None:
+            est_slot -= 10
+            continue
+        est_error = est_time - target_ts
+        if abs(est_error) <= 30:
+            break
+        slot_span = current_slot - est_slot
+        ts_span = current_time - est_time
+        if ts_span > 0 and slot_span > 0:
+            observed_rate = ts_span / slot_span
+            est_slot = max(1, est_slot - int(est_error / observed_rate))
+
+    # Binary search refinement
+    low = est_slot - 500
+    high = est_slot + 500
     best_slot = est_slot
     best_ts = None
 

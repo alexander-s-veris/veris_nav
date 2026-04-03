@@ -15,7 +15,6 @@ Copy `.env` and add your API keys:
 ALCHEMY_API_KEY=your_key
 ETHERSCAN_API_KEY=your_key
 COINGECKO_API_KEY=your_key
-KATANA_RPC_URL=https://rpc.katana.network
 SOLSCAN_API_KEY=your_key
 ```
 
@@ -60,7 +59,7 @@ python src/falconx/update_falconx_optimized.py
 
 ## Current Status
 
-**Production NAV collection** (`src/collect.py`) is operational. Queries all protocol positions + wallet balances across 7 EVM chains + Solana, values per category methodology, and outputs to `outputs/nav_YYYYMMDD/`. ~108 positions, ~$26M net. RPC calls optimized via Multicall3 batching and concurrent execution.
+**Production NAV collection** (`src/collect.py`) is operational. Queries all protocol positions + wallet balances across 8 EVM chains + Solana, values per category methodology, and outputs to `outputs/MM_Month YYYY/nav_YYYYMMDD_HH_MM_SS_TZ/`. ~126 positions, ~$29.4M net. RPC calls optimized via Multicall3 batching and concurrent execution.
 
 **All protocol positions are registered:**
 
@@ -69,25 +68,25 @@ python src/falconx/update_falconx_optimized.py
 | 0xa33e | Open Market Positions | Morpho D (3 active, 1 closed), Steakhouse USDC A1, Steakhouse USDT A1, Euler A1, Aave Base A1, mF-ONE A2, mHYPER A2, Ethena cooldown, Uniswap V4 LP |
 | 0x6691 | Private Deal Positions | msyrupUSDp A2, Aave Plasma A1, Avantis A1, Yearn Katana A1, ARMA proxy, Curve LP |
 | 0x0c16 | Credit Positions | Gauntlet/FalconX A3 (indirect via vault + direct AA_FalconXUSDC), Morpho AA_FalconXUSDC closed |
-| 0xeC0B | Credit Positions 2 | CreditCoop A1, Hyperithm A1, Ethena cooldown |
+| 0xeC0B | Credit Positions 2 | CreditCoop A1 (dynamic sub-strategy breakdown: Rain credit, Gauntlet vaults, cash), Hyperithm A1, Ethena cooldown |
 | 0xaca2 | Open Market Positions 3 | ARMA proxy (Arbitrum) |
 | 0x8055 | Open Market Positions 2 | Aave Horizon D, Clearstar A1, mHYPER A2 |
 | ASQ4... | Solana Vault 1 | Kamino D (2 obligations: USCC/USDC + PT-USX/PT-eUSX/USX), PT-USX B (7 lots), PT-eUSX B (1 lot), Exponent C (2 LPs: ONyc + eUSX), Exponent F (2 YTs: ONyc + eUSX), farming rewards F |
 
 ## Architecture
 
-The system uses a **config-driven handler registry** pattern. Adding a new position for a standard protocol pattern requires only config changes, no code:
+The system uses a **config-driven, decorator-based handler registry** pattern. Adding a new protocol handler requires only the handler file with a `@register_evm_handler` or `@register_solana_handler` decorator — no manual registry edits. Adding a new position for a standard protocol pattern requires only config changes, no code:
 
 1. `wallets.json` declares which protocols each wallet uses on each chain
 2. `contracts.json` defines protocol contracts with `_query_type` fields
-3. `protocol_queries.py` dispatches via `HANDLER_REGISTRY` based on protocol type
+3. `handlers/_registry.py` auto-discovers and registers all handler modules via decorators
 4. `solana_protocols.json` configures Solana positions (Kamino, Exponent)
 5. `tokens.json` defines pricing config per token (method, feed IDs, fallback sources)
 6. `valuation.py` builds pricing indices from config at init — no hardcoded prices or feed IDs
 
 Additional features:
 - **Oracle staleness checking**: A2 tokens flag stale prices (>2x expected update frequency) and fall through to next source in hierarchy
-- **Independent verification (Section 7.3)**: 5 tokens verified — mHYPER (LlamaRisk attestation), msyrupUSDp + mF-ONE (Midas PDF reports via Google Drive OCR), USCC (Superstate REST API), ONyc (OnRe on-chain NAV)
+- **Independent verification (Section 7.3)**: 5 tokens verified — mHYPER (LlamaRisk attestation), msyrupUSDp + mF-ONE (Midas PDF reports via Google Drive, name-agnostic download with cache expiry), USCC (Superstate REST API), ONyc (OnRe on-chain NAV). Verification CSV includes `source_date` showing when each source was published.
 - **Valuation Policy compliance tests**: 87 automated tests validate config against the Valuation Policy v1.0 (`python -m unittest discover -s tests -v`)
 - **Chain health tracking**: Reports per-chain success/failure in `nav_summary.json`
 - **Snapshot diff tool**: `python src/tools/diff_snapshots.py --latest` catches disappeared/changed positions before submission
@@ -101,9 +100,10 @@ src/
   collect.py                # Production orchestrator (--date pinning)
   protocol_queries.py       # Handler registry, concurrent dispatch
   handlers/                 # Protocol-specific position readers
+    _registry.py            # Decorator-based auto-registration
     morpho.py, erc4626.py, euler.py, aave.py, midas.py
     gauntlet.py, creditcoop.py, uniswap.py, ethena.py
-    kamino.py, exponent.py, pt_lots.py, curve.py
+    kamino.py, exponent.py, pt_lots.py, curve.py, merkl.py
   adapters/                 # Price feed adapters (per provider)
     chainlink.py, pyth.py, redstone.py, kraken.py
     coingecko.py, defillama.py, exchange_rate.py
@@ -151,12 +151,12 @@ docs/
 
 ## Configuration Files
 
-- `config/chains.json` — RPC endpoints per chain, `token_balance_method` (default=Alchemy, `etherscan_v2` for Plasma, `balance_of` for Katana), `multicall3` addresses
+- `config/chains.json` — RPC endpoints per chain (Alchemy, DRPC, or static URLs), optional `fallback_rpc`/`fallback_rpc_template`, `multicall3` addresses. `token_balance_method: "balance_of"` for chains where wallet scanning is handled by protocol handlers
 - `config/wallets.json` — Wallet addresses per chain with per-wallet protocol registrations. Used by the handler dispatch to determine which protocols to query for each wallet.
 - `config/tokens.json` — Token registry per chain with category (A1-F) and pricing config (method, feed IDs, fallback sources). Pricing indices are built from this at init.
 - `config/contracts.json` — Protocol contracts grouped by chain and protocol, with `_query_type` fields that map to handlers in `HANDLER_REGISTRY`
 - `config/solana_protocols.json` — Solana protocol position configs (Kamino obligations with reserve mappings, Exponent markets with SY/PT/YT details)
-- `config/abis.json` — Minimal ABIs for all contract interactions (ERC-20, ERC-4626, Morpho, Chainlink, Aave, Pareto, Ethena, CreditCoop strategies, Uniswap V4)
+- `config/abis.json` — Minimal ABIs for all contract interactions (ERC-20, ERC-4626, Morpho, Chainlink, Aave, Pareto, Ethena, Uniswap V4)
 - `config/morpho_markets.json` — Morpho leveraged position market IDs with collateral/loan token details
 - `config/pt_lots.json` — PT token individual lot details for linear amortisation
 - `config/falconx_rates.json` — FalconX loan notice rate schedule

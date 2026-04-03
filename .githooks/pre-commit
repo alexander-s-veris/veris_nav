@@ -1,0 +1,56 @@
+#!/bin/bash
+# Pre-commit hook: automated checks from CLAUDE.md pre-commit checklist.
+# Blocks commit if any check fails.
+
+FAILED=0
+
+echo "=== Pre-commit checks ==="
+
+# 1. No bare .call() without block_identifier in handlers
+echo -n "  .call() with block_identifier... "
+BAD_CALLS=$(grep -rn '\.call()' src/handlers/*.py 2>/dev/null | grep -v 'block_identifier' | grep -v '#')
+if [ -n "$BAD_CALLS" ]; then
+    echo "FAIL"
+    echo "$BAD_CALLS"
+    echo "    Every .call() in handlers must include block_identifier="
+    FAILED=1
+else
+    echo "OK"
+fi
+
+# 2. No silent except (without logger) in handlers
+echo -n "  No silent except:continue... "
+BAD_EXCEPT=$(grep -rn 'except.*:' src/handlers/*.py 2>/dev/null | grep -v 'logger\.' | grep -v 'raise' | grep -v '#' | grep -v 'continue' | grep -v 'pass')
+# More targeted: find except blocks followed by continue without logging
+BAD_SILENT=$(grep -B1 -A1 'except.*:' src/handlers/*.py 2>/dev/null | grep -A1 'continue' | grep -v 'logger')
+# Simplest check: any except with bare continue on the next line
+BAD=$(grep -Pzo 'except[^\n]*:\n\s*continue' src/handlers/*.py 2>/dev/null)
+if [ -n "$BAD" ]; then
+    echo "FAIL"
+    echo "$BAD"
+    echo "    Every except block must log the error or re-raise"
+    FAILED=1
+else
+    echo "OK"
+fi
+
+# 3. No math.* on financial values in handlers
+echo -n "  No math.* on financial values... "
+BAD_MATH=$(grep -rn 'math\.' src/handlers/*.py 2>/dev/null | grep -v 'uniswap\|curve' | grep -v '#')
+if [ -n "$BAD_MATH" ]; then
+    echo "FAIL"
+    echo "$BAD_MATH"
+    echo "    Use decimal.Decimal for financial calculations, not math.*"
+    FAILED=1
+else
+    echo "OK"
+fi
+
+if [ $FAILED -ne 0 ]; then
+    echo ""
+    echo "=== COMMIT BLOCKED: fix the above issues ==="
+    exit 1
+fi
+
+echo "=== All pre-commit checks passed ==="
+exit 0
