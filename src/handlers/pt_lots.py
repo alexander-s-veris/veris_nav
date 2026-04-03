@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 @register_solana_handler("pt_lots", display_name="PT lots", output_name="PT Lots")
-def query_pt_lots(wallet, block_ts):
+def query_pt_lots(wallet, block_ts, valuation_date=None):
     """Query PT token positions valued via lot-based linear amortisation.
 
     Reads lots from config/pt_lots.json. Returns one row per PT symbol.

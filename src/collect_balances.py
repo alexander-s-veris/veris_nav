@@ -70,7 +70,7 @@ def query_evm_balances(w3: Web3, chain: str, wallet: str,
     native_decimals = get_native_decimals(chain)
 
     # Native balance
-    native_wei = w3.eth.get_balance(checksum_wallet)
+    native_wei = w3.eth.get_balance(checksum_wallet, block_identifier=block_number)
     native_balance = Decimal(native_wei) / Decimal(10 ** native_decimals)
     native_entry = chain_registry.get("native")
 
@@ -178,6 +178,13 @@ def query_balances_solana(wallet: str, registry: dict,
             slot = "N/A"
             block_ts = "N/A"
 
+    # Historical path: replay balances from transaction history
+    is_historical = slot_override is not None
+    if is_historical:
+        return _solana_balances_historical(
+            wallet, slot, block_ts, solana_registry, native_decimals, rpc_call)
+
+    # Current path: direct RPC queries
     # Native SOL balance
     native_entry = solana_registry.get("native")
     try:
@@ -225,6 +232,121 @@ def query_balances_solana(wallet: str, registry: dict,
         rows.append(_build_row(
             wallet, "solana", info.get("mint", mint), token_entry, human_balance,
             str(slot), block_ts))
+
+    return rows
+
+
+def _solana_balances_historical(wallet, target_slot, block_ts, solana_registry,
+                                native_decimals, rpc_call):
+    """Reconstruct Solana balances at a historical slot via transaction replay.
+
+    For each whitelisted token, finds the last transaction affecting the wallet
+    before the target slot and reads postBalance/postTokenBalance from it.
+    """
+    rows = []
+
+    # Get the last transaction before the target slot for this wallet
+    try:
+        sigs_resp = rpc_call("getSignaturesForAddress", [
+            wallet, {"limit": 1, "before": None, "commitment": "finalized"}
+        ])
+        # We need signatures at or before target_slot. Filter by slot.
+        # getSignaturesForAddress returns recent-first; we need to find one <= target_slot
+        all_sigs = []
+        before_sig = None
+        for _ in range(10):  # max 10 pages
+            params = [wallet, {"limit": 100, "commitment": "finalized"}]
+            if before_sig:
+                params[1]["before"] = before_sig
+            sigs_resp = rpc_call("getSignaturesForAddress", params)
+            sigs = sigs_resp.get("result", [])
+            if not sigs:
+                break
+            for sig in sigs:
+                if sig.get("slot", 0) <= target_slot:
+                    all_sigs.append(sig)
+            # If we found sigs before target, stop
+            if all_sigs:
+                break
+            # If the oldest sig in this batch is still after target, keep paging
+            if sigs[-1].get("slot", 0) > target_slot:
+                before_sig = sigs[-1]["signature"]
+            else:
+                break
+    except Exception as e:
+        print(f"  Solana historical: getSignaturesForAddress failed: {e}")
+        return rows
+
+    if not all_sigs:
+        print(f"  Solana historical: no transactions found at or before slot {target_slot}")
+        return rows
+
+    # Get the most recent transaction at or before target slot
+    latest_sig = all_sigs[0]  # most recent that's <= target_slot
+    try:
+        tx_resp = rpc_call("getTransaction", [
+            latest_sig["signature"],
+            {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}
+        ])
+        tx = tx_resp.get("result")
+        if not tx:
+            return rows
+    except Exception as e:
+        print(f"  Solana historical: getTransaction failed: {e}")
+        return rows
+
+    meta = tx.get("meta", {})
+    tx_msg = tx.get("transaction", {}).get("message", {})
+    account_keys = [k if isinstance(k, str) else k.get("pubkey", "")
+                    for k in tx_msg.get("accountKeys", [])]
+
+    # Find wallet index in account keys for native SOL balance
+    wallet_idx = None
+    for i, key in enumerate(account_keys):
+        if key == wallet:
+            wallet_idx = i
+            break
+
+    # Native SOL from postBalances
+    native_entry = solana_registry.get("native")
+    if wallet_idx is not None and native_entry:
+        post_balances = meta.get("postBalances", [])
+        if wallet_idx < len(post_balances):
+            lamports = post_balances[wallet_idx]
+            sol_balance = Decimal(lamports) / Decimal(10 ** native_decimals)
+            if sol_balance > 0:
+                rows.append(_build_row(
+                    wallet, "solana", "native", native_entry, sol_balance,
+                    str(target_slot), block_ts))
+
+    # SPL token balances from postTokenBalances
+    post_token_balances = meta.get("postTokenBalances", [])
+    seen_mints = set()
+    for ptb in post_token_balances:
+        owner = ptb.get("owner", "")
+        if owner != wallet:
+            continue
+        mint = ptb.get("mint", "").lower()
+        if mint in seen_mints:
+            continue
+        seen_mints.add(mint)
+
+        token_entry = solana_registry.get(mint)
+        if token_entry is None:
+            token_entry = solana_registry.get(ptb.get("mint", ""))
+        if token_entry is None:
+            continue
+
+        ui_amount = ptb.get("uiTokenAmount", {})
+        raw_amount = int(ui_amount.get("amount", "0"))
+        if raw_amount == 0:
+            continue
+
+        decimals = token_entry.get("decimals", int(ui_amount.get("decimals", 9)))
+        human_balance = Decimal(raw_amount) / Decimal(10 ** decimals)
+        rows.append(_build_row(
+            wallet, "solana", ptb.get("mint", mint), token_entry, human_balance,
+            str(target_slot), block_ts))
 
     return rows
 

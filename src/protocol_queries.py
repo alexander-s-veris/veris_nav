@@ -326,7 +326,8 @@ def query_solana_positions(wallet, valuation_date=None, block_ts_override=None):
                     rows.extend(result)
             else:
                 result = _run_with_retry(
-                    name, lambda fn=handler_fn: fn(wallet, block_ts))
+                    name, lambda fn=handler_fn: fn(wallet, block_ts,
+                                                    valuation_date=valuation_date))
                 # Backfill slot as block_number for handlers that don't set it
                 if _slot:
                     for r in result:

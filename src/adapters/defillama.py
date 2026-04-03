@@ -25,11 +25,12 @@ from evm import TS_FMT
 
 logger = logging.getLogger(__name__)
 
-_API_BASE = "https://coins.llama.fi/prices/current"
+_API_BASE = "https://coins.llama.fi/prices"
 _API_TIMEOUT = 15
 
 
-def defillama_price(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
+def defillama_price(feed_cfg: dict, expected_freq_hours: float = None,
+                    valuation_ts: int = None) -> dict:
     """Query a single token price from DefiLlama.
 
     Args:
@@ -43,7 +44,10 @@ def defillama_price(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
     address = feed_cfg["address"]
     coin_key = f"{chain}:{address}"
 
-    url = f"{_API_BASE}/{coin_key}"
+    if valuation_ts:
+        url = f"{_API_BASE}/historical/{valuation_ts}/{coin_key}"
+    else:
+        url = f"{_API_BASE}/current/{coin_key}"
     logger.info("defillama: GET %s", url)
 
     resp = requests.get(url, timeout=_API_TIMEOUT)
@@ -104,7 +108,7 @@ def batch_defillama_prices(feed_configs: list[dict]) -> dict:
         return {}
 
     coin_keys = [f"{fc['chain']}:{fc['address']}" for fc in feed_configs]
-    url = f"{_API_BASE}/{','.join(coin_keys)}"
+    url = f"{_API_BASE}/current/{','.join(coin_keys)}"
     logger.info("defillama batch: %d tokens", len(coin_keys))
 
     resp = requests.get(url, timeout=_API_TIMEOUT)

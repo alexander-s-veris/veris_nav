@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @register_solana_handler("exponent", display_name="Exponent LP", output_name="Exponent Finance")
-def query_exponent_lps(wallet, block_ts):
+def query_exponent_lps(wallet, block_ts, valuation_date=None):
     """Query Exponent LP positions and decompose into SY + PT constituents.
 
     Reads market configs from solana_protocols.json exponent section.
@@ -90,7 +90,7 @@ def query_exponent_lps(wallet, block_ts):
 
 
 @register_solana_handler("exponent", display_name="Exponent YT")
-def query_exponent_yts(wallet, block_ts):
+def query_exponent_yts(wallet, block_ts, valuation_date=None):
     """Query Exponent Yield Token positions.
 
     Reads market configs from solana_protocols.json exponent section.

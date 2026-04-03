@@ -12,13 +12,20 @@ from adapters import _load_api_endpoints
 logger = logging.getLogger(__name__)
 
 
-def pyth_price(feed_id: str, expected_freq_hours: float = None) -> dict:
+def pyth_price(feed_id: str, expected_freq_hours: float = None,
+               valuation_ts: int = None) -> dict:
     """Query Pyth Hermes REST API for a price feed.
 
+    When valuation_ts is provided, uses the historical price endpoint.
     If expected_freq_hours is provided, checks staleness (>2x expected = stale).
     """
-    url = _load_api_endpoints()["pyth_hermes"]
-    resp = requests.get(url, params={"ids[]": feed_id}, timeout=10)
+    if valuation_ts:
+        base = _load_api_endpoints()["pyth_hermes"].rsplit("/", 1)[0]
+        url = f"{base}/v2/updates/price/{valuation_ts}"
+        resp = requests.get(url, params={"ids[]": feed_id}, timeout=10)
+    else:
+        url = _load_api_endpoints()["pyth_hermes"]
+        resp = requests.get(url, params={"ids[]": feed_id}, timeout=10)
     resp.raise_for_status()
     data = resp.json()
 

@@ -12,13 +12,18 @@ from adapters import _load_api_endpoints
 logger = logging.getLogger(__name__)
 
 
-def redstone_price(symbol: str) -> dict:
+def redstone_price(symbol: str, valuation_ts: int = None) -> dict:
     """Query Redstone Finance REST API for a price feed.
 
+    When valuation_ts is provided, uses toTimestamp for historical price.
     Free, no API key needed. Tier 3 in A2 hierarchy (after Chainlink, Pyth).
     """
     url = _load_api_endpoints()["redstone"]
-    resp = requests.get(url, params={"symbols": symbol, "provider": "redstone"}, timeout=10)
+    params = {"symbols": symbol, "provider": "redstone"}
+    if valuation_ts:
+        params["toTimestamp"] = valuation_ts * 1000  # Redstone uses milliseconds
+        params["limit"] = 1
+    resp = requests.get(url, params=params, timeout=10)
     resp.raise_for_status()
     data = resp.json()
 

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def a1_exchange_rate_price(token_entry: dict, w3_eth: Web3 | None = None,
-                           price_underlying_fn=None) -> dict:
+                           price_underlying_fn=None, eth_block: int = None) -> dict:
     """Price an A1 token via on-chain exchange rate × underlying price.
 
     Args:
@@ -75,7 +75,8 @@ def a1_exchange_rate_price(token_entry: dict, w3_eth: Web3 | None = None,
 
         # Query exchange rate: assets per 1 full share
         one_share = 10 ** decimals_shares
-        assets = getattr(vault.functions, function_name)(one_share).call()
+        call_kwargs = {"block_identifier": eth_block} if eth_block else {}
+        assets = getattr(vault.functions, function_name)(one_share).call(**call_kwargs)
 
         logger.info("a1_exchange_rate.%s(%s, 1e%d) → %s",
                      function_name, contract_addr[:10], decimals_shares, assets)
