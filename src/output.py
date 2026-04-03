@@ -156,7 +156,7 @@ VERIFICATION_COLUMNS = [
     "token_symbol", "chain", "category",
     "primary_price_usd", "verified_price_usd",
     "divergence_pct", "threshold_pct", "divergence_flag",
-    "source", "total_nav_usd", "total_supply",
+    "source", "source_date", "total_nav_usd", "total_supply",
     "attestation_hash", "verification_timestamp",
 ]
 
@@ -350,6 +350,11 @@ def write_verification(verification_results, output_dir, file_suffix=""):
 
     for v in verification_results:
         details = v.get("details", {})
+        # Unified source date: each verifier stores it differently
+        source_date = (details.get("report_date")
+                       or details.get("nav_date")
+                       or details.get("attestation_created_at")
+                       or "")
         rows.append({
             "token_symbol": v.get("token_symbol", ""),
             "chain": _format_chain(v.get("chain", "")),
@@ -360,6 +365,7 @@ def write_verification(verification_results, output_dir, file_suffix=""):
             "threshold_pct": str(v.get("threshold_pct", "")),
             "divergence_flag": v.get("divergence_flag", v.get("error", "")),
             "source": v.get("source", ""),
+            "source_date": source_date,
             "total_nav_usd": details.get("total_nav_usd", ""),
             "total_supply": details.get("total_supply", ""),
             "attestation_hash": details.get("attestation_hash", ""),

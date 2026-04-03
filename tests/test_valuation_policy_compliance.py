@@ -807,7 +807,7 @@ class TestVerificationConfig(unittest.TestCase):
         # Required fields differ by verification type
         required_by_type = {
             "midas_attestation": {"type", "token_decimals", "token_addresses"},
-            "midas_pdf_report": {"type", "gdrive_folder_id", "filename_pattern", "local_report_path"},
+            "midas_pdf_report": {"type", "gdrive_folder_id", "local_report_path"},
             "superstate_nav_api": {"type", "fund_id"},
             "onre_onchain_nav": {"type"},
         }

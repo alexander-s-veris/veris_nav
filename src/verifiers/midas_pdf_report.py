@@ -75,13 +75,13 @@ def _get_drive_credentials(sa_key_path: str):
 def _list_pdfs(creds, folder_id: str) -> list[dict]:
     """List PDF files in a Google Drive folder via REST API.
 
-    Returns list of {id, name} dicts sorted by name descending (latest first).
+    Returns list of {id, name, createdTime} dicts sorted by createdTime descending.
     """
     url = "https://www.googleapis.com/drive/v3/files"
     params = {
         "q": f"'{folder_id}' in parents and mimeType='application/pdf'",
-        "fields": "files(id,name)",
-        "orderBy": "name desc",
+        "fields": "files(id,name,createdTime)",
+        "orderBy": "createdTime desc",
         "pageSize": 50,
         "supportsAllDrives": "true",
         "includeItemsFromAllDrives": "true",
@@ -93,31 +93,47 @@ def _list_pdfs(creds, folder_id: str) -> list[dict]:
     return resp.json().get("files", [])
 
 
-def _find_latest_report(files: list[dict], filename_pattern: str) -> tuple[dict, date]:
-    """Find the latest report file matching the filename pattern.
+def _extract_date_from_filename(filename: str) -> date | None:
+    """Try to extract a YYYYMMDD date from a filename."""
+    m = re.search(r"(\d{8})", filename)
+    if m:
+        try:
+            return datetime.strptime(m.group(1), "%Y%m%d").date()
+        except ValueError:
+            pass
+    return None
 
-    The pattern must contain {date} placeholder which matches YYYYMMDD.
-    Returns (file_dict, report_date) for the latest report.
+
+def _find_latest_pdf(files: list[dict]) -> tuple[dict, date]:
+    """Find the latest PDF from a list of Drive files.
+
+    Name-agnostic: picks the most recent file by embedded YYYYMMDD date
+    in the filename, or by createdTime if no date is found.
+    Returns (file_dict, report_date).
     """
-    # Convert pattern to regex: replace {date} with a named group
-    regex = filename_pattern.replace("{date}", r"(?P<date>\d{8})")
-    regex = f"^{regex}$"
+    if not files:
+        raise ValueError("No PDF files in folder")
 
+    # Try to extract dates from filenames first
     best_file = None
     best_date = None
-
     for f in files:
-        m = re.match(regex, f["name"])
-        if m:
-            report_date = datetime.strptime(m.group("date"), "%Y%m%d").date()
-            if best_date is None or report_date > best_date:
-                best_file = f
-                best_date = report_date
+        file_date = _extract_date_from_filename(f["name"])
+        if file_date and (best_date is None or file_date > best_date):
+            best_file = f
+            best_date = file_date
 
-    if best_file is None:
-        raise ValueError(f"No files matching pattern '{filename_pattern}' in folder")
+    if best_file:
+        return best_file, best_date
 
-    return best_file, best_date
+    # Fallback: use createdTime (files are already sorted desc)
+    f = files[0]
+    created = f.get("createdTime", "")
+    if created:
+        report_date = datetime.fromisoformat(created.replace("Z", "+00:00")).date()
+    else:
+        report_date = date.today()
+    return f, report_date
 
 
 def _find_month_folder(creds, parent_folder_id: str, target_date: date) -> str:
@@ -175,15 +191,24 @@ def _download_pdf(creds, file_id: str) -> bytes:
     return resp.content
 
 
-def _save_report(content: bytes, local_path: str, filename: str) -> str:
-    """Save PDF to local path for audit trail. Returns full file path."""
+def _save_report(content: bytes, local_path: str, filename: str,
+                  report_date: date) -> str:
+    """Save PDF to local path in a month subfolder for audit trail.
+
+    Mirrors the Google Drive folder structure: local_path/YYYY_MM_Mon/filename.
+    Returns full file path.
+    """
     # Resolve relative path from project root
     if not os.path.isabs(local_path):
         project_root = os.path.join(os.path.dirname(__file__), "..", "..")
         local_path = os.path.join(project_root, local_path)
 
-    os.makedirs(local_path, exist_ok=True)
-    filepath = os.path.join(local_path, filename)
+    # Organize into month subfolder: YYYY_MM_Mon (e.g. 2026_04_Apr)
+    month_folder = report_date.strftime("%Y_%m_%b")
+    save_dir = os.path.join(local_path, month_folder)
+    os.makedirs(save_dir, exist_ok=True)
+
+    filepath = os.path.join(save_dir, filename)
     if not os.path.exists(filepath):
         with open(filepath, "wb") as f:
             f.write(content)
@@ -238,8 +263,10 @@ def _parse_report(text: str) -> dict:
         for m in re.finditer(r"\$([\d,]+\.\d+)", line):
             dollar_amounts.append(Decimal(m.group(1).replace(",", "")))
         # Bare numbers (no dollar sign) — for issued token totals
-        if not line.startswith("$") and re.match(r"^[\d,]+\.\d+$", line):
-            bare_numbers.append(Decimal(line.replace(",", "")))
+        # Strip spaces first: OCR sometimes inserts spaces inside numbers
+        clean = line.replace(" ", "")
+        if not clean.startswith("$") and re.match(r"^[\d,]+\.\d+$", clean):
+            bare_numbers.append(Decimal(clean.replace(",", "")))
 
     # The Midas report structure (consistent across all reports):
     #   Collateral section dollar amounts: [strategy, reserve, funds_in_process, total_assets]
@@ -277,7 +304,6 @@ def verify(config: dict, primary_price: Decimal, api_base: str) -> dict:
     Args:
         config: Verification entry from verification.json with:
             - gdrive_folder_id: Google Drive root folder ID
-            - filename_pattern: PDF filename pattern with {date} placeholder
             - local_report_path: local directory for audit trail
             - expected_report_freq_days: for staleness flagging
             - max_report_age_days: max acceptable age of report vs today
@@ -294,33 +320,38 @@ def verify(config: dict, primary_price: Decimal, api_base: str) -> dict:
     tesseract_cmd = _get_tesseract_cmd(tools_cfg)
 
     folder_id = config["gdrive_folder_id"]
-    filename_pattern = config["filename_pattern"]
     local_path = config.get("local_report_path", "docs/reference/midas")
     max_age_days = config.get("max_report_age_days", 10)
+    expected_freq = config.get("expected_report_freq_days", 2)
 
     # Resolve local path
     if not os.path.isabs(local_path):
         local_path = os.path.join(os.path.dirname(__file__), "..", "..", local_path)
 
-    # Fast path: check for cached parsed result from latest local PDF
+    # Fast path: use cached result only if the report is recent enough
     import glob as _glob
     import json as _json
-    glob_pattern = filename_pattern.replace("{date}", "*")
-    local_pdfs = sorted(_glob.glob(os.path.join(local_path, glob_pattern)), reverse=True)
+    local_pdfs = sorted(
+        _glob.glob(os.path.join(local_path, "**", "*.pdf"), recursive=True),
+        reverse=True)
     cached_result = None
 
     if local_pdfs:
         latest_local = local_pdfs[0]
         cache_path = latest_local + ".cache.json"
         if os.path.exists(cache_path):
-            with open(cache_path) as f:
-                cached_result = _json.load(f)
-            # Extract report_date from filename
-            import re as _re
-            date_regex = filename_pattern.replace("{date}", r"(?P<date>\d{8})")
-            m = _re.search(date_regex, os.path.basename(latest_local))
-            report_date = datetime.strptime(m.group("date"), "%Y%m%d").date() if m else date.today()
-            logger.info("Using cached PDF result: %s", os.path.basename(latest_local))
+            file_date = _extract_date_from_filename(os.path.basename(latest_local))
+            report_date = file_date or date.today()
+            report_age = (date.today() - report_date).days
+
+            if report_age <= expected_freq:
+                with open(cache_path) as f:
+                    cached_result = _json.load(f)
+                logger.info("Using cached PDF result: %s (age: %d days)",
+                             os.path.basename(latest_local), report_age)
+            else:
+                logger.info("Cached report %s is %d days old (threshold: %d), checking Drive for newer",
+                             os.path.basename(latest_local), report_age, expected_freq)
 
     if cached_result:
         total_assets = Decimal(cached_result["total_assets"])
@@ -331,9 +362,11 @@ def verify(config: dict, primary_price: Decimal, api_base: str) -> dict:
         # 1. Authenticate with Google Drive
         creds = _get_drive_credentials(api_base)
 
-        # 2. Navigate to current month folder and find latest PDF.
+        # 2. Navigate to current month folder, grab latest PDF.
+        #    Try current month first, then previous.
         today = date.today()
-        files = []
+        latest_file = None
+        report_date = None
         for month_offset in (0, 1):
             try:
                 target = today.replace(day=1)
@@ -342,19 +375,19 @@ def verify(config: dict, primary_price: Decimal, api_base: str) -> dict:
                 month_folder_id = _find_month_folder(creds, folder_id, target)
                 files = _list_pdfs(creds, month_folder_id)
                 if files:
+                    latest_file, report_date = _find_latest_pdf(files)
                     break
             except ValueError:
                 continue
 
-        if not files:
-            raise ValueError(f"No PDFs found in Drive folder for {date.today().strftime('%Y-%m')} or previous month")
-
-        latest_file, report_date = _find_latest_report(files, filename_pattern)
+        if latest_file is None:
+            raise ValueError(
+                f"No PDFs found in Drive for {today.strftime('%Y-%m')} or previous month")
         logger.info("Latest report: %s (date: %s)", latest_file["name"], report_date)
 
-        # 3. Download and save for audit trail
+        # 3. Download and save in month subfolder for audit trail
         pdf_bytes = _download_pdf(creds, latest_file["id"])
-        _save_report(pdf_bytes, local_path, latest_file["name"])
+        filepath = _save_report(pdf_bytes, local_path, latest_file["name"], report_date)
 
         # 4. OCR and parse
         text = _ocr_pdf(pdf_bytes, tesseract_cmd)
@@ -364,8 +397,7 @@ def verify(config: dict, primary_price: Decimal, api_base: str) -> dict:
         issued_tokens = parsed["issued_tokens"]
         report_filename = latest_file["name"]
 
-        # Cache parsed result
-        filepath = os.path.join(local_path, report_filename)
+        # Cache parsed result alongside the PDF
         cache_path = filepath + ".cache.json"
         with open(cache_path, "w") as f:
             _json.dump({"price": str(total_assets / issued_tokens),

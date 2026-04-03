@@ -154,7 +154,6 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
             "token_contract": credit_strategy_addr,
             "balance_human": rain_amount,
             "underlying_amount": rain_amount,
-            "notes": "CreditStrategy.totalActiveCredit() × ownership share",
         })
 
         # 2. Dynamically discover ERC-4626 vaults from LiquidStrategy
@@ -202,7 +201,6 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
                 "token_contract": vault_addr,
                 "balance_human": deployed,
                 "underlying_amount": deployed,
-                "notes": f"LiquidStrategy shares in {vault_name}",
             })
 
         # 3. Cash: vault USDC + liquid strategy idle + credit strategy USDC
@@ -226,9 +224,6 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
             "token_contract": usdc_addr,
             "balance_human": total_cash,
             "underlying_amount": total_cash,
-            "notes": (f"Vault USDC={vault_usdc_total * our_share:,.2f}, "
-                      f"LiquidStrategy idle={liquid_idle_total * our_share:,.2f}, "
-                      f"CreditStrategy USDC={credit_cash_total * our_share:,.2f}"),
         })
 
         # Store structured breakdown on aggregate row (all values are our pro-rata share)
@@ -242,16 +237,8 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
             breakdown[label] = str(deployed_row["balance_human"])
 
         aggregate_row["_breakdown"] = breakdown
-        aggregate_row["notes"] = (
-            f"Breakdown: Rain credit={rain_amount:,.2f}, "
-            + ", ".join(f"{deployed_row['position_label'].replace('Credit Coop — ', '')}="
-                        f"{deployed_row['balance_human']:,.2f}"
-                        for deployed_row in rows[2:2 + len(liquid_vaults)])
-            + f", cash={total_cash:,.2f}"
-        )
 
     except Exception as e:
         logger.exception("creditcoop: sub-strategy breakdown failed")
-        aggregate_row["notes"] = f"Sub-strategy breakdown failed: {e}"
 
     return rows

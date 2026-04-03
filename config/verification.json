@@ -28,20 +28,18 @@
     "msyrupUSDp": {
       "type": "midas_pdf_report",
       "gdrive_folder_id": "1NAPVo8sQYG6ggnjlM6ldi1zfPnvyRc7f",
-      "filename_pattern": "msyrupUSDp_reporting_public_{date}.pdf",
       "local_report_path": "docs/reference/midas/msyrupusdp",
       "expected_report_freq_days": 4,
       "max_report_age_days": 10,
-      "_note": "Midas msyrupUSDp weekly PDF reports on Google Drive. Reports published every 3-4 days. OCR extraction of Total assets / Issued tokens to derive per-token price."
+      "_note": "Midas msyrupUSDp weekly PDF reports on Google Drive. Reports published every 3-4 days. Name-agnostic: downloads latest PDF from current month folder. OCR extraction of Total assets / Issued tokens to derive per-token price."
     },
     "mF-ONE": {
       "type": "midas_pdf_report",
       "gdrive_folder_id": "122vggonAVEp0Q5Y66-R41c6UIZW4mFIY",
-      "filename_pattern": "mfone_reporting_public_{date}.pdf",
       "local_report_path": "docs/reference/midas/mf-one",
       "expected_report_freq_days": 2,
       "max_report_age_days": 7,
-      "_note": "Midas mF-ONE daily PDF reports on Google Drive. Reports published daily. OCR extraction of Total assets / Issued tokens to derive per-token price."
+      "_note": "Midas mF-ONE daily PDF reports on Google Drive. Reports published daily. Name-agnostic: downloads latest PDF from current month folder. OCR extraction of Total assets / Issued tokens to derive per-token price."
     },
     "ONyc": {
       "type": "onre_onchain_nav",
