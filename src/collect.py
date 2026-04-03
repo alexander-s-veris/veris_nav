@@ -137,18 +137,21 @@ def main():
 
         print()
 
-    # --- Output directory: outputs/MM_Month YYYY/nav_YYYYMMDD_HH-MM-SS ---
-    # Month folder uses run date (today), not valuation date
+    # --- Output directory: outputs/MM_Month YYYY/DD_Month/nav_YYYYMMDD_HH_MM_SS_TZ ---
+    # Month and day folders use run date (today), not valuation date
     run_date = date.today()
     month_dir = os.path.join(
         OUTPUT_DIR,
         f"{run_date.strftime('%m')}_{run_date.strftime('%B')} {run_date.strftime('%Y')}")
+    day_dir = os.path.join(
+        month_dir,
+        f"{run_date.strftime('%d')}_{run_date.strftime('%B')}")
     cet_now = now.astimezone(CET)
     run_ts_for_dir = cet_now.strftime("%H_%M_%S")
     tz_abbr = cet_now.strftime("%Z")  # CET or CEST
     file_suffix = f"_{valuation_date.strftime('%Y%m%d')}_{run_ts_for_dir}_{tz_abbr}"
     output_dir = os.path.join(
-        month_dir,
+        day_dir,
         f"nav{file_suffix}")
     print(f"Output: {output_dir}")
     print()
