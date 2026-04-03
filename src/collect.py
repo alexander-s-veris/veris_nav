@@ -409,12 +409,9 @@ def main():
 
     # All positions — wallet balances and protocol positions alike — go through
     # value_position() for consistent category-specific pricing and depeg handling.
-    # When --date is specified, pass valuation_ts and eth_block for historical pricing.
-    eth_block = valuation_blocks.get("ethereum", (None, None))[0]
     for pos in all_positions:
         try:
-            value_position(pos, w3_eth, valuation_date, registry,
-                           valuation_ts=valuation_ts, eth_block=eth_block)
+            value_position(pos, w3_eth, valuation_date, registry)
         except Exception as e:
             pos["price_usd"] = Decimal(0)
             pos["value_usd"] = Decimal(0)

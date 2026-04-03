@@ -90,29 +90,21 @@ def _get_w3_for_chain(feed_cfg: dict, w3_eth: Web3 | None) -> Web3:
     return w3
 
 
-def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None,
-                expected_freq_hours: float = None,
-                valuation_ts: int = None, eth_block: int = None) -> dict:
-    """Query a single price feed based on its type. Returns result dict.
-
-    When valuation_ts/eth_block are provided, adapters use historical data.
-    On-chain adapters (chainlink, exchange_rate) use eth_block.
-    REST API adapters use valuation_ts.
-    """
+def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None, expected_freq_hours: float = None) -> dict:
+    """Query a single price feed based on its type. Returns result dict."""
     feed_type = feed_cfg["type"]
     if feed_type == "chainlink":
-        return chainlink_price(feed_cfg["address"], _get_w3_for_chain(feed_cfg, w3_eth),
-                               expected_freq_hours, block_identifier=eth_block)
+        return chainlink_price(feed_cfg["address"], _get_w3_for_chain(feed_cfg, w3_eth), expected_freq_hours)
     elif feed_type == "pyth":
-        return pyth_price(feed_cfg["feed_id"], expected_freq_hours, valuation_ts=valuation_ts)
+        return pyth_price(feed_cfg["feed_id"], expected_freq_hours)
     elif feed_type == "redstone":
-        return redstone_price(feed_cfg["symbol"], valuation_ts=valuation_ts)
+        return redstone_price(feed_cfg["symbol"])
     elif feed_type == "kraken":
-        return kraken_price(feed_cfg["pair"], valuation_ts=valuation_ts)
+        return kraken_price(feed_cfg["pair"])
     elif feed_type == "coingecko":
-        return coingecko_price(feed_cfg["coin_id"], valuation_ts=valuation_ts)
+        return coingecko_price(feed_cfg["coin_id"])
     elif feed_type == "defillama":
-        return defillama_price(feed_cfg, expected_freq_hours, valuation_ts=valuation_ts)
+        return defillama_price(feed_cfg, expected_freq_hours)
     elif feed_type == "issuer_nav":
         return issuer_nav_price(feed_cfg, expected_freq_hours)
     else:
@@ -121,17 +113,9 @@ def _query_feed(feed_cfg: dict, w3_eth: Web3 | None = None,
 
 # --- Main dispatcher ---
 
-def get_price(token_entry: dict, w3_eth: Web3 | None = None,
-              valuation_ts: int = None, eth_block: int = None) -> dict:
-    """Main dispatcher. Routes to hierarchy walker or special method.
-
-    When valuation_ts/eth_block are provided, fetches historical prices.
-    When None, returns current prices (existing behavior).
-    """
-    # Cache key includes valuation_ts to avoid mixing current and historical
+def get_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
+    """Main dispatcher. Routes to hierarchy walker or special method."""
     key = _cache_key(token_entry)
-    if valuation_ts:
-        key = f"{key}@{valuation_ts}"
     if key in _price_cache:
         return _price_cache[key]
 
@@ -150,16 +134,14 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None,
     policy_cfg = policy.get(policy_key, {})
     method = policy_cfg.get("method", policy_key)
 
-    pk = {"valuation_ts": valuation_ts, "eth_block": eth_block}
-
     if method == "par":
-        result = par_price(token_entry, w3_eth, **pk)
+        result = par_price(token_entry, w3_eth)
     elif method in ("oracle_hierarchy", "market_hierarchy"):
-        result = _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_eth, expected_freq, **pk)
+        result = _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_eth, expected_freq)
     elif method == "exchange_rate":
-        result = a1_exchange_rate_price(token_entry, w3_eth, eth_block=eth_block)
+        result = a1_exchange_rate_price(token_entry, w3_eth)
     elif method == "curve_lp":
-        result = curve_lp_price(token_entry, w3_eth, eth_block=eth_block)
+        result = curve_lp_price(token_entry, w3_eth)
     else:
         result = _unavailable(symbol)
 
@@ -169,8 +151,7 @@ def get_price(token_entry: dict, w3_eth: Web3 | None = None,
 
 # --- Generic hierarchy walker ---
 
-def _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_eth, expected_freq,
-                          valuation_ts=None, eth_block=None):
+def _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_eth, expected_freq):
     """Walk the pricing hierarchy, trying each source in order."""
     hierarchy = policy_cfg.get("hierarchy", [])
     stale_result = None
@@ -183,8 +164,7 @@ def _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_et
         if not feed_cfg:
             continue
         try:
-            result = _query_feed(feed_cfg, w3_eth, expected_freq,
-                                 valuation_ts=valuation_ts, eth_block=eth_block)
+            result = _query_feed(feed_cfg, w3_eth, expected_freq)
             if not result.get("stale_flag"):
                 return result
             if stale_result is None:
@@ -201,8 +181,7 @@ def _price_with_hierarchy(symbol, token_feeds, policy_cfg, feeds_registry, w3_et
 
 # --- Par pricing with depeg check ---
 
-def par_price(token_entry: dict, w3_eth: Web3 | None = None,
-              valuation_ts: int = None, eth_block: int = None) -> dict:
+def par_price(token_entry: dict, w3_eth: Web3 | None = None) -> dict:
     """Category E par pricing. $1.00 with depeg monitoring."""
     result = {
         "price_usd": Decimal("1.00"),
@@ -239,8 +218,7 @@ def par_price(token_entry: dict, w3_eth: Web3 | None = None,
         if not feed_cfg:
             continue
         try:
-            check_result = _query_feed(feed_cfg, w3_eth,
-                                       valuation_ts=valuation_ts, eth_block=eth_block)
+            check_result = _query_feed(feed_cfg, w3_eth)
             oracle_price = check_result["price_usd"]
             result["oracle_updated_at"] = check_result.get("oracle_updated_at")
             result["staleness_hours"] = check_result.get("staleness_hours")

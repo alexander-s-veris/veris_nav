@@ -50,7 +50,7 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     share_pct = Decimal(str(veris_shares)) / Decimal(str(total_supply))
 
     # Read accrual NAV from SQLite (sole source of truth)
-    accrual_value = _read_falconx_sqlite("gauntlet_levered", "veris_share", as_of=block_ts)
+    accrual_value = _read_falconx_sqlite("gauntlet_levered", "veris_share")
     source_note = "from data/falconx.db gauntlet_levered"
 
     if accrual_value is None:
@@ -81,14 +81,12 @@ def query_gauntlet_falconx(w3, chain, wallet, block_number, block_ts):
     }]
 
 
-def _read_falconx_sqlite(table_name, value_column, as_of=None):
-    """Read a value from the FalconX SQLite database.
+def _read_falconx_sqlite(table_name, value_column):
+    """Read the latest value from the FalconX SQLite database.
 
     Args:
         table_name: 'gauntlet_levered' or 'direct_accrual'
         value_column: column name to read (e.g. 'veris_share' or 'running_balance')
-        as_of: optional timestamp string (UTC) — if provided, reads the latest
-               row at or before this time instead of the absolute latest.
     """
     db_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "falconx.db")
     if not os.path.exists(db_path):
@@ -96,15 +94,9 @@ def _read_falconx_sqlite(table_name, value_column, as_of=None):
 
     try:
         conn = sqlite3.connect(db_path)
-        if as_of:
-            cursor = conn.execute(
-                f"SELECT {value_column} FROM {table_name} "
-                f"WHERE timestamp_utc <= ? ORDER BY timestamp_utc DESC LIMIT 1",
-                (as_of,))
-        else:
-            cursor = conn.execute(
-                f"SELECT {value_column} FROM {table_name} ORDER BY timestamp_utc DESC LIMIT 1"
-            )
+        cursor = conn.execute(
+            f"SELECT {value_column} FROM {table_name} ORDER BY timestamp_utc DESC LIMIT 1"
+        )
         row = cursor.fetchone()
         conn.close()
         if row and row[0] is not None:
@@ -202,7 +194,7 @@ def query_falconx_direct(w3, chain, wallet, block_number, block_ts):
     balance_human = _fmt(balance, tranche_decimals)
 
     # Read accrual value from SQLite (sole source of truth)
-    running_balance = _read_falconx_sqlite("direct_accrual", "running_balance", as_of=block_ts)
+    running_balance = _read_falconx_sqlite("direct_accrual", "running_balance")
     source_note = "from data/falconx.db direct_accrual"
 
     if running_balance is None:

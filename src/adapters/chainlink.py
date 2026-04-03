@@ -11,12 +11,10 @@ from evm import AGGREGATOR_V3_ABI, TS_FMT
 logger = logging.getLogger(__name__)
 
 
-def chainlink_price(feed_address: str, w3: Web3, expected_freq_hours: float = None,
-                    block_identifier: int = None) -> dict:
+def chainlink_price(feed_address: str, w3: Web3, expected_freq_hours: float = None) -> dict:
     """Query a Chainlink AggregatorV3 feed.
 
     Returns price as Decimal with metadata.
-    If block_identifier is provided, queries at that block (historical pricing).
     If expected_freq_hours is provided, checks staleness (>2x expected = stale).
     """
     contract = w3.eth.contract(
@@ -24,10 +22,9 @@ def chainlink_price(feed_address: str, w3: Web3, expected_freq_hours: float = No
         abi=AGGREGATOR_V3_ABI,
     )
 
-    call_kwargs = {"block_identifier": block_identifier} if block_identifier else {}
-    decimals = contract.functions.decimals().call(**call_kwargs)
+    decimals = contract.functions.decimals().call()
     _round_id, answer, _started_at, updated_at, _answered_in_round = (
-        contract.functions.latestRoundData().call(**call_kwargs)
+        contract.functions.latestRoundData().call()
     )
 
     price = Decimal(answer) / Decimal(10**decimals)
