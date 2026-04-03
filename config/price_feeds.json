@@ -1,516 +1,373 @@
 {
-  "_description": "Registry of all unique price feeds used across tokens.json. One entry per unique feed, grouped by type. Referenced by tokens via their pricing config.",
+  "_description": "Registry of all unique price feeds. Grouped by provider type, then by chain. Referenced by tokens via their pricing.feeds config keys.",
+
   "chainlink": {
-    "chainlink_usdt_usd": {
-      "type": "chainlink",
-      "address": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
-      "chain": "ethereum",
-      "description": "USDT/USD price feed (AggregatorV3). Used for USDT and USDT0 across all chains."
-    },
-    "chainlink_usdc_depeg": {
-      "type": "chainlink",
-      "address": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
-      "chain": "ethereum",
-      "description": "USDC/USD price feed (AggregatorV3). Used as depeg_check_feed for par-priced USDC on all chains."
-    },
-    "chainlink_dai_depeg": {
-      "type": "chainlink",
-      "address": "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
-      "chain": "ethereum",
-      "description": "DAI/USD price feed (AggregatorV3). Used as depeg_check_feed for par-priced DAI on Ethereum."
-    },
-    "chainlink_usde_usd": {
-      "type": "chainlink",
-      "address": "0xa569d910839Ae8C109eDAA97c4eBB6a00b60C10c",
-      "chain": "ethereum",
-      "description": "USDe/USD price feed (AggregatorV3). Primary for USDe on Ethereum and Plasma. Also used for Aave Plasma USDe aToken."
-    },
-    "midas_mfone_oracle": {
-      "type": "chainlink",
-      "address": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
-      "chain": "ethereum",
-      "description": "mF-ONE/USD Midas Chainlink-style oracle. NAV updated daily. Primary for mF-ONE (A2).",
-      "issuer_nav_url": "https://midas.app/mfone",
-      "issuer_nav_reports": "https://drive.google.com/drive/folders/122vggonAVEp0Q5Y66-R41c6UIZW4mFIY"
-    },
-    "midas_msyrupusdp_oracle": {
-      "type": "chainlink",
-      "address": "0x337d914ff6622510FC2C63ac59c1D07983895241",
-      "chain": "ethereum",
-      "description": "msyrupUSDp/USD Midas Chainlink-style oracle. NAV updated 1-2x/week (~168h)."
-    },
-    "midas_mhyper_oracle": {
-      "type": "chainlink",
-      "address": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
-      "chain": "plasma",
-      "description": "mHYPER/USD Midas Chainlink-style oracle on Plasma. NAV updated 1-2x/week (~168h)."
-    },
-    "chainlink_uscc_nav": {
-      "type": "chainlink",
-      "address": "0xAfFd8F5578E8590665de561bdE9E7BAdb99300d9",
-      "chain": "ethereum",
-      "description": "USCC/USD Chainlink NAVLink oracle. Daily NAV/S from Superstate via Chainlink. ENS: uscc-nav.data.eth."
-    },
-    "chainlink_pyusd_usd": {
-      "type": "chainlink",
-      "address": "0x8f1dF6D7F2db73eECE86a18b4381F4707b918FB1",
-      "chain": "ethereum",
-      "description": "PYUSD/USD Chainlink price feed. Depeg monitoring for par-priced PYUSD. ENS: pyusd-usd.data.eth."
-    },
-    "chainlink_ausd_usd": {
-      "type": "chainlink",
-      "address": "0xB00341502DfEA6Ced8A5786b4059d29dA5E4D1FD",
-      "chain": "ethereum",
-      "description": "AUSD/USD Chainlink price feed. Depeg monitoring for par-priced AUSD (Agora). ENS: ausd-usd.data.eth."
-    },
-    "chainlink_rlusd_usd": {
-      "type": "chainlink",
-      "address": "0x26C46B7aD0012cA71F2298ada567dC9Af14E7f2A",
-      "chain": "ethereum",
-      "description": "RLUSD/USD Chainlink price feed. Depeg monitoring for par-priced RLUSD (Ripple). ENS: rlusd-usd.data.eth."
-    },
-    "chainlink_usdg_usd": {
-      "type": "chainlink",
-      "address": "0x14f0737d6b705259e521EA6E9E3506AC78dBd311",
-      "chain": "ethereum",
-      "description": "USDG/USD Chainlink price feed. Oracle pricing for USDG. ENS: usdg-usd.data.eth."
-    },
-    "resolv_rlp_nav": {
-      "type": "chainlink",
-      "address": "0xAdb2c15Fde49D1A4294740aCb650de94184E66b2",
-      "chain": "ethereum",
-      "description": "RLP/USD Resolv AggregatorV3Interface. Issuer-published fundamental NAV, updated daily. Implements standard latestRoundData()."
-    }
-  },
-  "pyth": {
-    "pyth_usdt_usd": {
-      "type": "pyth",
-      "feed_id": "0x2b89b9dc8fdf9f34592c9f48b082e8e61d65f4d69e2c87a74d6c5c4c4b207a3e",
-      "description": "USDT/USD Pyth price feed. Fallback for Chainlink USDT/USD across all chains."
-    },
-    "pyth_uscc_usd": {
-      "type": "pyth",
-      "feed_id": "0x5d73a5953dc86c4773adc778c30e8a6dfc94c5c3a74d7ebb56dd5e70350f044a",
-      "description": "USCC/USD Pyth price feed. Primary for USCC (A2) on Ethereum and Solana. Also used for Aave Horizon USCC aToken."
-    },
-    "pyth_syrupusdc_usd": {
-      "type": "pyth",
-      "feed_id": "0xe616297dab48626eaacf6d030717b25823b13ae6520b83f4735bf8deec8e2c9a",
-      "description": "syrupUSDC/USD Pyth price feed. Primary for syrupUSDC (A2) on Ethereum, Arbitrum, Base, and Solana. Also used for Aave Base syrupUSDC aToken."
-    },
-    "pyth_onyc_usd": {
-      "type": "pyth",
-      "feed_id": "0xbabbfcc7f46b6e7df73adcccece8b6782408ed27c4e77f35ba39a449440170ab",
-      "description": "ONyc/USD Pyth price feed. Primary for ONyc (A2) on Solana. Weekly NAV updates (~168h)."
-    },
-    "pyth_usx_usd": {
-      "type": "pyth",
-      "feed_id": "0x85d11b381ccc3e3021b7f84fa757cc01b9b5b5b1b899192b28bae7429e92926b",
-      "description": "USX/USD Pyth price feed. Primary for USX (E) on Solana. Also used as underlying price for eUSX (A1)."
-    },
-    "pyth_rlp_usd": {
-      "type": "pyth",
-      "feed_id": "0x7265d5cf8ee0e7b5266f75ff19c42c5b7697a9756c9304aa78b6be4fbb8d823d",
-      "description": "RLP/USD Pyth price feed. Primary for RLP (A2) on Ethereum."
-    },
-    "pyth_usdd_usd": {
-      "type": "pyth",
-      "feed_id": "0x6d20210495d6518787b72e4ad06bc4df21e68d89a802cf6bced2fca6c29652a6",
-      "description": "USDD/USD Pyth price feed. Primary for USDD (E) on Ethereum."
-    },
-    "pyth_pyusd_usd": {
-      "type": "pyth",
-      "feed_id": "0x150ac9b959aee0051e4091f0ef5216d941f590e1c5e7f91cf7635b5c11628c0e",
-      "description": "PYUSD/USD Pyth price feed. Depeg monitoring fallback for par-priced PYUSD on Ethereum. No free Chainlink PYUSD/USD feed."
-    },
-    "pyth_ausd_usd": {
-      "type": "pyth",
-      "feed_id": "0xd9912df360b5b7f21a122f15bdd5e27f62ce5e72bd316c291f7c86620e07fb2a",
-      "description": "AUSD/USD Pyth price feed. Depeg monitoring for par-priced AUSD on Ethereum."
-    },
-    "pyth_rlusd_usd": {
-      "type": "pyth",
-      "feed_id": "0x65652029e7acde632e80192dcaa6ea88e61d84a4c78a982a63e98f4bbcb288d5",
-      "description": "RLUSD/USD Pyth price feed. Depeg monitoring for par-priced RLUSD on Ethereum and Solana. Also used for Aave Horizon RLUSD debt token."
-    },
-    "pyth_dai_usd": {
-      "type": "pyth",
-      "feed_id": "0xb0948a5e5313200c632b51bb5ca32f6de0d36e9950a942d19751e833f70dabfd",
-      "description": "DAI/USD Pyth price feed. Depeg monitoring for par-priced DAI."
-    },
-    "pyth_usdc_usd": {
-      "type": "pyth",
-      "feed_id": "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
-      "description": "USDC/USD Pyth price feed. Depeg monitoring for par-priced USDC across all chains."
-    },
-    "pyth_usde_usd": {
-      "type": "pyth",
-      "feed_id": "0x6ec879b1e9963de5ee97e9c8710b742d6228252a5e2ca12d4ae81d7fe5ee8c5d",
-      "description": "USDe/USD Pyth price feed. Oracle pricing for USDe (E_oracle) on Ethereum and Plasma."
-    },
-    "pyth_usdg_usd": {
-      "type": "pyth",
-      "feed_id": "0xdaa58c6a3ce7d4b9c46c32a6e646012c17c4a2b24c08dd8c5e476118b855a7da",
-      "description": "USDG/USD Pyth price feed. Oracle pricing for USDG (E_oracle) on Solana."
-    }
-  },
-  "redstone": {
-    "redstone_usdt": {
-      "type": "redstone",
-      "symbol": "USDT",
-      "description": "USDT Redstone price feed. Gas-cost fallback for USDT across all chains."
-    },
-    "redstone_usdc": {
-      "type": "redstone",
-      "symbol": "USDC",
-      "description": "USDC Redstone price feed. Gas-cost fallback for par-priced USDC across all chains."
-    },
-    "redstone_dai": {
-      "type": "redstone",
-      "symbol": "DAI",
-      "description": "DAI Redstone price feed. Gas-cost fallback for par-priced DAI on Ethereum."
-    },
-    "redstone_pyusd": {
-      "type": "redstone",
-      "symbol": "PYUSD",
-      "description": "PYUSD Redstone price feed. Used for par-priced PYUSD on Ethereum and Solana."
-    },
-    "redstone_usde": {
-      "type": "redstone",
-      "symbol": "USDe",
-      "description": "USDe Redstone price feed. Fallback for USDe on Ethereum and Plasma."
-    }
-  },
-  "kraken": {
-    "kraken_eth_usd": {
-      "type": "kraken",
-      "pair": "ETHUSD",
-      "description": "ETH/USD Kraken ticker. Primary for native ETH on Ethereum, Arbitrum, and Base."
-    },
-    "kraken_arb_usd": {
-      "type": "kraken",
-      "pair": "ARBUSD",
-      "description": "ARB/USD Kraken ticker. Primary for ARB governance token on Arbitrum."
-    },
-    "kraken_morpho_usd": {
-      "type": "kraken",
-      "pair": "MORPHOUSD",
-      "description": "MORPHO/USD Kraken ticker. Primary for MORPHO governance token on Ethereum, Arbitrum, and Base."
-    },
-    "kraken_pendle_usd": {
-      "type": "kraken",
-      "pair": "PENDLEUSD",
-      "description": "PENDLE/USD Kraken ticker. Primary for PENDLE governance token on Ethereum."
-    },
-    "kraken_sol_usd": {
-      "type": "kraken",
-      "pair": "SOLUSD",
-      "description": "SOL/USD Kraken ticker. Primary for native SOL on Solana."
-    },
-    "kraken_avax_usd": {
-      "type": "kraken",
-      "pair": "AVAXUSD",
-      "description": "AVAX/USD Kraken ticker. Primary for native AVAX on Avalanche."
-    },
-    "kraken_hype_usd": {
-      "type": "kraken",
-      "pair": "HYPEUSD",
-      "description": "HYPE/USD Kraken ticker. Primary for native HYPE on HyperEVM."
-    },
-    "kraken_xpl_usd": {
-      "type": "kraken",
-      "pair": "XPLUSD",
-      "description": "XPL/USD Kraken ticker. Primary for native XPL and WXPL on Plasma."
-    }
-  },
-  "coingecko": {
-    "coingecko_ethereum": {
-      "type": "coingecko",
-      "coin_id": "ethereum",
-      "description": "Ethereum (ETH). Fallback for native ETH on Ethereum, Arbitrum, and Base."
-    },
-    "coingecko_arbitrum": {
-      "type": "coingecko",
-      "coin_id": "arbitrum",
-      "description": "Arbitrum (ARB). Fallback for ARB governance token."
-    },
-    "coingecko_morpho": {
-      "type": "coingecko",
-      "coin_id": "morpho",
-      "description": "Morpho (MORPHO). Fallback for MORPHO governance token on Ethereum, Arbitrum, and Base."
-    },
-    "coingecko_pendle": {
-      "type": "coingecko",
-      "coin_id": "pendle",
-      "description": "Pendle (PENDLE). Fallback for PENDLE governance token on Ethereum."
-    },
-    "coingecko_solana": {
-      "type": "coingecko",
-      "coin_id": "solana",
-      "description": "Solana (SOL). Fallback for native SOL on Solana."
-    },
-    "coingecko_avalanche": {
-      "type": "coingecko",
-      "coin_id": "avalanche-2",
-      "description": "Avalanche (AVAX). Fallback for native AVAX on Avalanche."
-    },
-    "coingecko_hyperliquid": {
-      "type": "coingecko",
-      "coin_id": "hyperliquid",
-      "description": "Hyperliquid (HYPE). Fallback for native HYPE on HyperEVM."
-    },
-    "coingecko_plasma": {
-      "type": "coingecko",
-      "coin_id": "plasma",
-      "description": "Plasma (XPL). Fallback for native XPL and WXPL on Plasma."
-    },
-    "coingecko_reservoir": {
-      "type": "coingecko",
-      "coin_id": "reservoir",
-      "description": "Reservoir (DAM). Primary for DAM (F) on Ethereum."
-    },
-    "coingecko_giza": {
-      "type": "coingecko",
-      "coin_id": "giza",
-      "description": "Giza (GIZA). Primary for GIZA (F) on Base."
-    },
-    "coingecko_kat": {
-      "type": "coingecko",
-      "coin_id": "katana-network-token",
-      "description": "KAT (Katana Network Token) via CoinGecko."
-    },
-    "coingecko_yo": {
-      "type": "coingecko",
-      "coin_id": "yolo-games",
-      "description": "YO (Yologames) via CoinGecko."
-    }
-  },
-  "defillama": {
-    "_doc": "DefiLlama aggregated prices \u00e2\u20ac\u201d last resort fallback. Combines DEX + CEX sources across all chains. Replaces per-pool DEX TWAP. API: coins.llama.fi/prices/current/{chain}:{address}. No auth required.",
-    "defillama_eth": {
-      "type": "defillama",
-      "chain": "coingecko",
-      "address": "ethereum",
-      "description": "ETH via DefiLlama (coingecko ID for native token)."
-    },
-    "defillama_sol": {
-      "type": "defillama",
-      "chain": "coingecko",
-      "address": "solana",
-      "description": "SOL via DefiLlama."
-    },
-    "defillama_avax": {
-      "type": "defillama",
-      "chain": "coingecko",
-      "address": "avalanche-2",
-      "description": "AVAX via DefiLlama."
-    },
-    "defillama_hype": {
-      "type": "defillama",
-      "chain": "coingecko",
-      "address": "hyperliquid",
-      "description": "HYPE via DefiLlama."
-    },
-    "defillama_usdc": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-      "description": "USDC via DefiLlama."
-    },
-    "defillama_usdt": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
-      "description": "USDT via DefiLlama."
-    },
-    "defillama_dai": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x6b175474e89094c44da98b954eedeac495271d0f",
-      "description": "DAI via DefiLlama."
-    },
-    "defillama_pyusd": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x6c3ea9036406852006290770bedfcaba0e23a0e8",
-      "description": "PYUSD via DefiLlama."
-    },
-    "defillama_usde": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
-      "description": "USDe via DefiLlama."
-    },
-    "defillama_usdd": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x4f8e5de400de08b164e7421b3ee387f461becd1a",
-      "description": "USDD via DefiLlama."
-    },
-    "defillama_ausd": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x00000000efe302beaa2b3e6e1b18d08d69a9012a",
-      "description": "AUSD (Agora) via DefiLlama."
-    },
-    "defillama_rlusd": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x8292bb45bf1ee4d140127049757c2e0ff06317ed",
-      "description": "RLUSD via DefiLlama."
-    },
-    "defillama_usx": {
-      "type": "defillama",
-      "chain": "solana",
-      "address": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG",
-      "description": "USX via DefiLlama (Solana)."
-    },
-    "defillama_usdg": {
-      "type": "defillama",
-      "chain": "solana",
-      "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
-      "description": "USDG via DefiLlama (Solana)."
-    },
-    "defillama_morpho": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x58d97b57bb95320f9a05dc918aef65434969c2b2",
-      "description": "MORPHO via DefiLlama."
-    },
-    "defillama_pendle": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x808507121b80c02388fad14726482e061b8da827",
-      "description": "PENDLE via DefiLlama."
-    },
-    "defillama_arb": {
-      "type": "defillama",
-      "chain": "arbitrum",
-      "address": "0x912ce59144191c1204e64559fe8253a0e49e6548",
-      "description": "ARB via DefiLlama."
-    },
-    "defillama_giza": {
-      "type": "defillama",
-      "chain": "base",
-      "address": "0x590830dfdf9a3f68afcdde2694773debdf267774",
-      "description": "GIZA via DefiLlama."
-    },
-    "defillama_dam": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x0fedba9178b70e8b54e2af08ebffcf28a1e5a43b",
-      "description": "DAM (Reservoir) via DefiLlama."
-    },
-    "defillama_kat": {
-      "type": "defillama",
-      "chain": "katana",
-      "address": "0x3ba1fbc4c3aea775d335b31fb53778f46fd3a330",
-      "description": "KAT (Katana Network Token) via DefiLlama."
-    },
-    "defillama_yo": {
-      "type": "defillama",
-      "chain": "base",
-      "address": "0x1925450f5e5fb974b0aae1f3408cf5286fbd1a72",
-      "description": "YO (Yologames) via DefiLlama."
-    },
-    "defillama_xpl": {
-      "type": "defillama",
-      "chain": "coingecko",
-      "address": "plasma",
-      "description": "XPL via DefiLlama (coingecko ID for native token)."
-    },
-    "defillama_wxpl": {
-      "type": "defillama",
-      "chain": "plasma",
-      "address": "0x6100e367285b01f48d07953803a2d8dca5d19873",
-      "description": "WXPL (wrapped XPL) via DefiLlama on Plasma."
-    },
-    "defillama_vbusdc": {
-      "type": "defillama",
-      "chain": "coingecko",
-      "address": "vaultbridge-bridged-usdc-katana",
-      "description": "vbUSDC (Vault Bridge USDC on Katana) via DefiLlama. Only depeg monitoring source \u00e2\u20ac\u201d no Chainlink/Pyth on Katana."
-    },
-    "defillama_uscc": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x14d60e7fdc0d71d8611742720e4c50e7a974020c",
-      "description": "USCC (Superstate) via DefiLlama."
-    },
-    "defillama_syrupusdc": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x80ac24aa929eaf5013f6436cda2a7ba190f5cc0b",
-      "description": "syrupUSDC (Maple) via DefiLlama."
-    },
-    "defillama_rlp": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x4956b52ae2ff65d74ca2d61207523288e4528f96",
-      "description": "RLP (Resolv) via DefiLlama."
-    },
-    "defillama_onyc": {
-      "type": "defillama",
-      "chain": "solana",
-      "address": "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5",
-      "description": "ONyc (OnRe) via DefiLlama (Solana)."
-    },
-    "defillama_dusd": {
-      "type": "defillama",
-      "chain": "ethereum",
-      "address": "0x1e33e98af620f1d563fcd3cfd3c75ace841204ef",
-      "description": "DUSD via DefiLlama. Depegged stablecoin."
-    }
-  },
-  "issuer_nav": {
-    "_doc": "Issuer-published NAV feeds \u00e2\u20ac\u201d tier 2 in A2 hierarchy per Section 6.2. Used as pricing fallback when oracle feeds are stale/unavailable. Same sources also serve as verification (Section 7.3).",
-    "issuer_nav_uscc": {
-      "type": "issuer_nav",
-      "issuer_type": "superstate_api",
-      "api_base": "https://api.superstate.com",
-      "fund_id": 2,
-      "description": "USCC NAV via Superstate REST API. Daily NAV/S."
-    },
-    "issuer_nav_onyc": {
-      "type": "issuer_nav",
-      "issuer_type": "onre_onchain",
-      "description": "ONyc NAV from OnRe Offer PDA on Solana. APR-based step pricing."
-    },
-    "issuer_nav_mfone": {
-      "type": "issuer_nav",
-      "issuer_type": "midas_pdf",
-      "gdrive_folder_id": "122vggonAVEp0Q5Y66-R41c6UIZW4mFIY",
-      "filename_pattern": "mfone_reporting_public_{date}.pdf",
-      "local_report_path": "docs/reference/midas/mf-one",
-      "description": "mF-ONE NAV from Midas daily PDF reports on Google Drive."
-    },
-    "issuer_nav_msyrupusdp": {
-      "type": "issuer_nav",
-      "issuer_type": "midas_pdf",
-      "gdrive_folder_id": "1NAPVo8sQYG6ggnjlM6ldi1zfPnvyRc7f",
-      "filename_pattern": "msyrupUSDp_reporting_public_{date}.pdf",
-      "local_report_path": "docs/reference/midas/msyrupusdp",
-      "description": "msyrupUSDp NAV from Midas weekly PDF reports on Google Drive."
-    },
-    "issuer_nav_mhyper": {
-      "type": "issuer_nav",
-      "issuer_type": "midas_attestation",
-      "proof_id": "0xac9a528065afb4290ab62fb0ee1a9110d48ed834454d2d04ab369b4832bbda7a",
-      "token_decimals": 18,
-      "token_addresses": {
-        "ethereum": "0x9b5528528656DBC094765E2abB79F293c21191B9",
-        "plasma": "0xb31BeA5c2a43f942a3800558B1aa25978da75F8a",
-        "monad": "0xd90F6bFEd23fFDE40106FC4498DD2e9EDB95E4e7",
-        "katana": "0x926a8a63Fa1e1FDBBEb811a0319933B1A0F1EDbb"
+    "ethereum": {
+      "chainlink_usdt_usd": {
+        "type": "chainlink",
+        "address": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
+        "chain": "ethereum",
+        "description": "USDT/USD price feed on Ethereum."
       },
-      "description": "mHYPER NAV from Midas attestation via LlamaRisk API."
+      "chainlink_usdc_depeg": {
+        "type": "chainlink",
+        "address": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+        "chain": "ethereum",
+        "description": "USDC/USD price feed on Ethereum. Depeg monitoring."
+      },
+      "chainlink_dai_depeg": {
+        "type": "chainlink",
+        "address": "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
+        "chain": "ethereum",
+        "description": "DAI/USD price feed on Ethereum. Depeg monitoring."
+      },
+      "chainlink_usde_usd": {
+        "type": "chainlink",
+        "address": "0xa569d910839Ae8C109eDAA97c4eBB6a00b60C10c",
+        "chain": "ethereum",
+        "description": "USDe/USD price feed on Ethereum. Also used cross-chain for Plasma USDe."
+      },
+      "chainlink_pyusd_usd": {
+        "type": "chainlink",
+        "address": "0x8f1dF6D7F2db73eECE86a18b4381F4707b918FB1",
+        "chain": "ethereum",
+        "description": "PYUSD/USD price feed on Ethereum. Depeg monitoring."
+      },
+      "chainlink_ausd_usd": {
+        "type": "chainlink",
+        "address": "0xB00341502DfEA6Ced8A5786b4059d29dA5E4D1FD",
+        "chain": "ethereum",
+        "description": "AUSD/USD price feed on Ethereum. Depeg monitoring."
+      },
+      "chainlink_rlusd_usd": {
+        "type": "chainlink",
+        "address": "0x26C46B7aD0012cA71F2298ada567dC9Af14E7f2A",
+        "chain": "ethereum",
+        "description": "RLUSD/USD price feed on Ethereum. Depeg monitoring."
+      },
+      "chainlink_usdg_usd": {
+        "type": "chainlink",
+        "address": "0x14f0737d6b705259e521EA6E9E3506AC78dBd311",
+        "chain": "ethereum",
+        "description": "USDG/USD price feed on Ethereum."
+      },
+      "chainlink_uscc_nav": {
+        "type": "chainlink",
+        "address": "0xAfFd8F5578E8590665de561bdE9E7BAdb99300d9",
+        "chain": "ethereum",
+        "description": "USCC/USD Chainlink NAVLink oracle. Daily NAV/S from Superstate."
+      },
+      "resolv_rlp_nav": {
+        "type": "chainlink",
+        "address": "0xAdb2c15Fde49D1A4294740aCb650de94184E66b2",
+        "chain": "ethereum",
+        "description": "RLP/USD Resolv AggregatorV3Interface. Issuer-published fundamental NAV, updated daily."
+      },
+      "midas_mfone_oracle": {
+        "type": "chainlink",
+        "address": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
+        "chain": "ethereum",
+        "description": "mF-ONE/USD Midas Chainlink-style oracle. NAV updated daily.",
+        "issuer_nav_url": "https://midas.app/mfone",
+        "issuer_nav_reports": "https://drive.google.com/drive/folders/122vggonAVEp0Q5Y66-R41c6UIZW4mFIY"
+      },
+      "midas_msyrupusdp_oracle": {
+        "type": "chainlink",
+        "address": "0x337d914ff6622510FC2C63ac59c1D07983895241",
+        "chain": "ethereum",
+        "description": "msyrupUSDp/USD Midas Chainlink-style oracle. NAV updated 1-2x/week."
+      }
+    },
+    "arbitrum": {
+      "chainlink_usdt0_usd_arbitrum": {
+        "type": "chainlink",
+        "address": "0x3f3f5dF88dC9F13eac63DF89EC16ef6e7E25DdE7",
+        "chain": "arbitrum",
+        "description": "USDT0/USD price feed on Arbitrum. Native Arbitrum feed."
+      },
+      "chainlink_usdc_depeg_arbitrum": {
+        "type": "chainlink",
+        "address": "0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3",
+        "chain": "arbitrum",
+        "description": "USDC/USD price feed on Arbitrum. Native Arbitrum feed for depeg monitoring."
+      }
+    },
+    "plasma": {
+      "chainlink_usdt0_usd_plasma": {
+        "type": "chainlink",
+        "address": "0x3205B49b3C8c5D593589e1e70567993f72C5F845",
+        "chain": "plasma",
+        "description": "USDT0/USD price feed on Plasma. Native Plasma feed."
+      },
+      "midas_mhyper_oracle": {
+        "type": "chainlink",
+        "address": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
+        "chain": "plasma",
+        "description": "mHYPER/USD Midas Chainlink-style oracle on Plasma. NAV updated 1-2x/week."
+      }
     }
   },
-  "_api_endpoints": {
-    "_description": "Base URLs for REST API price adapters. Adapters read from here instead of hardcoding URLs.",
-    "pyth_hermes": "https://hermes.pyth.network/v2/updates/price/latest",
-    "redstone": "https://api.redstone.finance/prices",
-    "kraken": "https://api.kraken.com/0/public/Ticker",
-    "coingecko": "https://pro-api.coingecko.com/api/v3"
+
+  "pyth": {
+    "_global": {
+      "pyth_usdt_usd": {
+        "type": "pyth",
+        "feed_id": "0x2b89b9dc8fdf9f34592c9f48b082e8e61d65f4d69e2c87a74d6c5c4c4b207a3e",
+        "description": "USDT/USD Pyth price feed. Fallback for Chainlink USDT/USD."
+      },
+      "pyth_uscc_usd": {
+        "type": "pyth",
+        "feed_id": "0x5d73a5953dc86c4773adc778c30e8a6dfc94c5c3a74d7ebb56dd5e70350f044a",
+        "description": "USCC/USD Pyth price feed. Primary for USCC (A2)."
+      },
+      "pyth_syrupusdc_usd": {
+        "type": "pyth",
+        "feed_id": "0xe616297dab48626eaacf6d030717b25823b13ae6520b83f4735bf8deec8e2c9a",
+        "description": "syrupUSDC/USD Pyth price feed. Primary for syrupUSDC (A2)."
+      },
+      "pyth_onyc_usd": {
+        "type": "pyth",
+        "feed_id": "0xbabbfcc7f46b6e7df73adcccece8b6782408ed27c4e77f35ba39a449440170ab",
+        "description": "ONyc/USD Pyth price feed. Primary for ONyc (A2). Weekly NAV updates."
+      },
+      "pyth_usx_usd": {
+        "type": "pyth",
+        "feed_id": "0x85d11b381ccc3e3021b7f84fa757cc01b9b5b5b1b899192b28bae7429e92926b",
+        "description": "USX/USD Pyth price feed. Primary for USX (E) on Solana."
+      },
+      "pyth_rlp_usd": {
+        "type": "pyth",
+        "feed_id": "0x7265d5cf8ee0e7b5266f75ff19c42c5b7697a9756c9304aa78b6be4fbb8d823d",
+        "description": "RLP/USD Pyth price feed. Primary for RLP (A2)."
+      },
+      "pyth_usdd_usd": {
+        "type": "pyth",
+        "feed_id": "0x6d20210495d6518787b72e4ad06bc4df21e68d89a802cf6bced2fca6c29652a6",
+        "description": "USDD/USD Pyth price feed."
+      },
+      "pyth_pyusd_usd": {
+        "type": "pyth",
+        "feed_id": "0x150ac9b959aee0051e4091f0ef5216d941f590e1c5e7f91cf7635b5c11628c0e",
+        "description": "PYUSD/USD Pyth price feed. Depeg monitoring fallback."
+      },
+      "pyth_ausd_usd": {
+        "type": "pyth",
+        "feed_id": "0xd9912df360b5b7f21a122f15bdd5e27f62ce5e72bd316c291f7c86620e07fb2a",
+        "description": "AUSD/USD Pyth price feed. Depeg monitoring."
+      },
+      "pyth_rlusd_usd": {
+        "type": "pyth",
+        "feed_id": "0x65652029e7acde632e80192dcaa6ea88e61d84a4c78a982a63e98f4bbcb288d5",
+        "description": "RLUSD/USD Pyth price feed. Depeg monitoring."
+      },
+      "pyth_dai_usd": {
+        "type": "pyth",
+        "feed_id": "0xb0948a5e5313200c632b51bb5ca32f6de0d36e9950a942d19751e833f70dabfd",
+        "description": "DAI/USD Pyth price feed. Depeg monitoring."
+      },
+      "pyth_usdc_usd": {
+        "type": "pyth",
+        "feed_id": "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
+        "description": "USDC/USD Pyth price feed. Depeg monitoring."
+      },
+      "pyth_usde_usd": {
+        "type": "pyth",
+        "feed_id": "0x6ec879b1e9963de5ee97e9c8710b742d6228252a5e2ca12d4ae81d7fe5ee8c5d",
+        "description": "USDe/USD Pyth price feed."
+      },
+      "pyth_usdg_usd": {
+        "type": "pyth",
+        "feed_id": "0xdaa58c6a3ce7d4b9c46c32a6e646012c17c4a2b24c08dd8c5e476118b855a7da",
+        "description": "USDG/USD Pyth price feed."
+      }
+    }
+  },
+
+  "redstone": {
+    "_global": {
+      "redstone_usdt": {
+        "type": "redstone",
+        "symbol": "USDT",
+        "description": "USDT Redstone price feed."
+      },
+      "redstone_usdc": {
+        "type": "redstone",
+        "symbol": "USDC",
+        "description": "USDC Redstone price feed."
+      },
+      "redstone_dai": {
+        "type": "redstone",
+        "symbol": "DAI",
+        "description": "DAI Redstone price feed."
+      },
+      "redstone_pyusd": {
+        "type": "redstone",
+        "symbol": "PYUSD",
+        "description": "PYUSD Redstone price feed."
+      },
+      "redstone_usde": {
+        "type": "redstone",
+        "symbol": "USDe",
+        "description": "USDe Redstone price feed."
+      }
+    }
+  },
+
+  "kraken": {
+    "_global": {
+      "kraken_eth_usd": {
+        "type": "kraken",
+        "pair": "ETHUSD",
+        "description": "ETH/USD Kraken ticker."
+      },
+      "kraken_arb_usd": {
+        "type": "kraken",
+        "pair": "ARBUSD",
+        "description": "ARB/USD Kraken ticker."
+      },
+      "kraken_morpho_usd": {
+        "type": "kraken",
+        "pair": "MORPHOUSD",
+        "description": "MORPHO/USD Kraken ticker."
+      },
+      "kraken_pendle_usd": {
+        "type": "kraken",
+        "pair": "PENDLEUSD",
+        "description": "PENDLE/USD Kraken ticker."
+      },
+      "kraken_sol_usd": {
+        "type": "kraken",
+        "pair": "SOLUSD",
+        "description": "SOL/USD Kraken ticker."
+      },
+      "kraken_avax_usd": {
+        "type": "kraken",
+        "pair": "AVAXUSD",
+        "description": "AVAX/USD Kraken ticker."
+      },
+      "kraken_hype_usd": {
+        "type": "kraken",
+        "pair": "HYPEUSD",
+        "description": "HYPE/USD Kraken ticker."
+      },
+      "kraken_xpl_usd": {
+        "type": "kraken",
+        "pair": "XPLUSD",
+        "description": "XPL/USD Kraken ticker."
+      }
+    }
+  },
+
+  "coingecko": {
+    "_global": {
+      "coingecko_ethereum": { "type": "coingecko", "coin_id": "ethereum", "description": "Ethereum (ETH)." },
+      "coingecko_arbitrum": { "type": "coingecko", "coin_id": "arbitrum", "description": "Arbitrum (ARB)." },
+      "coingecko_morpho": { "type": "coingecko", "coin_id": "morpho", "description": "Morpho (MORPHO)." },
+      "coingecko_pendle": { "type": "coingecko", "coin_id": "pendle", "description": "Pendle (PENDLE)." },
+      "coingecko_solana": { "type": "coingecko", "coin_id": "solana", "description": "Solana (SOL)." },
+      "coingecko_avalanche": { "type": "coingecko", "coin_id": "avalanche-2", "description": "Avalanche (AVAX)." },
+      "coingecko_hyperliquid": { "type": "coingecko", "coin_id": "hyperliquid", "description": "Hyperliquid (HYPE)." },
+      "coingecko_plasma": { "type": "coingecko", "coin_id": "plasma", "description": "Plasma (XPL)." },
+      "coingecko_reservoir": { "type": "coingecko", "coin_id": "reservoir", "description": "Reservoir (DAM)." },
+      "coingecko_giza": { "type": "coingecko", "coin_id": "giza", "description": "Giza (GIZA)." },
+      "coingecko_kat": { "type": "coingecko", "coin_id": "katana-network-token", "description": "KAT (Katana)." },
+      "coingecko_yo": { "type": "coingecko", "coin_id": "yolo-games", "description": "YO (Yologames)." }
+    }
+  },
+
+  "defillama": {
+    "_doc": "DefiLlama aggregated prices. Last-resort fallback. API: coins.llama.fi/prices/current/{chain}:{address}.",
+    "ethereum": {
+      "defillama_eth": { "type": "defillama", "chain": "coingecko", "address": "ethereum", "description": "ETH via DefiLlama." },
+      "defillama_usdc": { "type": "defillama", "chain": "ethereum", "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "description": "USDC via DefiLlama." },
+      "defillama_usdt": { "type": "defillama", "chain": "ethereum", "address": "0xdac17f958d2ee523a2206206994597c13d831ec7", "description": "USDT via DefiLlama." },
+      "defillama_dai": { "type": "defillama", "chain": "ethereum", "address": "0x6b175474e89094c44da98b954eedeac495271d0f", "description": "DAI via DefiLlama." },
+      "defillama_pyusd": { "type": "defillama", "chain": "ethereum", "address": "0x6c3ea9036406852006290770bedfcaba0e23a0e8", "description": "PYUSD via DefiLlama." },
+      "defillama_usde": { "type": "defillama", "chain": "ethereum", "address": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3", "description": "USDe via DefiLlama." },
+      "defillama_usdd": { "type": "defillama", "chain": "ethereum", "address": "0x4f8e5de400de08b164e7421b3ee387f461becd1a", "description": "USDD via DefiLlama." },
+      "defillama_ausd": { "type": "defillama", "chain": "ethereum", "address": "0x00000000efe302beaa2b3e6e1b18d08d69a9012a", "description": "AUSD via DefiLlama." },
+      "defillama_rlusd": { "type": "defillama", "chain": "ethereum", "address": "0x8292bb45bf1ee4d140127049757c2e0ff06317ed", "description": "RLUSD via DefiLlama." },
+      "defillama_morpho": { "type": "defillama", "chain": "ethereum", "address": "0x58d97b57bb95320f9a05dc918aef65434969c2b2", "description": "MORPHO via DefiLlama." },
+      "defillama_pendle": { "type": "defillama", "chain": "ethereum", "address": "0x808507121b80c02388fad14726482e061b8da827", "description": "PENDLE via DefiLlama." },
+      "defillama_dam": { "type": "defillama", "chain": "ethereum", "address": "0x0fedba9178b70e8b54e2af08ebffcf28a1e5a43b", "description": "DAM via DefiLlama." },
+      "defillama_dusd": { "type": "defillama", "chain": "ethereum", "address": "0x1e33e98af620f1d563fcd3cfd3c75ace841204ef", "description": "DUSD via DefiLlama." },
+      "defillama_uscc": { "type": "defillama", "chain": "ethereum", "address": "0x14d60e7fdc0d71d8611742720e4c50e7a974020c", "description": "USCC via DefiLlama." },
+      "defillama_syrupusdc": { "type": "defillama", "chain": "ethereum", "address": "0x80ac24aa929eaf5013f6436cda2a7ba190f5cc0b", "description": "syrupUSDC via DefiLlama." },
+      "defillama_rlp": { "type": "defillama", "chain": "ethereum", "address": "0x4956b52ae2ff65d74ca2d61207523288e4528f96", "description": "RLP via DefiLlama." }
+    },
+    "arbitrum": {
+      "defillama_arb": { "type": "defillama", "chain": "arbitrum", "address": "0x912ce59144191c1204e64559fe8253a0e49e6548", "description": "ARB via DefiLlama." }
+    },
+    "base": {
+      "defillama_giza": { "type": "defillama", "chain": "base", "address": "0x590830dfdf9a3f68afcdde2694773debdf267774", "description": "GIZA via DefiLlama." },
+      "defillama_yo": { "type": "defillama", "chain": "base", "address": "0x1925450f5e5fb974b0aae1f3408cf5286fbd1a72", "description": "YO via DefiLlama." }
+    },
+    "solana": {
+      "defillama_usx": { "type": "defillama", "chain": "solana", "address": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG", "description": "USX via DefiLlama." },
+      "defillama_usdg": { "type": "defillama", "chain": "solana", "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH", "description": "USDG via DefiLlama." },
+      "defillama_onyc": { "type": "defillama", "chain": "solana", "address": "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5", "description": "ONyc via DefiLlama." },
+      "defillama_sol": { "type": "defillama", "chain": "coingecko", "address": "solana", "description": "SOL via DefiLlama." }
+    },
+    "avalanche": {
+      "defillama_avax": { "type": "defillama", "chain": "coingecko", "address": "avalanche-2", "description": "AVAX via DefiLlama." }
+    },
+    "hyperevm": {
+      "defillama_hype": { "type": "defillama", "chain": "coingecko", "address": "hyperliquid", "description": "HYPE via DefiLlama." }
+    },
+    "plasma": {
+      "defillama_xpl": { "type": "defillama", "chain": "coingecko", "address": "plasma", "description": "XPL via DefiLlama." },
+      "defillama_wxpl": { "type": "defillama", "chain": "plasma", "address": "0x6100e367285b01f48d07953803a2d8dca5d19873", "description": "WXPL via DefiLlama." }
+    },
+    "katana": {
+      "defillama_kat": { "type": "defillama", "chain": "katana", "address": "0x3ba1fbc4c3aea775d335b31fb53778f46fd3a330", "description": "KAT via DefiLlama." },
+      "defillama_vbusdc": { "type": "defillama", "chain": "coingecko", "address": "vaultbridge-bridged-usdc-katana", "description": "vbUSDC via DefiLlama." }
+    }
+  },
+
+  "issuer_nav": {
+    "_doc": "Issuer-published NAV feeds. Tier 2 in A2 hierarchy per Section 6.2.",
+    "_global": {
+      "issuer_nav_uscc": {
+        "type": "issuer_nav",
+        "issuer_type": "superstate_api",
+        "api_base": "https://api.superstate.com",
+        "fund_id": 2,
+        "description": "USCC NAV via Superstate REST API. Daily NAV/S."
+      },
+      "issuer_nav_onyc": {
+        "type": "issuer_nav",
+        "issuer_type": "onre_onchain",
+        "description": "ONyc NAV from OnRe Offer PDA on Solana."
+      },
+      "issuer_nav_mfone": {
+        "type": "issuer_nav",
+        "issuer_type": "midas_pdf",
+        "gdrive_folder_id": "122vggonAVEp0Q5Y66-R41c6UIZW4mFIY",
+        "filename_pattern": "mfone_reporting_public_{date}.pdf",
+        "local_report_path": "docs/reference/midas/mf-one",
+        "description": "mF-ONE NAV from Midas daily PDF reports on Google Drive."
+      },
+      "issuer_nav_msyrupusdp": {
+        "type": "issuer_nav",
+        "issuer_type": "midas_pdf",
+        "gdrive_folder_id": "1NAPVo8sQYG6ggnjlM6ldi1zfPnvyRc7f",
+        "filename_pattern": "msyrupUSDp_reporting_public_{date}.pdf",
+        "local_report_path": "docs/reference/midas/msyrupusdp",
+        "description": "msyrupUSDp NAV from Midas weekly PDF reports on Google Drive."
+      },
+      "issuer_nav_mhyper": {
+        "type": "issuer_nav",
+        "issuer_type": "midas_attestation",
+        "proof_id": "0xac9a528065afb4290ab62fb0ee1a9110d48ed834454d2d04ab369b4832bbda7a",
+        "token_decimals": 18,
+        "token_addresses": {
+          "ethereum": "0x9b5528528656DBC094765E2abB79F293c21191B9",
+          "plasma": "0xb31BeA5c2a43f942a3800558B1aa25978da75F8a",
+          "monad": "0xd90F6bFEd23fFDE40106FC4498DD2e9EDB95E4e7",
+          "katana": "0x926a8a63Fa1e1FDBBEb811a0319933B1A0F1EDbb"
+        },
+        "description": "mHYPER NAV from Midas attestation via LlamaRisk API."
+      }
+    }
   }
 }

@@ -13,7 +13,8 @@ This document defines the architectural principles and patterns of the NAV colle
 3. **Single source of truth.** Each piece of data is defined in exactly one place:
    - Chain metadata (RPC URLs, chain IDs, native token, block times, Etherscan base URL) --> `config/chains.json`
    - Wallet addresses and protocol registrations --> `config/wallets.json`
-   - Token registry (symbols, decimals, categories, pricing config) --> `config/tokens.json`
+   - Wallet token registry (balance scanning + pricing) --> `config/tokens.json`
+   - Protocol token registry (pricing only, handler-managed) --> `config/protocol_tokens.json`
    - Protocol contracts and query types --> `config/contracts.json`
    - Morpho market IDs --> `config/morpho_markets.json`
    - Solana protocol accounts --> `config/solana_protocols.json`
@@ -91,7 +92,7 @@ Balance scanners are per-chain-method functions. The method is declared in `chai
 | `balance_of` | (no-op, handled by protocol queries) | Katana |
 | (Solana) | `query_balances_solana()` | Solana |
 
-All scanners return standardised row dicts via `_build_row()`. All read token metadata from the registry (`tokens.json`), not from on-chain metadata calls. Native token decimals come from `chains.json`.
+All scanners return standardised row dicts via `_build_row()`. The balance scanner reads only `tokens.json` (wallet tokens). Protocol tokens (Aave aTokens, vault shares, Morpho collateral) are in `protocol_tokens.json` and are NOT scanned — handlers query those positions directly. The valuation layer loads both files merged for pricing lookups. Native token decimals come from `chains.json`.
 
 ARMA smart account proxies are scanned as regular wallets with a `parent_wallet` annotation -- no special handler needed.
 
@@ -231,10 +232,11 @@ Euler V2 uses XOR-based sub-accounts. The scan range is limited to sub-accounts 
 
 | Adding... | Config files | Code changes |
 |-----------|-------------|--------------|
-| New EVM chain | `chains.json` (chain entry with RPC, chain_id, native token) | None |
+| New EVM chain | `chains.json` (see schema below) | None |
 | New wallet | `wallets.json` (address + protocol registrations) | None |
-| New token | `tokens.json` (symbol, decimals, category, pricing config) | None |
-| New ERC-4626 vault | `contracts.json` + `tokens.json` | None |
+| New wallet token | `tokens.json` (symbol, decimals, category, pricing config) | None |
+| New protocol token | `protocol_tokens.json` (pricing config for handler-managed tokens) | None |
+| New ERC-4626 vault | `contracts.json` + `protocol_tokens.json` | None |
 | New Morpho market | `morpho_markets.json` | None |
 | New Aave position | `contracts.json` (aToken + debt token entries) | None |
 | New Midas token | `contracts.json` (token + oracle entry) | None |
@@ -247,8 +249,37 @@ Euler V2 uses XOR-based sub-accounts. The scan range is limited to sub-accounts 
 | New verification type | `src/verifiers/new_type.py` + registry in `verifiers/__init__.py` | Verifier function |
 | New protocol type | `handlers/new_protocol.py` + registry entry in `protocol_queries.py` | Handler function |
 | New price adapter | `src/adapters/new_adapter.py` + import in `pricing.py` | Adapter function |
-| New EVM chain with Multicall3 | `chains.json` (add `multicall3` address) | None |
 | New ARMA proxy | `wallets.json` (`arma_proxies` + `_chain_protocols`) | None |
+
+### New EVM Chain Schema
+
+Every new EVM chain in `chains.json` must use exactly these fields in this order:
+
+```json
+{
+  "chain_id": 1,
+  "native_symbol": "ETH",
+  "native_decimals": 18,
+  "rpc_url_template": "https://xxx-mainnet.g.alchemy.com/v2/{api_key}",
+  "explorer": "https://etherscan.io",
+  "avg_block_time": 12.0,
+  "multicall3": "0xcA11bde05977b3631167028862bE2a173976CA11"
+}
+```
+
+**RPC fields** (use exactly one primary, plus optional fallback):
+
+| Field | When to use |
+|-------|-------------|
+| `rpc_url_template` | Alchemy RPCs — substitutes `{api_key}` from `ALCHEMY_API_KEY` env var |
+| `rpc_url` | Static public endpoints with no API key (e.g. DRPC, Katana) — use instead of `rpc_url_template` |
+| `fallback_rpc_template` | Optional. Alchemy as backup when primary is a non-Alchemy provider |
+
+**Required fields**: `chain_id`, `native_symbol`, `native_decimals`, one RPC field, `explorer`, `avg_block_time`, `multicall3`.
+
+**Before adding**:
+1. Verify Multicall3 is deployed at the canonical address: `w3.eth.get_code("0xcA11bde05977b3631167028862bE2a173976CA11")` must return >2 bytes.
+2. If `rpc_url_template` (Alchemy) doesn't support `alchemy_getTokenBalances` on this chain, the balance scanner falls back to multicall `balanceOf` automatically — no special config needed.
 
 ### Protocol Registration
 

@@ -36,7 +36,6 @@
       "address": "0x0c1644d7af63df4a3b15423dbe04a1927c00a4f4",
       "description": "Credit Positions",
       "protocols": {
-        "morpho": true,
         "gauntlet_falconx": true,
         "falconx_direct": true
       }

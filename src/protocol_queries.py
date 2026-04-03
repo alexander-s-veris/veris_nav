@@ -99,7 +99,7 @@ def _validate_config():
                 errors.append(f"morpho_markets.{chain}: market missing 'market_id'")
             for side in ("loan_token", "collateral_token"):
                 tok = mkt.get(side, {})
-                for field in ("symbol", "address", "decimals"):
+                for field in ("symbol", "address"):
                     if field not in tok:
                         errors.append(f"morpho_markets.{chain}.{mkt.get('name', '?')}.{side}: missing '{field}'")
 
@@ -158,14 +158,6 @@ def _get_wallet_protocols(chain, wallet):
         for p_key, enabled in wallet_chain_entry.get("protocols", {}).items():
             if enabled:
                 protocols.add(p_key)
-
-    # Check morpho_markets.json for wallet-specific Morpho positions
-    morpho_cfg = _load_morpho_cfg()
-    chain_morpho = morpho_cfg.get(chain, {})
-    for mkt in chain_morpho.get("markets", []):
-        if wallet_lower in [w.lower() for w in mkt.get("wallets", [])]:
-            protocols.add("morpho")
-            break
 
     return list(protocols)
 

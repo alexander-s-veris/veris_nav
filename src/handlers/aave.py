@@ -33,10 +33,12 @@ def query_aave_positions(w3, chain, wallet, block_number, block_ts):
     for entry_key, entry in aave_section.items():
         if not isinstance(entry, dict) or "address" not in entry:
             continue
-        if entry_key.startswith("atoken") or entry_key.startswith("horizon_atoken"):
-            atokens[entry_key] = entry
-        elif "vdebt" in entry_key or "debt" in entry_key:
+        if "underlying_symbol" not in entry:
+            continue  # Skip pool entries (no underlying_symbol)
+        if "debt" in entry_key.lower():
             debt_tokens[entry_key] = entry
+        else:
+            atokens[entry_key] = entry
 
     # Query each aToken
     for akey, aentry in atokens.items():

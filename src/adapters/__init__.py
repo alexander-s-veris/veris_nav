@@ -9,17 +9,16 @@ import os
 
 from evm import CONFIG_DIR
 
-# Lazy-loaded API endpoints from price_feeds.json
+# Lazy-loaded API endpoints from api_endpoints.json
 _API_ENDPOINTS_CACHE = None
 
 
 def _load_api_endpoints():
-    """Load REST API base URLs from price_feeds.json _api_endpoints section."""
+    """Load REST API base URLs from config/api_endpoints.json."""
     global _API_ENDPOINTS_CACHE
     if _API_ENDPOINTS_CACHE is None:
-        with open(os.path.join(CONFIG_DIR, "price_feeds.json")) as f:
-            cfg = json.load(f)
-        _API_ENDPOINTS_CACHE = cfg.get("_api_endpoints", {})
+        with open(os.path.join(CONFIG_DIR, "api_endpoints.json")) as f:
+            _API_ENDPOINTS_CACHE = json.load(f)
     return _API_ENDPOINTS_CACHE
 
 

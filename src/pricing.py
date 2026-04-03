@@ -46,9 +46,18 @@ def _load_feeds_registry() -> dict:
             if section_key.startswith("_"):
                 continue
             if isinstance(section_val, dict):
-                for feed_key, feed_cfg in section_val.items():
-                    if isinstance(feed_cfg, dict):
-                        flat[feed_key] = feed_cfg
+                for key, val in section_val.items():
+                    if key.startswith("_") and key != "_global":
+                        continue
+                    if isinstance(val, dict):
+                        if "type" in val:
+                            # Direct feed entry (flat structure)
+                            flat[key] = val
+                        else:
+                            # Chain grouping — feeds nested one level deeper
+                            for feed_key, feed_cfg in val.items():
+                                if isinstance(feed_cfg, dict):
+                                    flat[feed_key] = feed_cfg
         _FEEDS_CACHE = flat
     return _FEEDS_CACHE
 

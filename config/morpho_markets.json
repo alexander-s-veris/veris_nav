@@ -1,97 +1,45 @@
 {
   "_template": {
-    "_comment": "Template for Morpho market entries. Each market is a leveraged position (Category D).",
+    "_comment": "Template for Morpho market entries. Each market is a leveraged position (Category D). Token metadata (decimals, category) is resolved from the token registry at runtime.",
     "market_id": "0x... (bytes32 unique key from Morpho)",
     "name": "Collateral/Loan descriptive name",
-    "chain": "ethereum | arbitrum | base",
     "morpho_contract": "0x... (Morpho core contract on this chain)",
     "loan_token": {
       "symbol": "USDC",
-      "address": "0x...",
-      "decimals": 6,
-      "category": "E"
+      "address": "0x..."
     },
     "collateral_token": {
       "symbol": "syrupUSDC",
-      "address": "0x...",
-      "decimals": 6,
-      "category": "A2"
-    },
-    "wallets": ["0x... (wallets with positions in this market)"]
+      "address": "0x..."
+    }
   },
 
   "ethereum": {
     "morpho_contract": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     "markets": [
       {
-        "market_id": "0xef2c308b5abecf5c8750a1aa82b47c558005feb7a03f4f8e1ad682d71ac8d0ba",
-        "name": "mF-ONE / USDC",
-        "loan_token": {
-          "symbol": "USDC",
-          "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-          "decimals": 6,
-          "category": "E"
-        },
-        "collateral_token": {
-          "symbol": "mF-ONE",
-          "address": "0x238a700eD6165261Cf8b2e544ba797BC11e466Ba",
-          "decimals": 18,
-          "category": "A2"
-        },
-        "wallets": ["0xa33e1f748754d2d624638ab335100d92fcbe62a2"],
-        "_note": "Closed as of 26 Mar 2026. mF-ONE collateral moved to wallet, USDT deposited to Steakhouse USDT vault."
-      },
-      {
         "market_id": "0xab3196447663a41382ba4b4d55eab3fa702ee2cf071db224fd72492953040056",
         "name": "syrupUSDC / AUSD",
         "loan_token": {
           "symbol": "AUSD",
-          "address": "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a",
-          "decimals": 6,
-          "category": "E"
+          "address": "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a"
         },
         "collateral_token": {
           "symbol": "syrupUSDC",
-          "address": "0x80ac24aA929eaF5013f6436cdA2a7ba190f5Cc0b",
-          "decimals": 6,
-          "category": "A2"
-        },
-        "wallets": ["0xa33e1f748754d2d624638ab335100d92fcbe62a2"]
+          "address": "0x80ac24aA929eaF5013f6436cdA2a7ba190f5Cc0b"
+        }
       },
       {
         "market_id": "0xc0ae375fd761ff19b3f04de5534c0f1ec110f80e1c2ede27c42c1c43c3040394",
         "name": "syrupUSDC / RLUSD",
         "loan_token": {
           "symbol": "RLUSD",
-          "address": "0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD",
-          "decimals": 18,
-          "category": "E"
+          "address": "0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD"
         },
         "collateral_token": {
           "symbol": "syrupUSDC",
-          "address": "0x80ac24aA929eaF5013f6436cdA2a7ba190f5Cc0b",
-          "decimals": 6,
-          "category": "A2"
-        },
-        "wallets": ["0xa33e1f748754d2d624638ab335100d92fcbe62a2"]
-      },
-      {
-        "market_id": "0xe83d72fa5b00dcd46d9e0e860d95aa540d5ec106da5833108a9f826f21f36f52",
-        "name": "AA_FalconXUSDC / USDC",
-        "loan_token": {
-          "symbol": "USDC",
-          "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-          "decimals": 6,
-          "category": "E"
-        },
-        "collateral_token": {
-          "symbol": "AA_FalconXUSDC",
-          "address": "0xC26A6Fa2C37b38E549a4a1807543801Db684f99C",
-          "decimals": 18,
-          "category": "A3"
-        },
-        "wallets": ["0x0c1644d7af63df4a3b15423dbe04a1927c00a4f4"],
-        "_note": "Closed as of 16 Mar 2026. Gauntlet vault (0x00000000d8f3d6c5DFeB2D2b5ED2276095f3aF44) also has position in this market."
+          "address": "0x80ac24aA929eaF5013f6436cdA2a7ba190f5Cc0b"
+        }
       }
     ]
   },
@@ -101,26 +49,16 @@
     "markets": [
       {
         "market_id": "0x571cb3ac535d61d92026c071ef1df4794d0bbbe1755f916ff640746f81b52af4",
-        "name": "syrupUSDC / USDT",
+        "name": "syrupUSDC / USDT0",
         "loan_token": {
-          "symbol": "USDT",
-          "address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
-          "decimals": 6,
-          "category": "E"
+          "symbol": "USDT0",
+          "address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"
         },
         "collateral_token": {
           "symbol": "syrupUSDC",
-          "address": "0x41CA7586cC1311807B4605fBB748a3B8862b42b5",
-          "decimals": 6,
-          "category": "A2"
-        },
-        "wallets": ["0xa33e1f748754d2d624638ab335100d92fcbe62a2"]
+          "address": "0x41CA7586cC1311807B4605fBB748a3B8862b42b5"
+        }
       }
     ]
-  },
-
-  "base": {
-    "morpho_contract": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
-    "markets": []
   }
 }

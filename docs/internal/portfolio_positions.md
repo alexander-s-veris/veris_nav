@@ -31,7 +31,7 @@ Position balances and values are in the latest NAV snapshot (`outputs/`). This d
 ## D Positions (Leveraged / Looping)
 - **Kamino USCC/USDC**: Superstate Opening Bell market (Solana).
 - **Kamino PT-USX+PT-eUSX/USX**: Solstice market (Solana). PT collateral priced via Category B lot methodology.
-- **Morpho syrupUSDC loops**: Multiple markets on Ethereum and Arbitrum (USDT, PYUSD, AUSD, RLUSD debt).
+- **Morpho syrupUSDC loops**: Multiple markets on Ethereum (AUSD, RLUSD debt) and Arbitrum (USDT0 debt).
 - **Aave Horizon USCC/RLUSD**: Ethereum.
 - **Aave Plasma sUSDe/USDe**: Plasma.
 

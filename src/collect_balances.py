@@ -26,11 +26,43 @@ from evm import CONFIG_DIR, TS_FMT, get_native_decimals
 # --- Config loaders ---
 
 def load_tokens_registry() -> dict:
-    """Load config/tokens.json. Returns dict keyed by chain, then by lowered address."""
+    """Load config/tokens.json (wallet tokens only, used by balance scanner).
+
+    Returns dict keyed by chain, then by address.
+    """
     with open(os.path.join(CONFIG_DIR, "tokens.json")) as f:
         registry = json.load(f)
     registry.pop("_template", None)
     return registry
+
+
+def load_protocol_tokens() -> dict:
+    """Load config/protocol_tokens.json (handler-managed tokens, used for pricing).
+
+    Returns dict keyed by chain, then by address.
+    """
+    with open(os.path.join(CONFIG_DIR, "protocol_tokens.json")) as f:
+        registry = json.load(f)
+    registry.pop("_template", None)
+    return registry
+
+
+def load_full_registry() -> dict:
+    """Load and merge wallet tokens + protocol tokens into one registry.
+
+    Used by the valuation layer which needs pricing config for all tokens.
+    The balance scanner uses load_tokens_registry() (wallet tokens only).
+    """
+    wallet = load_tokens_registry()
+    protocol = load_protocol_tokens()
+    merged = {}
+    for chain in set(list(wallet.keys()) + list(protocol.keys())):
+        merged[chain] = {}
+        if chain in wallet and isinstance(wallet[chain], dict):
+            merged[chain].update(wallet[chain])
+        if chain in protocol and isinstance(protocol[chain], dict):
+            merged[chain].update(protocol[chain])
+    return merged
 
 
 def load_wallets() -> dict:

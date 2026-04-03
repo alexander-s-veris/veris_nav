@@ -2,15 +2,6 @@
   "_doc": "Protocol contracts used for on-chain queries. Grouped by chain, then by protocol. Each protocol section has a _query_type field that maps to a handler in protocol_queries.py. Token addresses are in tokens.json, Morpho market IDs in morpho_markets.json, ABIs in abis.json.",
 
   "ethereum": {
-    "_morpho": {
-      "_query_type": "reference",
-      "core": {
-        "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
-        "abi": "morpho_core",
-        "display_name": "Morpho Core",
-        "description": "Morpho Core -- position() and market() queries"
-      }
-    },
     "_aave": {
       "_query_type": "aave_leverage",
       "horizon_pool": {
@@ -19,18 +10,18 @@
         "display_name": "Aave Horizon RWA Pool",
         "description": "Aave Horizon RWA Pool -- separate from standard V3"
       },
-      "horizon_atoken_uscc": {
+      "aHorRwaUSCC": {
         "address": "0x08b798c40b9AB931356d9aB4235F548325C4cb80",
         "abi": "erc20",
-        "symbol": "USCC",
+        "symbol": "aHorRwaUSCC",
         "display_name": "Aave Horizon USCC / RLUSD",
         "underlying_symbol": "USCC",
         "description": "aHorRwaUSCC -- supply side of USCC/RLUSD position"
       },
-      "horizon_vdebt_rlusd": {
+      "variableDebtHorRwaRLUSD": {
         "address": "0xace8a1c0ec12ae81814377491265b47f4ee5d3dd",
         "abi": "erc20",
-        "symbol": "RLUSD",
+        "symbol": "variableDebtHorRwaRLUSD",
         "display_name": "Aave Horizon USCC / RLUSD",
         "underlying_symbol": "RLUSD",
         "description": "variableDebtHorRwaRLUSD -- debt side of USCC/RLUSD position"
@@ -108,11 +99,6 @@
       "rain_credit_line": {
         "address": "0x1e86E49780Dd5FF522B43889A7C196caa0CABd85",
         "description": "Rain Line-of-Credit-v2. Borrower for the credit strategy."
-      },
-      "usdc_token": {
-        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "decimals": 6,
-        "description": "USDC token used for cash balance queries in sub-strategy breakdown"
       }
     },
     "_morpho_vaults": {
@@ -161,25 +147,22 @@
         "abi": "erc20",
         "symbol": "mF-ONE",
         "display_name": "Midas Fasanara ONE",
+        "underlying_symbol": "USDC",
         "decimals": 18,
         "oracle": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
-        "oracle_chain": "ethereum"
+        "oracle_chain": "ethereum",
+        "description": "Midas Fasanara ONE tokenised fund share. A2 oracle-priced via Chainlink."
       },
       "msyrupusdp": {
         "address": "0x2fE058CcF29f123f9dd2aEC0418AA66a877d8E50",
         "abi": "erc20",
         "symbol": "msyrupUSDp",
         "display_name": "Midas syrupUSDp",
+        "underlying_symbol": "USDC",
         "decimals": 18,
         "oracle": "0x337d914ff6622510FC2C63ac59c1D07983895241",
-        "oracle_chain": "ethereum"
-      }
-    },
-    "_fluid": {
-      "_query_type": "reference",
-      "vault": {
-        "address": "0xbc345229c1b52e4c30530c614bb487323ba38da5",
-        "description": "Fluid Vault (syrupUSDC/USDC)"
+        "oracle_chain": "ethereum",
+        "description": "Midas syrupUSDp tokenised fund share. A2 oracle-priced via Chainlink."
       }
     },
     "_curve": {
@@ -205,15 +188,6 @@
   },
 
   "arbitrum": {
-    "_morpho": {
-      "_query_type": "reference",
-      "core": {
-        "address": "0x6c247b1F6182318877311737BaC0844bAa518F5e",
-        "abi": "morpho_core",
-        "display_name": "Morpho Core",
-        "description": "Morpho Core on Arbitrum"
-      }
-    },
     "_euler": {
       "_query_type": "euler_erc4626",
       "syrupusdc_vault": {
@@ -243,26 +217,10 @@
         "underlying_symbol": "USDC",
         "description": "Morpho vault on Arbitrum held by 0xd5086229 ARMA proxy. Dust position."
       }
-    },
-    "_arma": {
-      "_query_type": "reference",
-      "protocol_contract": {
-        "address": "0x1b3259eef2c5c2f80f0a47796ee3fea82f9e6f66",
-        "description": "ARMA (Giza) protocol contract on Arbitrum."
-      }
     }
   },
 
   "base": {
-    "_morpho": {
-      "_query_type": "reference",
-      "core": {
-        "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
-        "abi": "morpho_core",
-        "display_name": "Morpho Core",
-        "description": "Morpho Core on Base (same address as Ethereum)"
-      }
-    },
     "_aave": {
       "_query_type": "aave_leverage",
       "pool": {
@@ -271,10 +229,10 @@
         "display_name": "Aave V3 Pool",
         "description": "Aave V3 Pool on Base"
       },
-      "atoken_syrupusdc": {
+      "aBassyrupUSDC": {
         "address": "0xD7424238CcbE7b7198Ab3cFE232e0271E22da7bd",
         "abi": "erc20",
-        "symbol": "syrupUSDC",
+        "symbol": "aBassyrupUSDC",
         "display_name": "Aave syrupUSDC",
         "underlying_symbol": "syrupUSDC",
         "description": "aBassyrupUSDC -- Aave Base syrupUSDC aToken"
@@ -301,21 +259,6 @@
         "underlying_symbol": "USDC",
         "description": "Avantis USDC Vault (avUSDC)"
       }
-    },
-    "_arma": {
-      "_query_type": "reference",
-      "proxy": {
-        "address": "0xa8d4e894f268438d3438d0030f2e36852aeba97d",
-        "description": "ARMA (Giza) smart account proxy -- scan as wallet"
-      },
-      "implementation": {
-        "address": "0x17bac39f916c21ac825aed89607fdba251dce97d",
-        "description": "ARMA smart account implementation (EIP-1167 clone)"
-      },
-      "protocol_contract": {
-        "address": "0x1b3259eef2c5c2f80f0a47796ee3fea82f9e6f66",
-        "description": "ARMA (Giza) protocol contract. DeBank uses this as pool.controller for all ARMA deposits. position_index = proxy wallet address."
-      }
     }
   },
 
@@ -328,18 +271,18 @@
         "display_name": "Aave V3 Pool",
         "description": "Aave V3 Pool on Plasma"
       },
-      "atoken_usde": {
+      "aPlaUSDe": {
         "address": "0x7519403E12111ff6b710877Fcd821D0c12CAF43A",
         "abi": "erc20",
-        "symbol": "USDe",
+        "symbol": "aPlaUSDe",
         "display_name": "Aave USDe",
         "underlying_symbol": "USDe",
         "description": "aPlaUSDe -- Aave Plasma USDe aToken"
       },
-      "atoken_susde": {
+      "aPlasUSDe": {
         "address": "0xc1a318493ff07a68fe438cee60a7ad0d0dba300e",
         "abi": "erc20",
-        "symbol": "sUSDe",
+        "symbol": "aPlasUSDe",
         "display_name": "Aave sUSDe",
         "underlying_symbol": "sUSDe",
         "description": "aPlasUSDe -- Aave Plasma sUSDe aToken"
@@ -352,27 +295,11 @@
         "abi": "erc20",
         "symbol": "mHYPER",
         "display_name": "Midas Hyperithm",
+        "underlying_symbol": "USDC",
         "decimals": 18,
         "oracle": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
-        "oracle_chain": "plasma"
-      },
-      "mhyper_oracle": {
-        "address": "0xfC3E47c4Da8F3a01ac76c3C5ecfBfC302e1A08F0",
-        "abi": "chainlink_aggregator_v3",
-        "display_name": "mHYPER/USD Oracle",
-        "description": "mHYPER/USD Chainlink-style Oracle"
-      }
-    },
-    "_fluid": {
-      "_query_type": "reference",
-      "vault_resolver": {
-        "address": "0x5471195328cB443c85097A7A7fF0A74eaB3Cb497",
-        "description": "Fluid Vault Resolver"
-      },
-      "wstusr_usdt0_vault": {
-        "address": "0xBc345229C1b52e4c30530C614BB487323BA38Da5",
-        "description": "Fluid wstUSR/USDT0 Vault",
-        "_todo": "Same address as Ethereum Fluid vault — verify correct Plasma address via on-chain query"
+        "oracle_chain": "plasma",
+        "description": "Midas Hyperithm tokenised fund share on Plasma. A2 oracle-priced via Chainlink."
       }
     }
   },
@@ -387,55 +314,6 @@
         "display_name": "Yearn V3 vbUSDC",
         "underlying_symbol": "USDC",
         "description": "Yearn V3 vbUSDC yVault (yvvbUSDC)"
-      }
-    }
-  },
-
-  "oracles": {
-    "_chainlink": {
-      "_query_type": "reference",
-      "usdt_usd": {
-        "address": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
-        "chain": "ethereum",
-        "abi": "chainlink_aggregator_v3",
-        "display_name": "USDT/USD Feed",
-        "description": "USDT/USD Price Feed"
-      },
-      "usdc_usd": {
-        "address": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
-        "chain": "ethereum",
-        "abi": "chainlink_aggregator_v3",
-        "display_name": "USDC/USD Feed",
-        "description": "USDC/USD Price Feed"
-      },
-      "dai_usd": {
-        "address": "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
-        "chain": "ethereum",
-        "abi": "chainlink_aggregator_v3",
-        "display_name": "DAI/USD Feed",
-        "description": "DAI/USD Price Feed"
-      },
-      "uscc_nav": {
-        "address": "0xAfFd8F5578E8590665de561bdE9E7BAdb99300d9",
-        "chain": "ethereum",
-        "abi": "chainlink_aggregator_v3",
-        "display_name": "USCC NAVLink Feed",
-        "description": "USCC NAV per share (NAVLink)",
-        "notes": "uscc-nav.data.eth"
-      },
-      "mfone_usd": {
-        "address": "0x8D51DBC85cEef637c97D02bdaAbb5E274850e68C",
-        "chain": "ethereum",
-        "abi": "chainlink_aggregator_v3",
-        "display_name": "mF-ONE/USD Feed",
-        "description": "mF-ONE/USD Oracle (Midas)"
-      },
-      "msyrupusdp_usd": {
-        "address": "0x337d914ff6622510FC2C63ac59c1D07983895241",
-        "chain": "ethereum",
-        "abi": "chainlink_aggregator_v3",
-        "display_name": "msyrupUSDp/USD Feed",
-        "description": "msyrupUSDp/USD Oracle (Midas)"
       }
     }
   }

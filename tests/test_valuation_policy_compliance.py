@@ -24,8 +24,37 @@ def load_json(filename):
         return json.load(f)
 
 
+def load_all_tokens():
+    """Load and merge tokens.json + protocol_tokens.json for validation."""
+    wallet = load_json("tokens.json")
+    protocol = load_json("protocol_tokens.json")
+    merged = {}
+    for chain in set(list(wallet.keys()) + list(protocol.keys())):
+        if chain.startswith("_"):
+            continue
+        merged[chain] = {}
+        if chain in wallet and isinstance(wallet[chain], dict):
+            merged[chain].update(wallet[chain])
+        if chain in protocol and isinstance(protocol[chain], dict):
+            merged[chain].update(protocol[chain])
+    return merged
+
+
+def load_feeds_flat():
+    """Load price_feeds.json as a flat {feed_key: feed_cfg} index.
+
+    Reuses the same loader as the pricing module to avoid duplication.
+    """
+    from pricing import _load_feeds_registry, _FEEDS_CACHE
+    import pricing
+    pricing._FEEDS_CACHE = None  # force reload
+    result = _load_feeds_registry()
+    pricing._FEEDS_CACHE = None  # don't pollute runtime cache
+    return result
+
+
 def iter_tokens(tokens):
-    """Yield (chain, addr, entry) for every real token entry in tokens.json."""
+    """Yield (chain, addr, entry) for every real token entry."""
     for chain, chain_tokens in tokens.items():
         if chain.startswith("_"):
             continue
@@ -45,7 +74,7 @@ class TestCategoryClassification(unittest.TestCase):
     """Section 5: Every token must have a valid category."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
+        self.tokens = load_all_tokens()
 
     def test_all_tokens_have_valid_category(self):
         """Every token entry must have category in {A1, A2, A3, B, C, D, E, F}."""
@@ -74,7 +103,7 @@ class TestTokenPricingPolicy(unittest.TestCase):
     """Every token must have a pricing.policy field that exists in pricing_policy.json."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
+        self.tokens = load_all_tokens()
         self.policies = load_json("pricing_policy.json")
 
     def test_all_tokens_have_pricing_policy(self):
@@ -116,16 +145,9 @@ class TestFeedReferences(unittest.TestCase):
     """Every feed key referenced in tokens.json pricing.feeds must exist in price_feeds.json."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
-        self.price_feeds = load_json("price_feeds.json")
-        # Build flat set of all valid feed keys across all feed type groups
-        self.all_feed_keys = set()
-        for group_key, group in self.price_feeds.items():
-            if group_key.startswith("_"):
-                continue
-            if isinstance(group, dict):
-                for feed_key in group:
-                    self.all_feed_keys.add(feed_key)
+        self.tokens = load_all_tokens()
+        self.price_feeds = load_feeds_flat()
+        self.all_feed_keys = set(self.price_feeds.keys())
 
     def test_all_feed_references_resolve(self):
         """Every feed key in pricing.feeds must exist in price_feeds.json."""
@@ -156,7 +178,7 @@ class TestA1Methodology(unittest.TestCase):
     """Section 6.1: A1 tokens must use smart contract exchange rate."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
+        self.tokens = load_all_tokens()
 
     def _get_a1_tokens(self):
         return [(c, e.get("symbol", a), e)
@@ -203,7 +225,7 @@ class TestA2Methodology(unittest.TestCase):
     """Section 6.2: A2 tokens must use oracle hierarchy with staleness thresholds."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
+        self.tokens = load_all_tokens()
 
     def _get_a2_tokens(self):
         return [(c, e.get("symbol", a), e)
@@ -253,7 +275,7 @@ class TestA3Methodology(unittest.TestCase):
     """Section 6.3: A3 tokens use manual accrual, on-chain TP is cross-ref only."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
+        self.tokens = load_all_tokens()
 
     def test_a3_policy_is_a3(self):
         """A3 tokens must have pricing.policy = 'A3', NOT 'A1'."""
@@ -281,7 +303,7 @@ class TestBMethodology(unittest.TestCase):
     """Section 6.4: PT tokens use linear amortisation, not mark-to-market."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
+        self.tokens = load_all_tokens()
 
     def _get_b_tokens(self):
         return [(c, e.get("symbol", a), e)
@@ -324,7 +346,7 @@ class TestEMethodology(unittest.TestCase):
     """Section 6.7: Stablecoins — par or oracle with depeg monitoring."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
+        self.tokens = load_all_tokens()
 
     def _get_e_tokens(self):
         return [(c, e.get("symbol", a), e)
@@ -393,7 +415,7 @@ class TestFMethodology(unittest.TestCase):
     """Section 6.8: F tokens — Kraken -> CoinGecko -> DEX TWAP hierarchy."""
 
     def setUp(self):
-        self.tokens = load_json("tokens.json")
+        self.tokens = load_all_tokens()
 
     def _get_f_tokens(self):
         return [(c, e.get("symbol", a), e)
@@ -430,19 +452,14 @@ class TestPriceFeedsRegistry(unittest.TestCase):
     """Validate price_feeds.json structure — every feed has correct fields per type."""
 
     def setUp(self):
-        self.price_feeds = load_json("price_feeds.json")
+        self.price_feeds = load_feeds_flat()
 
     def _iter_feeds(self):
-        """Yield (group_key, feed_key, feed_entry) for all feeds."""
-        for group_key, group in self.price_feeds.items():
-            if group_key.startswith("_"):
+        """Yield (feed_type, feed_key, feed_entry) for all feeds."""
+        for feed_key, feed_entry in self.price_feeds.items():
+            if not isinstance(feed_entry, dict):
                 continue
-            if not isinstance(group, dict):
-                continue
-            for feed_key, feed_entry in group.items():
-                if not isinstance(feed_entry, dict):
-                    continue
-                yield group_key, feed_key, feed_entry
+            yield feed_entry.get("type", ""), feed_key, feed_entry
 
     def test_all_feeds_have_type(self):
         """Every feed must have a 'type' field."""
@@ -676,7 +693,7 @@ class TestMorphoMarketsConfig(unittest.TestCase):
                     self.assertIn(side, mkt,
                                   f"morpho.{chain}.{name}: missing {side}")
                     tok = mkt[side]
-                    for field in ("symbol", "address", "decimals", "category"):
+                    for field in ("symbol", "address"):
                         self.assertIn(field, tok,
                                       f"morpho.{chain}.{name}.{side}: missing {field}")
 
@@ -846,11 +863,11 @@ class TestCrossReferences(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tokens = load_json("tokens.json")
+        cls.tokens = load_all_tokens()
         cls.chains = load_json("chains.json")
         cls.wallets = load_json("wallets.json")
         cls.contracts = load_json("contracts.json")
-        cls.price_feeds = load_json("price_feeds.json")
+        cls.price_feeds = load_feeds_flat()
         cls.abis = load_json("abis.json")
 
         # Build flat feed key set
@@ -947,7 +964,7 @@ class TestCrossReferences(unittest.TestCase):
         for symbol in verification.get("asset_level", {}):
             self.assertIn(
                 symbol, all_symbols,
-                f"verification.json asset_level '{symbol}' not found in tokens.json")
+                f"verification.json asset_level '{symbol}' not found in token registry")
 
     def test_arma_proxies_reference_known_chains(self):
         """Every ARMA proxy chain must exist in chains.json."""

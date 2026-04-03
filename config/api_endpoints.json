@@ -1,0 +1,8 @@
+{
+  "_description": "Base URLs for REST API price adapters and verification providers.",
+  "pyth_hermes": "https://hermes.pyth.network/v2/updates/price/latest",
+  "redstone": "https://api.redstone.finance/prices",
+  "kraken": "https://api.kraken.com/0/public/Ticker",
+  "coingecko": "https://pro-api.coingecko.com/api/v3",
+  "defillama": "https://coins.llama.fi/prices"
+}

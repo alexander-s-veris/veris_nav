@@ -22,11 +22,15 @@ from decimal import Decimal
 import requests
 
 from evm import TS_FMT
+from adapters import _load_api_endpoints
 
 logger = logging.getLogger(__name__)
 
-_API_BASE = "https://coins.llama.fi/prices/current"
 _API_TIMEOUT = 15
+
+
+def _get_api_base():
+    return _load_api_endpoints()["defillama"]
 
 
 def defillama_price(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
@@ -43,7 +47,7 @@ def defillama_price(feed_cfg: dict, expected_freq_hours: float = None) -> dict:
     address = feed_cfg["address"]
     coin_key = f"{chain}:{address}"
 
-    url = f"{_API_BASE}/{coin_key}"
+    url = f"{_get_api_base()}/current/{coin_key}"
     logger.info("defillama: GET %s", url)
 
     resp = requests.get(url, timeout=_API_TIMEOUT)
@@ -104,7 +108,7 @@ def batch_defillama_prices(feed_configs: list[dict]) -> dict:
         return {}
 
     coin_keys = [f"{fc['chain']}:{fc['address']}" for fc in feed_configs]
-    url = f"{_API_BASE}/{','.join(coin_keys)}"
+    url = f"{_get_api_base()}/current/{','.join(coin_keys)}"
     logger.info("defillama batch: %d tokens", len(coin_keys))
 
     resp = requests.get(url, timeout=_API_TIMEOUT)

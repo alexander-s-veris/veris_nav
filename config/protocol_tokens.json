@@ -1,0 +1,325 @@
+{
+  "ethereum": {
+    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "category": "E",
+      "decimals": 6,
+      "pricing": {
+        "policy": "E_par",
+        "feeds": {
+          "chainlink": "chainlink_usdc_depeg",
+          "redstone": "redstone_usdc",
+          "defillama": "defillama_usdc",
+          "pyth": "pyth_usdc_usd"
+        }
+      }
+    },
+    "0x238a700ed6165261cf8b2e544ba797bc11e466ba": {
+      "symbol": "mF-ONE",
+      "name": "Midas Fasanara ONE",
+      "category": "A2",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A2",
+        "feeds": {
+          "chainlink": "midas_mfone_oracle",
+          "issuer_nav": "issuer_nav_mfone"
+        },
+        "expected_update_freq_hours": 24,
+        "_note": "Hierarchy: Chainlink Midas oracle (primary) -> Midas daily NAV reports (tier 2 issuer, manual). No Pyth/Redstone/CoinGecko feeds available. If oracle is stale, use the daily report from the Google Drive folder as manual fallback."
+      }
+    },
+    "0x2fe058ccf29f123f9dd2aec0418aa66a877d8e50": {
+      "symbol": "msyrupUSDp",
+      "name": "Plasma syrupUSD Pre-deposit Midas Vault",
+      "category": "A2",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A2",
+        "feeds": {
+          "chainlink": "midas_msyrupusdp_oracle",
+          "issuer_nav": "issuer_nav_msyrupusdp"
+        },
+        "expected_update_freq_hours": 168,
+        "_note": "Midas Chainlink-style oracle, NAV updated 1-2x/week, expected update frequency ~168h"
+      }
+    },
+    "0x32e616f4f17d43f9a5cd9be0e294727187064cb3": {
+      "symbol": "DUSDUSDC",
+      "name": "Curve DUSD/USDC LP",
+      "category": "C",
+      "decimals": 18,
+      "pricing": {
+        "policy": "C",
+        "pool_address": "0x32e616f4f17d43f9a5cd9be0e294727187064cb3",
+        "constituents": [
+          "USDC",
+          "DUSD"
+        ],
+        "constituent_addresses": [
+          "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          "0x1e33E98aF620F1D563fcD3cfd3C75acE841204ef"
+        ],
+        "_note": "Category C LP. Decompose into constituents and price each. Virtual price available via get_virtual_price(). DUSD has depegged significantly."
+      }
+    },
+    "0x00000000efe302beaa2b3e6e1b18d08d69a9012a": {
+      "symbol": "AUSD",
+      "name": "Agora Dollar",
+      "category": "E",
+      "decimals": 6,
+      "pricing": {
+        "policy": "E_par",
+        "feeds": {
+          "pyth": "pyth_ausd_usd",
+          "defillama": "defillama_ausd",
+          "chainlink": "chainlink_ausd_usd"
+        },
+        "_note": "Fiat-backed stablecoin, 1:1 USD peg. Same contract address on multiple EVM chains. Pyth feed used for depeg monitoring."
+      }
+    },
+    "0x8292bb45bf1ee4d140127049757c2e0ff06317ed": {
+      "symbol": "RLUSD",
+      "name": "Ripple USD",
+      "category": "E",
+      "decimals": 18,
+      "pricing": {
+        "policy": "E_par",
+        "feeds": {
+          "pyth": "pyth_rlusd_usd",
+          "defillama": "defillama_rlusd",
+          "chainlink": "chainlink_rlusd_usd"
+        },
+        "_note": "Issued by Standard Custody & Trust Company (Ripple Labs subsidiary). Par-priced. Pyth feed used for depeg monitoring."
+      }
+    },
+    "0x80ac24aa929eaf5013f6436cda2a7ba190f5cc0b": {
+      "symbol": "syrupUSDC",
+      "name": "Syrup USDC",
+      "category": "A2",
+      "decimals": 6,
+      "pricing": {
+        "policy": "A2",
+        "feeds": {
+          "pyth": "pyth_syrupusdc_usd",
+          "defillama": "defillama_syrupusdc"
+        },
+        "expected_update_freq_hours": 24,
+        "_note": "Maple yield-bearing USDC vault token. Pyth as primary, issuer price as cross-reference."
+      }
+    },
+    "0xbeeff047c03714965a54b671a37c18bef6b96210": {
+      "symbol": "bbqSUDCreservoir",
+      "name": "Steakhouse Reservoir USDC",
+      "category": "A1",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "USDC",
+        "exchange_rate_contract": "0xBEeFF047C03714965a54b671A37C18beF6b96210",
+        "exchange_rate_function": "convertToAssets",
+        "_note": "Steakhouse/Morpho MetaMorpho vault (ERC-4626). Underlying USDC priced at par."
+      }
+    },
+    "0xbeef047a543e45807105e51a8bbefcc5950fcfba": {
+      "symbol": "steakUSDT",
+      "name": "Steakhouse USDT",
+      "category": "A1",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "USDT",
+        "exchange_rate_contract": "0xbEef047a543E45807105E51A8BBEFCc5950fcfBa",
+        "exchange_rate_function": "convertToAssets",
+        "_note": "Steakhouse/Morpho MetaMorpho vault (ERC-4626). Underlying USDT priced via Chainlink."
+      }
+    },
+    "0xc26a6fa2c37b38e549a4a1807543801db684f99c": {
+      "symbol": "AA_FalconXUSDC",
+      "name": "Pareto AA Tranche - FalconXUSDC",
+      "category": "A3",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A3",
+        "price_contract": "0x433d5b175148da32ffe1e1a37a939e1b7e79be4d",
+        "price_function": "tranchePrice",
+        "price_decimals": 6,
+        "_note": "Private credit tranche token. On-chain tranche price is cross-reference only. Primary valuation is manual accrual."
+      }
+    },
+    "0x00000000d8f3d6c5dfeb2d2b5ed2276095f3af44": {
+      "symbol": "gpAAFalconX",
+      "name": "Gauntlet AAFalconX Vault",
+      "category": "A3",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A3",
+        "_note": "Custom vault (NOT ERC-4626). Veris share = balanceOf/totalSupply of vault net exposure. Primary valuation is manual accrual."
+      }
+    },
+    "0x08b798c40b9ab931356d9ab4235f548325c4cb80": {
+      "symbol": "aHorRwaUSCC",
+      "name": "Aave Horizon RWA USCC",
+      "category": "D",
+      "decimals": 6,
+      "pricing": {
+        "policy": "D",
+        "underlying": "USCC",
+        "_note": "Aave aToken \u00e2\u20ac\u201d balance wrapper, not independently priced. Balance = USCC deposited + accrued interest. Priced via underlying USCC (A2) through atoken_map in contracts.json."
+      }
+    },
+    "0xace8a1c0ec12ae81814377491265b47f4ee5d3dd": {
+      "symbol": "variableDebtHorRwaRLUSD",
+      "name": "Aave Horizon RWA Variable Debt RLUSD",
+      "category": "D",
+      "decimals": 18,
+      "pricing": {
+        "policy": "D",
+        "underlying": "RLUSD",
+        "_note": "Aave debt token \u00e2\u20ac\u201d balance wrapper, not independently priced. Balance = RLUSD borrowed + accrued interest. Priced via underlying RLUSD (E_par) through atoken_map in contracts.json."
+      }
+    },
+    "0x9d39a5de30e57443bff2a8307a4256c8797a3497": {
+      "symbol": "sUSDe",
+      "name": "Staked USDe",
+      "category": "A1",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "USDe",
+        "exchange_rate_contract": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+        "exchange_rate_function": "convertToAssets",
+        "_note": "ERC-4626 vault. On-chain exchange rate is authoritative (A1). Check cooldowns(address) for pending unstakes."
+      }
+    }
+  },
+  "arbitrum": {
+    "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": {
+      "symbol": "USDT0",
+      "name": "USDT0 (Tether USD via LayerZero OFT)",
+      "category": "E",
+      "decimals": 6,
+      "pricing": {
+        "policy": "E_oracle",
+        "feeds": {
+          "chainlink": "chainlink_usdt0_usd_arbitrum",
+          "pyth": "pyth_usdt_usd",
+          "redstone": "redstone_usdt",
+          "defillama": "defillama_usdt"
+        },
+        "_note": "USDT0 on Arbitrum (USDT upgraded to LayerZero OFT standard, Jan 2025). Chainlink Arbitrum-native (primary) -> Pyth -> Redstone -> DefiLlama"
+      }
+    },
+    "0x41ca7586cc1311807b4605fbb748a3b8862b42b5": {
+      "symbol": "syrupUSDC",
+      "name": "Syrup USDC",
+      "category": "A2",
+      "decimals": 6,
+      "pricing": {
+        "policy": "A2",
+        "feeds": {
+          "pyth": "pyth_syrupusdc_usd",
+          "defillama": "defillama_syrupusdc"
+        },
+        "expected_update_freq_hours": 24,
+        "_note": "Maple yield-bearing USDC vault token on Arbitrum"
+      }
+    }
+  },
+  "base": {
+    "0x944766f715b51967e56afde5f0aa76ceacc9e7f9": {
+      "symbol": "avUSDC",
+      "name": "Avantis USDC Vault",
+      "category": "A1",
+      "decimals": 6,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "USDC",
+        "exchange_rate_contract": "0x944766f715b51967E56aFdE5f0Aa76cEaCc9E7f9",
+        "exchange_rate_function": "convertToAssets",
+        "_note": "ERC-4626 vault. convertToAssets(shares) returns USDC value. Underlying USDC priced at par."
+      }
+    },
+    "0x1d3b1cd0a0f242d598834b3f2d126dc6bd774657": {
+      "symbol": "CSUSDC",
+      "name": "Clearstar USDC Reactor",
+      "category": "A1",
+      "decimals": 6,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "USDC",
+        "exchange_rate_contract": "0x1D3b1Cd0a0f242d598834b3F2d126dC6bd774657",
+        "exchange_rate_function": "convertToAssets",
+        "_note": "Clearstar/OpenEden MetaMorpho vault (ERC-4626) on Base. Underlying USDC priced at par."
+      }
+    },
+    "0xd7424238ccbe7b7198ab3cfe232e0271e22da7bd": {
+      "symbol": "aBassyrupUSDC",
+      "name": "Aave Base syrupUSDC",
+      "category": "A1",
+      "decimals": 6,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "syrupUSDC",
+        "_note": "Aave aToken for syrupUSDC on Base. Balance = supplied syrupUSDC + accrued interest. Underlying (syrupUSDC) is A2."
+      }
+    }
+  },
+  "plasma": {
+    "0xb31bea5c2a43f942a3800558b1aa25978da75f8a": {
+      "symbol": "mHYPER",
+      "name": "Midas Hyperithm",
+      "category": "A2",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A2",
+        "feeds": {
+          "chainlink": "midas_mhyper_oracle",
+          "issuer_nav": "issuer_nav_mhyper"
+        },
+        "expected_update_freq_hours": 168,
+        "_note": "Midas Chainlink-style oracle on Plasma, NAV-based pricing"
+      }
+    },
+    "0x7519403e12111ff6b710877fcd821d0c12caf43a": {
+      "symbol": "aPlaUSDe",
+      "name": "Aave Plasma USDe",
+      "category": "A1",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "USDe",
+        "_note": "Aave aToken for USDe on Plasma. balanceOf = supplied USDe + accrued interest. Underlying USDe priced via Chainlink (same feed as ethereum USDe)."
+      }
+    },
+    "0xc1a318493ff07a68fe438cee60a7ad0d0dba300e": {
+      "symbol": "aPlasUSDe",
+      "name": "Aave Plasma sUSDe",
+      "category": "A1",
+      "decimals": 18,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "sUSDe",
+        "exchange_rate_contract": "0x211cc4dd073734da055fbf44a2b4667d5e5fe5d2",
+        "exchange_rate_function": "convertToAssets",
+        "_note": "Aave aToken for sUSDe on Plasma. balanceOf = supplied sUSDe + accrued interest. Underlying is sUSDe (A1), which itself wraps USDe (E)."
+      }
+    }
+  },
+  "katana": {
+    "0x80c34bd3a3569e126e7055831036aa7b212cb159": {
+      "symbol": "yvvbUSDC",
+      "name": "vbUSDC yVault",
+      "category": "A1",
+      "decimals": 6,
+      "pricing": {
+        "policy": "A1",
+        "underlying": "vbUSDC",
+        "exchange_rate_contract": "0x80c34BD3A3569E126e7055831036aa7b212cB159",
+        "exchange_rate_function": "convertToAssets",
+        "_note": "Yearn V3 ERC-4626 vault on Katana. Underlying is Vault Bridge USDC (vbUSDC), pegged to USDC."
+      }
+    }
+  }
+}

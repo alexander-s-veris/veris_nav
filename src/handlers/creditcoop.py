@@ -129,10 +129,7 @@ def query_creditcoop(w3, chain, wallet, block_number, block_ts):
         credit_strategy_addr = vault.functions.creditStrategy().call(block_identifier=block_number)
         logger.info("creditcoop: liquidStrategy=%s, creditStrategy=%s", liquid_strategy_addr, credit_strategy_addr)
 
-        usdc_addr = cc_section.get("usdc_token", {}).get("address")
-        if not usdc_addr:
-            # Fallback: read asset() from vault
-            usdc_addr = vault.functions.asset().call(block_identifier=block_number)
+        usdc_addr = vault.functions.asset().call(block_identifier=block_number)
         usdc = w3.eth.contract(address=Web3.to_checksum_address(usdc_addr), abi=erc20_abi)
 
         # 1. Rain credit line

@@ -30,7 +30,7 @@ from evm import (
 )
 from block_utils import concurrent_query
 from collect_balances import (
-    load_tokens_registry, load_wallets,
+    load_tokens_registry, load_full_registry, load_wallets,
     query_evm_balances, query_balances_solana,
 )
 from protocol_queries import (
@@ -69,7 +69,8 @@ def main():
     set_config_validation(strict=args.strict_config)
 
     # --- Load configs ---
-    registry = load_tokens_registry()
+    registry = load_tokens_registry()       # wallet tokens only (for balance scanning)
+    full_registry = load_full_registry()    # wallet + protocol tokens (for valuation)
     wallets = load_wallets()
     chains = load_chains()
     evm_chains = get_evm_chains()
@@ -414,7 +415,7 @@ def main():
     # value_position() for consistent category-specific pricing and depeg handling.
     for pos in all_positions:
         try:
-            value_position(pos, w3_eth, valuation_date, registry)
+            value_position(pos, w3_eth, valuation_date, full_registry)
         except Exception as e:
             pos["price_usd"] = Decimal(0)
             pos["value_usd"] = Decimal(0)

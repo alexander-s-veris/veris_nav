@@ -28,7 +28,7 @@ def query_midas_positions(w3, chain, wallet, block_number, block_ts):
         if entry_key.startswith("_") or not isinstance(entry, dict):
             continue
         if "address" not in entry or "oracle" not in entry:
-            continue  # Skip oracle-only entries (like mhyper_oracle)
+            continue
 
         if "decimals" not in entry:
             raise ValueError(f"Midas entry '{entry_key}' missing required 'decimals' field in contracts.json")

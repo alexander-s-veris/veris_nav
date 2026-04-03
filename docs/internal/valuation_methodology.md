@@ -58,7 +58,7 @@ For concentrated liquidity LP positions: value reflects actual token amounts wit
 - **Formula**: `Net Position Value = Value of Collateral − Value of Debt Outstanding`
 - **Collateral**: Balance read from lending protocol (inclusive of accrued supply interest), then priced per collateral token's own category (A1/A2/A3/B/E)
 - **Debt**: Balance read from lending protocol (inclusive of accrued borrow interest), priced per Category E
-- **Examples**: Kamino USCC/USDC, Morpho syrupUSDC/USDT, Aave Horizon USCC/RLUSD
+- **Examples**: Kamino USCC/USDC, Morpho syrupUSDC/USDT0, Aave Horizon USCC/RLUSD
 
 ## E: Stablecoins & Cash
 - **USDC-pegged** (USDC, USDS, DAI, PYUSD): Valued at **par ($1.00)** if within ±0.5% of peg
